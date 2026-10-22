@@ -57,7 +57,7 @@ export function Sheet({
           }}
           style={{ width: width ? `min(${width}px, 100vw)` : "min(var(--wf-drawer-w), 100vw)" }}
           className={cn(
-            "fixed inset-y-0 z-40 flex h-dvh flex-col bg-bg text-fg shadow-pop outline-none",
+            "fixed inset-y-0 z-overlay flex h-dvh flex-col bg-bg text-fg shadow-pop outline-none",
             side === "right" ? "right-0" : "left-0",
             "data-[state=open]:fade-in-0 data-[state=open]:animate-in data-[state=open]:duration-200 data-[state=open]:ease-wf",
             "data-[state=closed]:fade-out-0 data-[state=closed]:animate-out data-[state=closed]:duration-150 data-[state=closed]:ease-wf",

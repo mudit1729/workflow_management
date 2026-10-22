@@ -61,19 +61,19 @@ export function LintBadge({ counts, variant = "badge", onClick, className }: Lin
     <>
       {counts.error > 0 && (
         <span className="inline-flex items-center gap-1 text-danger">
-          <CircleX aria-hidden size={12} strokeWidth={2} />
+          <CircleX aria-hidden size={12} strokeWidth={1.75} />
           <span className="tabular">{counts.error}</span>
         </span>
       )}
       {counts.warn > 0 && (
-        <span className="inline-flex items-center gap-1 text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]">
-          <TriangleAlert aria-hidden size={12} strokeWidth={2} />
+        <span className="inline-flex items-center gap-1 text-stale-text">
+          <TriangleAlert aria-hidden size={12} strokeWidth={1.75} />
           <span className="tabular">{counts.warn}</span>
         </span>
       )}
       {counts.info > 0 && (
         <span className="inline-flex items-center gap-1 text-fg-faint">
-          <Info aria-hidden size={12} strokeWidth={2} />
+          <Info aria-hidden size={12} strokeWidth={1.75} />
           <span className="tabular">{counts.info}</span>
         </span>
       )}

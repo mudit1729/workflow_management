@@ -17,7 +17,9 @@ export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrim
     >
       <SwitchPrimitive.Thumb
         className={cn(
-          "pointer-events-none block size-[12px] rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.2)]",
+          // The knob is the page color in light and the text color in dark, so it reads on both
+          // the gray (off) and the accent (on) track. No shadow: only overlays carry one.
+          "pointer-events-none block size-[12px] rounded-full bg-bg dark:bg-fg",
           "transition-transform duration-150 ease-wf data-[state=checked]:translate-x-[12px]",
         )}
       />

@@ -57,7 +57,12 @@ export function Tooltip({
       open={disabled ? false : open}
       onOpenChange={onOpenChange}
     >
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      {/* Hover opens the tooltip; keyboard focus does not. Radix's tooltip would also take the
+          first Esc (hiding itself), so a focused icon button inside a dialog or drawer needed
+          Esc twice. Every icon button has an aria-label and the shortcuts live under ?. */}
+      <TooltipPrimitive.Trigger asChild onFocus={(e) => e.preventDefault()}>
+        {children}
+      </TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           data-wf="Tooltip"
@@ -66,7 +71,7 @@ export function Tooltip({
           sideOffset={sideOffset}
           collisionPadding={8}
           className={cn(
-            "z-[60] max-w-[280px] select-none rounded-sm bg-fg px-2 py-1 text-sm text-bg leading-snug",
+            "z-tooltip max-w-[280px] select-none rounded-sm bg-fg px-2 py-1 text-sm text-bg leading-snug",
             "origin-(--radix-tooltip-content-transform-origin)",
             "data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-98 data-[state=delayed-open]:animate-in data-[state=delayed-open]:duration-100",
             "data-[state=closed]:fade-out-0 data-[state=closed]:animate-out data-[state=closed]:duration-75",

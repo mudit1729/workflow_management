@@ -2,13 +2,26 @@
 @import "tw-animate-css";
 @import "./tokens.css";
 
-/* Dark mode follows the data-theme attribute set by the pre-paint script. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* Dark mode follows the data-theme attribute set by the pre-paint script. The nearest
+   data-theme wins, so a light subtree inside a dark page (the Kit shows both side by side)
+   does not get the dark: styles. Three levels of nesting are covered:
+   dark; dark > light; dark > light > dark. */
+@custom-variant dark (
+  &:where([data-theme="dark"], [data-theme="dark"] *):not(
+    :where([data-theme="dark"] [data-theme="light"], [data-theme="dark"] [data-theme="light"] *)
+  ),
+  &:where(
+    [data-theme="dark"] [data-theme="light"] [data-theme="dark"],
+    [data-theme="dark"] [data-theme="light"] [data-theme="dark"] *
+  )
+);
 
 /* Tailwind vocabulary mapped onto wf tokens. Use these classes, never raw hex:
    bg-bg bg-subtle bg-muted · border-border border-border-strong ·
    text-fg text-fg-muted text-fg-faint · bg-accent text-accent bg-accent-subtle text-accent-fg ·
-   text-status-<s> bg-status-<s> · text-stale text-danger text-needs-you · bg-hue-1..8 */
+   text-status-<s> bg-status-<s> · text-stale text-danger text-needs-you · bg-hue-1..8 ·
+   text-stale-text text-success-text (readable amber/green text) · text-on-hue (on a hue tile) ·
+   bg-scrim (behind dialogs) · z-raised z-overlay z-dialog z-popover z-tooltip (the only z-indexes) */
 @theme inline {
   --color-bg: var(--wf-bg);
   --color-subtle: var(--wf-bg-subtle);
@@ -43,6 +56,17 @@
   --color-hue-6: var(--wf-hue-6);
   --color-hue-7: var(--wf-hue-7);
   --color-hue-8: var(--wf-hue-8);
+  --color-on-hue: var(--wf-on-hue);
+
+  --color-stale-text: var(--wf-stale-text);
+  --color-success-text: var(--wf-success-text);
+  --color-scrim: var(--wf-scrim);
+
+  --z-index-raised: var(--wf-z-raised);
+  --z-index-overlay: var(--wf-z-overlay);
+  --z-index-dialog: var(--wf-z-dialog);
+  --z-index-popover: var(--wf-z-popover);
+  --z-index-tooltip: var(--wf-z-tooltip);
 
   --font-sans: var(--wf-font-sans);
   --font-mono: var(--wf-font-mono);
@@ -88,7 +112,13 @@
     font-size: var(--wf-text-base);
     line-height: var(--wf-leading);
     font-weight: 400;
-    font-feature-settings: "cv11", "ss01", "ss03";
+    /* calt is off on purpose: Inter's contextual alternates turn an "x" between digits into
+       a "×" (the id wf-3k9x2 read wf-3k9×2) and rewrite "->" and ":" between digits. */
+    font-feature-settings:
+      "calt" 0,
+      "cv11",
+      "ss01",
+      "ss03";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -123,6 +153,13 @@
   }
 }
 
+/* Inline code and mono refs: one class, on the type scale (12 px; 11 px inside a container that
+   sets --wf-code-size, such as compact prose). */
+@utility code-inline {
+  font-family: var(--wf-font-mono);
+  font-size: var(--wf-code-size, var(--wf-text-sm));
+}
+
 @layer utilities {
   .hairline {
     border: var(--wf-hairline);
@@ -134,9 +171,9 @@
     font-variant-caps: all-small-caps;
     letter-spacing: 0.04em;
   }
-  /* Live update: a changed card fades its background over 150 ms. */
+  /* Live update: a changed card fades its background over 150 ms (contract Part 3 section 6). */
   .wf-flash {
-    animation: wf-flash 1200ms var(--wf-ease);
+    animation: wf-flash var(--wf-dur-2) var(--wf-ease);
   }
   @keyframes wf-flash {
     0% {
@@ -145,5 +182,24 @@
     100% {
       background-color: transparent;
     }
+  }
+}
+
+/* Reduced motion (contract 1.12: durations go to 0). The tokens cover our own transitions; this
+   also stops Tailwind's numeric duration-* utilities, tw-animate enter/exit animations,
+   animate-pulse/spin and smooth scrolling. 0.01 ms (not 0) so animationend still fires and
+   Radix can unmount closing layers. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every utility's duration */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every utility's iteration count */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every utility's duration */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat smooth-scroll utilities */
+    scroll-behavior: auto !important;
   }
 }

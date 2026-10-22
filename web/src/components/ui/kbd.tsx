@@ -14,7 +14,7 @@ export interface KbdProps extends Omit<ComponentProps<"kbd">, "children"> {
 }
 
 const cap =
-  "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-sans text-[10.5px] leading-none font-medium";
+  "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-sans text-xs leading-none font-medium";
 
 const tones = {
   default: "border border-border bg-subtle text-fg-muted",
@@ -45,7 +45,7 @@ export function Kbd({ combo, children, tone = "default", className, ...props }: 
           {i > 0 && (
             <span
               className={cn(
-                "px-0.5 text-[10px] font-normal",
+                "px-0.5 text-xs font-normal",
                 tone === "inverted" ? "opacity-60" : "text-fg-faint",
               )}
             >

@@ -65,9 +65,7 @@ export function Checkbox({
         )}
         {...props}
       >
-        {s === "verified" && (
-          <Check aria-hidden size={10} strokeWidth={3.25} className="text-white" />
-        )}
+        {s === "verified" && <Check aria-hidden size={14} strokeWidth={1.75} className="text-bg" />}
       </CheckboxPrimitive.Root>
     );
   }
@@ -89,9 +87,9 @@ export function Checkbox({
     >
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-accent-fg">
         {checked === "indeterminate" ? (
-          <Minus aria-hidden size={10} strokeWidth={3.25} />
+          <Minus aria-hidden size={14} strokeWidth={1.75} />
         ) : (
-          <Check aria-hidden size={10} strokeWidth={3.25} />
+          <Check aria-hidden size={14} strokeWidth={1.75} />
         )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>

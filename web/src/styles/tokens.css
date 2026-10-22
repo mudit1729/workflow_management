@@ -13,9 +13,11 @@
   --wf-border-strong: #d3d3d8;
   --wf-text: #18181b;
   --wf-text-muted: #5f5f6b;
-  --wf-text-faint: #8e8e99;
+  /* Faint is still text (ids, counts, hints): 4.6:1 on bg-subtle, 4.3:1 on bg-muted. */
+  --wf-text-faint: #6b6b76;
 
-  --wf-accent: #5e6ad2;
+  /* 4.7:1 as text on accent-subtle, 5.4:1 white on it. */
+  --wf-accent: #5560c8;
   --wf-accent-subtle: #eef0fb;
   --wf-accent-fg: #ffffff;
   --wf-focus: color-mix(in srgb, var(--wf-accent) 40%, transparent);
@@ -31,18 +33,29 @@
   --wf-signal-stale: #d99a06;
   --wf-signal-danger: #e5484d;
   --wf-signal-needs-you: var(--wf-accent);
+  /* Readable text for the stale (amber) and success tones: the signal color pulled toward
+     the text color. One copy here, used by chips, lint counts and stale labels. */
+  --wf-stale-text: color-mix(in srgb, var(--wf-signal-stale) 60%, var(--wf-text));
+  --wf-success-text: color-mix(in srgb, var(--wf-status-done) 70%, var(--wf-text));
 
   /* Author and group identity. Validated with the dataviz palette validator
      (all checks pass; 3 slots sit below 3:1 on white, so a hue never appears
-     without its @handle or group name next to it). Fixed order, never cycled. */
+     without its @handle or group name next to it). Fixed order, never cycled.
+     Slot 6 is a sienna brown and slot 8 a teal: neither can be mistaken for the
+     status greens/reds or for --wf-signal-danger. */
   --wf-hue-1: #2a78d6;
   --wf-hue-2: #eb6834;
   --wf-hue-3: #1baf7a;
   --wf-hue-4: #eda100;
   --wf-hue-5: #e87ba4;
-  --wf-hue-6: #008300;
+  --wf-hue-6: #a8662f;
   --wf-hue-7: #6250d6;
-  --wf-hue-8: #e34948;
+  --wf-hue-8: #028a9b;
+  /* Text on a hue tile (author initials, bot glyph). */
+  --wf-on-hue: #ffffff;
+
+  /* Dim layer behind dialogs and the mobile nav. */
+  --wf-scrim: rgb(0 0 0 / 0.2);
 
   --wf-shadow-pop: 0 4px 16px rgb(0 0 0 / 0.08), 0 0 0 1px var(--wf-border);
 }
@@ -57,11 +70,13 @@
   --wf-border-strong: #34343a;
   --wf-text: #ededef;
   --wf-text-muted: #a1a1aa;
-  --wf-text-faint: #6e6e78;
+  /* 5.6:1 on bg, 5.0:1 on bg-muted. */
+  --wf-text-faint: #8a8a94;
 
+  /* Text on an accent fill is the page background: 5.7:1 (white was 3.3:1). */
   --wf-accent: #7c85e0;
   --wf-accent-subtle: #1e2040;
-  --wf-accent-fg: #ffffff;
+  --wf-accent-fg: #0f0f11;
   --wf-focus: color-mix(in srgb, var(--wf-accent) 50%, transparent);
 
   --wf-status-backlog: #b6b6bd;
@@ -75,15 +90,20 @@
   --wf-signal-stale: #f5b730;
   --wf-signal-danger: #ff6369;
   --wf-signal-needs-you: var(--wf-accent);
+  --wf-stale-text: color-mix(in srgb, var(--wf-signal-stale) 78%, var(--wf-text));
+  --wf-success-text: color-mix(in srgb, var(--wf-status-done) 85%, var(--wf-text));
 
   --wf-hue-1: #3987e5;
   --wf-hue-2: #d95926;
   --wf-hue-3: #199e70;
   --wf-hue-4: #c98500;
   --wf-hue-5: #d55181;
-  --wf-hue-6: #008300;
+  --wf-hue-6: #a8662f;
   --wf-hue-7: #9085e9;
-  --wf-hue-8: #e66767;
+  --wf-hue-8: #0096af;
+  --wf-on-hue: #ffffff;
+
+  --wf-scrim: rgb(0 0 0 / 0.5);
 
   --wf-shadow-pop: 0 4px 16px rgb(0 0 0 / 0.4), 0 0 0 1px var(--wf-border-strong);
 }
@@ -123,6 +143,16 @@
   --wf-dur-2: 150ms;
   --wf-dur-3: 200ms;
   --wf-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Stacking: named layers, never raw numbers in components.
+     raised: sticky bits inside a panel; overlay: drawers and sheets; dialog: modal dialogs, the
+     command palette and their scrim; popover: menus, popovers, hover cards (they open from
+     dialogs, so they sit above); tooltip: always on top. */
+  --wf-z-raised: 10;
+  --wf-z-overlay: 40;
+  --wf-z-dialog: 50;
+  --wf-z-popover: 60;
+  --wf-z-tooltip: 70;
 
   /* Layout */
   --wf-nav-w: 232px;

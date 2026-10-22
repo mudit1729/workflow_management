@@ -20,10 +20,7 @@ export interface EmptyStateProps {
 function SkillLine({ skill }: { skill: string }) {
   return (
     <p className="text-fg-muted text-sm">
-      Run the{" "}
-      <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11.5px] text-fg">
-        {skill}
-      </code>{" "}
+      Run the <code className="code-inline rounded-sm bg-muted px-1 py-px text-fg">{skill}</code>{" "}
       skill.
     </p>
   );
@@ -85,7 +82,7 @@ export function EmptyState({
       {icon && (
         <span
           aria-hidden
-          className="flex size-9 items-center justify-center rounded-lg border border-border bg-subtle text-fg-faint [&>svg]:size-[18px]"
+          className="flex size-9 items-center justify-center rounded-lg border border-border bg-subtle text-fg-faint [&>svg]:size-[14px]"
         >
           {icon}
         </span>

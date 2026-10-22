@@ -21,12 +21,15 @@ export function CommandInput({
   ...props
 }: ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 border-border border-b px-3">
+    <div
+      data-wf="CommandInput"
+      className="flex h-11 shrink-0 items-center gap-2 border-border border-b px-3"
+    >
       <Search aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
       <CommandPrimitive.Input
-        data-wf="CommandInput"
         className={cn(
-          "h-full min-w-0 flex-1 bg-transparent text-md text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none",
+          // 16 px on a phone: iOS Safari zooms the page when a smaller field is focused.
+          "h-full min-w-0 flex-1 bg-transparent text-md text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none max-md:text-lg",
           className,
         )}
         {...props}
@@ -131,7 +134,9 @@ export function CommandSeparator({
   );
 }
 
-export const CommandLoading = CommandPrimitive.Loading;
+export function CommandLoading(props: ComponentProps<typeof CommandPrimitive.Loading>) {
+  return <CommandPrimitive.Loading data-wf="CommandLoading" {...props} />;
+}
 
 export interface CommandDialogProps {
   open: boolean;
@@ -156,12 +161,12 @@ export function CommandDialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/20 data-[state=closed]:animate-out data-[state=open]:animate-in dark:bg-black/50" />
+        <DialogPrimitive.Overlay className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-dialog bg-scrim data-[state=closed]:animate-out data-[state=open]:animate-in" />
         <DialogPrimitive.Content
           data-wf="CommandDialog"
           aria-describedby={undefined}
           className={cn(
-            "fixed top-[14dvh] left-1/2 z-50 w-[calc(100vw-32px)] max-w-[640px] -translate-x-1/2 overflow-hidden rounded-lg bg-bg shadow-pop outline-none",
+            "fixed top-[14dvh] left-1/2 z-dialog w-[calc(100vw-32px)] max-w-[640px] -translate-x-1/2 overflow-hidden rounded-lg bg-bg shadow-pop outline-none",
             "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=open]:animate-in data-[state=open]:duration-150",
             "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-98 data-[state=closed]:animate-out data-[state=closed]:duration-100",
             className,

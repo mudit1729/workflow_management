@@ -11,13 +11,12 @@ export const chipVariants = cva(
         neutral: "bg-muted text-fg-muted",
         accent: "bg-accent-subtle text-accent",
         danger: "bg-danger/12 text-danger",
-        stale: "bg-stale/12 text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]",
-        success:
-          "bg-status-done/12 text-[color-mix(in_srgb,var(--wf-status-done)_85%,var(--wf-text))]",
+        stale: "bg-stale/12 text-stale-text",
+        success: "bg-status-done/12 text-success-text",
         outline: "border border-border text-fg-muted",
       },
       size: {
-        xs: "h-4 gap-0.5 px-1 text-[10px] [&>svg]:size-[10px]",
+        xs: "h-4 gap-0.5 px-1 text-xs [&>svg]:size-[10px]",
         sm: "h-5 gap-1 px-1.5 text-xs [&>svg]:size-[12px]",
       },
     },
@@ -50,25 +49,38 @@ export function Chip({
   ...props
 }: ChipProps) {
   const classes = cn(chipVariants({ tone, size }), className);
+  // Radix's Tooltip trigger adds an onClick (close on click) to whatever it wraps. That must not
+  // turn a plain chip into a button: a chip is a button when it asks to be, with `pressed` or an
+  // onClick of its own. The trigger's own marks are data-state "delayed-open" / "instant-open"
+  // (or "closed" without the aria-expanded that popovers and menus add).
+  const state = (props as { "data-state"?: string })["data-state"];
+  const tooltipTrigger =
+    state === "delayed-open" ||
+    state === "instant-open" ||
+    (state === "closed" && props["aria-expanded"] === undefined);
+  const interactive = onClick !== undefined && (pressed !== undefined || !tooltipTrigger);
   const body = (
     <>
       {icon}
       {children !== undefined && <span className="min-w-0 truncate">{children}</span>}
     </>
   );
-  if (onClick) {
+  if (interactive) {
+    // Everything else is forwarded (ref, data-wf, aria-*, the handlers a Tooltip or Popover
+    // trigger adds), so a wrapped chip keeps its name and still works as a trigger. The caller's
+    // data-wf wins over ours because the spread comes last.
     return (
       <button
         data-wf="Chip"
         type="button"
-        onClick={onClick}
         aria-pressed={pressed}
-        id={props.id}
-        title={props.title}
-        aria-label={props["aria-label"]}
+        {...(props as unknown as ComponentProps<"button">)}
+        onClick={onClick}
         className={cn(
           classes,
           "cursor-default transition-[filter,background-color] duration-100 hover:brightness-95 dark:hover:brightness-125",
+          // A filter chip is primary navigation on a phone: give it a 24 px+ hit area.
+          size === "xs" ? "max-md:h-6" : "max-md:h-7 max-md:px-2",
           pressed && "ring-1 ring-current/40 ring-inset",
         )}
       >
@@ -77,7 +89,7 @@ export function Chip({
     );
   }
   return (
-    <span data-wf="Chip" className={classes} {...props}>
+    <span data-wf="Chip" className={classes} {...props} {...(onClick ? { onClick } : null)}>
       {body}
     </span>
   );

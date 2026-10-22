@@ -30,9 +30,9 @@ export function CodeBlock({
         className,
       )}
     >
-      <div className="absolute top-1 right-1 z-10 flex items-center gap-1 rounded-sm bg-subtle pl-1.5">
+      <div className="absolute top-1 right-1 z-raised flex items-center gap-1 rounded-sm bg-subtle pl-1.5">
         {lang && (
-          <span className="select-none font-mono text-[10px] text-fg-faint lowercase">{lang}</span>
+          <span className="select-none font-mono text-fg-faint text-xs lowercase">{lang}</span>
         )}
         <span className="opacity-0 transition-opacity duration-100 focus-within:opacity-100 group-hover/code:opacity-100">
           <CopyButton text={code} label="Copy code" />
@@ -41,7 +41,7 @@ export function CodeBlock({
       <pre
         className={cn(
           "overflow-x-auto py-2.5 pl-3 font-mono text-fg leading-[1.6]",
-          compact ? "text-[11px]" : "text-[12px]",
+          compact ? "text-xs" : "text-sm",
           lang ? "pr-20" : "pr-10",
         )}
         style={maxHeight ? { maxHeight, overflowY: "auto" } : undefined}
@@ -54,8 +54,9 @@ export function CodeBlock({
                 data-line={i + 1}
                 className={cn(
                   "-ml-3 block pl-3",
+                  // A 2 px bar on the left edge: the line's own border, not a shadow.
                   i + 1 === highlightLine &&
-                    "-mr-20 bg-danger/10 shadow-[inset_2px_0_0_var(--wf-signal-danger)]",
+                    "-mr-20 border-danger border-l-2 bg-danger/10 pl-[calc(var(--spacing)*3-2px)]",
                 )}
               >
                 {line || " "}

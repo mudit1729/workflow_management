@@ -49,6 +49,20 @@ function findSubTitle(d: IssueDetail, sub: string): string | undefined {
 
 const DANGLING = "Dangling reference (F009)";
 
+/**
+ * Where a click on an entry reference lands, as a URL, so copy link, middle-click and "open in a
+ * new tab" agree with the click: the drawer over the board (the full page below 768 px, like
+ * `useOpenIssue`), on the tab and log view that hold the entry.
+ */
+function entryHref(issue: string, tab?: IssueTab, log?: LogView): string {
+  const narrow = typeof window !== "undefined" && window.innerWidth < 768;
+  const query = new URLSearchParams();
+  if (tab) query.set("tab", tab);
+  if (log) query.set("log", log);
+  const qs = query.toString();
+  return hrefFor(`${narrow ? "/i" : "/w/i"}/${issue}${qs ? `?${qs}` : ""}`);
+}
+
 const linkClass =
   "inline items-baseline rounded-sm font-medium text-fg underline decoration-border-strong decoration-1 underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:decoration-fg-muted";
 
@@ -59,7 +73,7 @@ function Dangling({ target, className }: { target: string; className?: string })
         data-wf="RefLink"
         data-dangling=""
         className={cn(
-          "font-mono text-[0.92em] text-fg-muted underline decoration-dashed decoration-fg-faint underline-offset-[3px]",
+          "code-inline text-fg-muted underline decoration-dashed decoration-fg-faint underline-offset-[3px]",
           className,
         )}
       >
@@ -137,11 +151,11 @@ export function RefLink({ target, issueId, className }: RefLinkProps) {
       <Tooltip content={tip}>
         <a
           data-wf="RefLink"
-          href={hrefFor(`/i/${issueIdResolved}`)}
+          href={entryHref(issueIdResolved, kind?.tab, kind?.log)}
           onClick={(e) =>
             follow(e, () => openIssue(issueIdResolved, { tab: kind?.tab, log: kind?.log }))
           }
-          className={cn(linkClass, "font-mono text-[0.92em]", className)}
+          className={cn(linkClass, "code-inline", className)}
         >
           {local ? sub : `${issueIdResolved} · ${sub}`}
         </a>

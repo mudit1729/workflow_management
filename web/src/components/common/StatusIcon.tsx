@@ -1,4 +1,5 @@
-// Linear-style status glyphs, 14 px on a 14 × 14 grid, drawn in the status color.
+// Linear-style status glyphs, 14 px on a 14 × 14 grid, drawn in the status color. The check and
+// the cross are knocked out of the filled disc in the page color (white in light, near-black in dark).
 import type { ComponentProps, ReactNode } from "react";
 import type { IssueStatus, TaskStatus } from "@/gen/types";
 import { cn } from "@/lib/cn";
@@ -71,7 +72,7 @@ export function StatusIcon({ status, size = 14, className, style, ...props }: St
           <path
             d="M4.4 7.2 6.2 9 9.6 5.3"
             fill="none"
-            stroke="white"
+            className="stroke-bg"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -86,7 +87,7 @@ export function StatusIcon({ status, size = 14, className, style, ...props }: St
           <path
             d="M5 5 9 9M9 5 5 9"
             fill="none"
-            stroke="white"
+            className="stroke-bg"
             strokeWidth="1.5"
             strokeLinecap="round"
           />

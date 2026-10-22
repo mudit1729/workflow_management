@@ -14,7 +14,7 @@ export const DialogPortal = DialogPrimitive.Portal;
 
 const contentVariants = cva(
   [
-    "fixed z-50 flex flex-col overflow-hidden rounded-lg bg-bg text-fg shadow-pop outline-none",
+    "fixed z-dialog flex flex-col overflow-hidden rounded-lg bg-bg text-fg shadow-pop outline-none",
     "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=open]:animate-in data-[state=open]:duration-150",
     "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-98 data-[state=closed]:animate-out data-[state=closed]:duration-100",
   ],
@@ -61,7 +61,7 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-0 z-50 bg-black/20 dark:bg-black/50",
+          "fixed inset-0 z-dialog bg-scrim",
           "data-[state=open]:fade-in-0 data-[state=open]:animate-in data-[state=open]:duration-150",
           "data-[state=closed]:fade-out-0 data-[state=closed]:animate-out data-[state=closed]:duration-100",
         )}
@@ -112,12 +112,21 @@ export function DialogContent({
   );
 }
 
-/** Right-aligned action row at the end of a dialog body. */
+/**
+ * Right-aligned action row at the end of a dialog body. It sticks to the bottom of the
+ * dialog's scrolling body, so the primary action stays in view when the content grows past the
+ * dialog (a long form on a laptop, anything on a phone). It bleeds into the body's 16 px
+ * padding (-mx-4 -mb-4, and -bottom-4 because a sticky edge is measured from the scroller's
+ * content box), so it assumes the default body padding.
+ */
 export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-wf="DialogFooter"
-      className={cn("mt-4 flex items-center justify-end gap-2", className)}
+      className={cn(
+        "-bottom-4 sticky z-raised -mx-4 -mb-4 mt-4 flex items-center justify-end gap-2 border-border border-t bg-bg px-4 py-3",
+        className,
+      )}
       {...props}
     />
   );

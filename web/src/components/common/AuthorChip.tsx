@@ -18,6 +18,15 @@ export function authorHue(author?: Author): string {
   return author ? `var(--wf-hue-${author.color})` : "var(--wf-text-faint)";
 }
 
+/** Glyph size inside a tile, from the tile size: the tiles are 14 and 16 px (chips, stacks) and
+ *  28 px (hover card). Kept on a short scale instead of a multiplier, so glyphs line up. */
+function tileGlyph(px: number): number {
+  if (px <= 14) return 10;
+  if (px <= 16) return 12;
+  if (px <= 24) return 14;
+  return 16;
+}
+
 function initials(author: Author | undefined, handle: string, max: number): string {
   const words = (author?.name ?? "").trim().split(/\s+/).filter(Boolean);
   const letters = words.length ? words.map((w) => w[0]) : [handle[0] ?? "?"];
@@ -43,7 +52,7 @@ export function AuthorAvatar({ handle, author, px, className, style }: AuthorAva
       role="img"
       aria-label={`@${handle}`}
       className={cn(
-        "inline-flex shrink-0 select-none items-center justify-center font-semibold text-white leading-none",
+        "inline-flex shrink-0 select-none items-center justify-center font-semibold text-on-hue leading-none",
         agent ? "rounded-[3px]" : "rounded-full",
         px >= 24 && agent && "rounded-[5px]",
         className,
@@ -57,7 +66,7 @@ export function AuthorAvatar({ handle, author, px, className, style }: AuthorAva
       }}
     >
       {agent ? (
-        <Bot aria-hidden size={Math.round(px * 0.7)} strokeWidth={2.25} />
+        <Bot aria-hidden size={tileGlyph(px)} strokeWidth={1.75} />
       ) : (
         initials(author, handle, two ? 2 : 1)
       )}
@@ -88,9 +97,9 @@ function AuthorCard({ author }: { author: Author }) {
             {author.name && <span className="truncate">@{author.handle}</span>}
             {author.name && <span aria-hidden>·</span>}
             {agent ? (
-              <Bot aria-hidden size={12} strokeWidth={1.75} />
+              <Bot aria-hidden size={14} strokeWidth={1.75} />
             ) : (
-              <User aria-hidden size={12} strokeWidth={1.75} />
+              <User aria-hidden size={14} strokeWidth={1.75} />
             )}
             {agent ? "Agent" : "Human"}
           </span>
@@ -100,7 +109,7 @@ function AuthorCard({ author }: { author: Author }) {
         {author.runtime && <Row label="Runtime">{RUNTIME_LABEL[author.runtime]}</Row>}
         {author.model && (
           <Row label="Model">
-            <span className="font-mono text-[11.5px]">{author.model}</span>
+            <span className="font-mono text-xs">{author.model}</span>
           </Row>
         )}
         <Row label="Lanes">
@@ -109,7 +118,7 @@ function AuthorCard({ author }: { author: Author }) {
               {author.lanes.map((l) => (
                 <span
                   key={l}
-                  className="inline-flex h-4 items-center rounded-sm bg-muted px-1 text-[10.5px] text-fg-muted"
+                  className="inline-flex h-4 items-center rounded-sm bg-muted px-1 text-fg-muted text-xs"
                 >
                   {l}
                 </span>

@@ -98,7 +98,7 @@ function DiagramFence({ id, compact }: { id: string; compact: boolean }) {
   if (!diagram) {
     return (
       <div className="rounded-md border border-border border-dashed px-3 py-2.5 text-fg-faint text-sm">
-        Diagram <code className="font-mono text-[11.5px]">{id || "(no id)"}</code> not found.
+        Diagram <code className="code-inline">{id || "(no id)"}</code> not found.
       </div>
     );
   }
@@ -115,11 +115,11 @@ function TaskBox({ checked }: { checked: boolean }) {
       role="img"
       aria-label={checked ? "Done" : "Not done"}
       className={cn(
-        "mr-1.5 inline-flex size-[12px] shrink-0 items-center justify-center rounded-[3px] border align-[-1px]",
+        "mr-1.5 inline-flex size-[14px] shrink-0 items-center justify-center rounded-sm border-[1.5px] align-[-2px]",
         checked ? "border-accent bg-accent text-accent-fg" : "border-border-strong bg-bg",
       )}
     >
-      {checked && <Check aria-hidden size={9} strokeWidth={3.25} />}
+      {checked && <Check aria-hidden size={14} strokeWidth={1.75} />}
     </span>
   );
 }
@@ -281,11 +281,7 @@ function buildComponents(opts: BuildOptions): Components {
     ),
     code: ({ node: _n, className, ...p }: P<"code">) => (
       <code
-        className={cn(
-          "rounded-sm bg-muted px-1 py-px font-mono text-fg",
-          compact ? "text-[11px]" : "text-[12px]",
-          className,
-        )}
+        className={cn("code-inline rounded-sm bg-muted px-1 py-px text-fg", className)}
         {...p}
       />
     ),
@@ -429,7 +425,7 @@ function SourceGutter({
   return (
     <div
       data-wf="SourceGutter"
-      className="pointer-events-none absolute inset-y-0 left-0 z-10"
+      className="pointer-events-none absolute inset-y-0 left-0 z-raised"
       style={{ width: gutter }}
     >
       {gutter >= 40 && (
@@ -491,7 +487,14 @@ export function MarkdownProse({
   );
   const gutter = source ? (source.gutter ?? 40) : 0;
   const trace = useTrace(Boolean(source) && gutter > 0, gutter, md);
-  if (!md.trim()) return <>{empty}</>;
+  if (!md.trim()) {
+    // Nothing to name when there is nothing to show; a placeholder gets the name, without a box.
+    return empty == null ? null : (
+      <div data-wf="MarkdownProse" data-empty="" className="contents">
+        {empty}
+      </div>
+    );
+  }
   return (
     <div
       ref={trace.root}
@@ -502,6 +505,7 @@ export function MarkdownProse({
       className={cn(
         "flex min-w-0 flex-col break-words text-fg",
         source && "relative",
+        compact && "[--wf-code-size:var(--wf-text-xs)]",
         doc === "page"
           ? "gap-3 text-md leading-[1.65]"
           : doc === "pane"

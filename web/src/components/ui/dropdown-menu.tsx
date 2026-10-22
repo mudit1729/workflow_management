@@ -13,7 +13,7 @@ export const DropdownMenuSub = MenuPrimitive.Sub;
 export const DropdownMenuPortal = MenuPrimitive.Portal;
 
 const surface = [
-  "z-50 min-w-[180px] overflow-y-auto overflow-x-hidden rounded-md bg-bg p-1 text-fg shadow-pop outline-none",
+  "z-popover min-w-[180px] overflow-y-auto overflow-x-hidden rounded-md bg-bg p-1 text-fg shadow-pop outline-none",
   "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=open]:animate-in data-[state=open]:duration-100",
   "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-98 data-[state=closed]:animate-out data-[state=closed]:duration-75",
 ].join(" ");
@@ -109,7 +109,7 @@ export function DropdownMenuItem({
       {icon && <IconSlot>{icon}</IconSlot>}
       <Label hint={hint}>{children}</Label>
       {selected && (
-        <Check aria-hidden size={14} strokeWidth={2} className="shrink-0 text-fg-muted" />
+        <Check aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
       )}
       {shortcut && <Kbd combo={shortcut} className="ml-1" />}
     </MenuPrimitive.Item>
@@ -145,7 +145,7 @@ export function DropdownMenuCheckboxItem({
         )}
       >
         <MenuPrimitive.ItemIndicator>
-          <Check size={10} strokeWidth={3} className="text-accent-fg" />
+          <Check aria-hidden size={14} strokeWidth={1.75} className="text-accent-fg" />
         </MenuPrimitive.ItemIndicator>
       </span>
       {icon && <IconSlot>{icon}</IconSlot>}
@@ -178,7 +178,7 @@ export function DropdownMenuRadioItem({
       {icon && <IconSlot>{icon}</IconSlot>}
       <Label hint={hint}>{children}</Label>
       <MenuPrimitive.ItemIndicator className="flex shrink-0 items-center">
-        <Check aria-hidden size={14} strokeWidth={2} className="text-fg-muted" />
+        <Check aria-hidden size={14} strokeWidth={1.75} className="text-fg-muted" />
       </MenuPrimitive.ItemIndicator>
       {shortcut && <Kbd combo={shortcut} className="ml-1" />}
     </MenuPrimitive.RadioItem>

@@ -35,7 +35,7 @@ function Transition({ from, to }: { from?: IssueStatus; to?: IssueStatus }) {
         <StatusIcon status={from} />
         {STATUS_LABEL[from]}
       </span>
-      <ArrowRight aria-hidden size={12} strokeWidth={1.75} className="text-fg-faint" />
+      <ArrowRight aria-hidden size={14} strokeWidth={1.75} className="text-fg-faint" />
       <span className="inline-flex items-center gap-1.5">
         <StatusIcon status={to} />
         {STATUS_LABEL[to]}
@@ -53,6 +53,21 @@ export function MoveGateDialog() {
   const issue = g.issue;
   const subject = issue ? `${issue.id} · ${issue.title}` : undefined;
 
+  // The gate opens from the store, not from a Radix trigger, so Radix has nowhere to return focus
+  // to and it would land on <body> (and the board's key bindings lose their anchor). Send it back
+  // to the card of the issue that was being moved, else to the page's status control.
+  const restoreFocus = (e: Event) => {
+    e.preventDefault();
+    const id = last.current.issue?.id;
+    const card = [...document.querySelectorAll<HTMLElement>('[data-wf="IssueCard"]')].find(
+      (el) => el.dataset.issueId === id,
+    );
+    const target =
+      card?.querySelector<HTMLElement>("[data-card-link]") ??
+      document.querySelector<HTMLElement>('[data-wf="StatusSelect"]');
+    target?.focus({ preventScroll: true });
+  };
+
   return (
     <Dialog
       open={gate.open}
@@ -67,6 +82,7 @@ export function MoveGateDialog() {
           hideClose
           title="Move not allowed"
           description={subject}
+          onCloseAutoFocus={restoreFocus}
         >
           <div className="flex flex-col gap-3">
             <Transition from={issue?.status} to={g.to} />
@@ -88,6 +104,7 @@ export function MoveGateDialog() {
           hideClose
           title="Move to Done with open gaps?"
           description={subject}
+          onCloseAutoFocus={restoreFocus}
         >
           <ul className="flex flex-col gap-1.5">
             {g.gaps.map((gap: string) => (
@@ -100,7 +117,7 @@ export function MoveGateDialog() {
             ))}
           </ul>
           <p className="mt-3 flex items-center gap-1.5 text-fg-muted text-sm">
-            <TriangleAlert aria-hidden size={12} strokeWidth={1.75} className="text-stale" />
+            <TriangleAlert aria-hidden size={14} strokeWidth={1.75} className="text-stale" />
             Lint will flag this as drift (Q001).
           </p>
           <DialogFooter>

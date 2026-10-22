@@ -91,10 +91,15 @@ export function SourceLineMarker({
       {shortened && (
         <span
           aria-hidden
-          className="absolute left-0 z-10 hidden h-5 items-center gap-1 whitespace-nowrap rounded-sm border border-border bg-bg px-1.5 text-fg-muted group-hover/marker:flex group-focus-visible/marker:flex"
+          className="absolute left-0 z-raised hidden h-5 items-center gap-1 whitespace-nowrap rounded-sm border border-border bg-bg px-1.5 text-fg-muted group-hover/marker:flex group-focus-visible/marker:flex"
         >
           {full}
-          <ArrowUpRight size={10} strokeWidth={2} className="shrink-0 text-fg-faint" />
+          <ArrowUpRight
+            aria-hidden
+            size={12}
+            strokeWidth={1.75}
+            className="shrink-0 text-fg-faint"
+          />
         </span>
       )}
     </button>

@@ -6,7 +6,8 @@ import { useHotkey } from "@/lib/hooks";
 import { Kbd } from "./kbd";
 
 const field = [
-  "w-full min-w-0 rounded-md border border-border bg-bg text-base text-fg",
+  // 16 px on a phone: iOS Safari zooms the whole page when a smaller field is focused.
+  "w-full min-w-0 rounded-md border border-border bg-bg text-base text-fg max-md:text-lg",
   "placeholder:text-fg-faint",
   "transition-[border-color,box-shadow] duration-100 ease-wf",
   "hover:border-border-strong",
@@ -123,7 +124,7 @@ export function SearchInput({
           }}
           className="absolute right-1 flex size-5 items-center justify-center rounded-sm text-fg-faint hover:bg-muted hover:text-fg"
         >
-          <X size={12} strokeWidth={2} />
+          <X aria-hidden size={14} strokeWidth={1.75} />
         </button>
       ) : (
         shortcut &&

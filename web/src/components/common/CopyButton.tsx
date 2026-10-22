@@ -58,9 +58,9 @@ export function CopyButton({
   };
 
   const icon = copied ? (
-    <Check size={14} strokeWidth={2} className="text-status-done" />
+    <Check aria-hidden size={14} strokeWidth={1.75} className="text-status-done" />
   ) : (
-    <Copy size={size === "sm" ? 13 : 14} strokeWidth={1.75} />
+    <Copy aria-hidden size={14} strokeWidth={1.75} />
   );
 
   if (variant === "button") {
