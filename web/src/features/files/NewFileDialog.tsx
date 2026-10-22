@@ -7,6 +7,8 @@ import { RadioGroup } from "radix-ui";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Dialog, DialogContent, DialogFooter, Input } from "@/components/ui";
+import { ContextPicker } from "@/features/context";
+import { type ContextItem, toLink } from "@/features/context/types";
 import type { GroupNode } from "@/gen/types";
 import { useMe, useSnapshot, useWorkspaceFiles, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -104,6 +106,7 @@ function NewFileForm({
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [override, setOverride] = useState<string | null>(null);
+  const [context, setContext] = useState<ContextItem[]>([]);
   const [busy, setBusy] = useState(false);
 
   const groups = useMemo(() => (snapshot ? groupOptions(snapshot.groups) : []), [snapshot]);
@@ -197,7 +200,13 @@ function NewFileForm({
       if (template === "issue") {
         const prefix = snapshot?.config.id_prefix ?? "wf";
         id = newId(prefix, new Set(snapshot?.issues.map((i) => i.id)));
-        text = goalTemplate({ id, title: title.trim(), created: nowTs() });
+        text = goalTemplate({
+          id,
+          title: title.trim(),
+          created: nowTs(),
+          links: context.map(toLink),
+          dir: path.slice(0, Math.max(0, path.lastIndexOf("/"))),
+        });
       } else {
         text = templateForPath(path, { author: me });
       }
@@ -205,7 +214,7 @@ function NewFileForm({
       if (!res) return; // the hook explained the failure
       toast.success(`Created ${basename(path)} · the board re-read it`, {
         description: id ? `${id} is in Backlog.` : undefined,
-        action: { label: "Open board", onClick: () => void go.board() },
+        action: { label: "Open Workflow", onClick: () => void go.board() },
       });
       onCreated(path);
       close();
@@ -288,6 +297,7 @@ function NewFileForm({
               />
             </Field>
           </div>
+          <ContextPicker value={context} onChange={setContext} compact />
         </div>
       )}
 

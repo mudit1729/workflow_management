@@ -1,5 +1,6 @@
 // Starting text for new files. Every template is a valid file under the contract grammar
 // (1.3–1.5), so a freshly created file parses and lints clean, and the board shows it.
+import { type ContextLink, linkLine } from "@/features/context/links";
 import { basename, type IssueFileName, isIssueFileName } from "./paths";
 
 const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
@@ -46,7 +47,20 @@ export interface TemplateOpts {
 
 // ---------------------------------------------------------------- goal.md
 
-export function goalTemplate(o: { id: string; title: string; created?: string }): string {
+/**
+ * A new issue's goal.md. `context` replaces the placeholder under `## Context`; `links` become
+ * the bullets of `## Links`, a file link relative to `dir` (the folder of the new issue). The
+ * text is the one the New issue dialog's `new_issue` op writes.
+ */
+export function goalTemplate(o: {
+  id: string;
+  title: string;
+  created?: string;
+  context?: string;
+  links?: ContextLink[];
+  dir?: string;
+}): string {
+  const links = [...new Map((o.links ?? []).map((l) => [`${l.kind}:${l.target}`, l])).values()];
   return `${[
     "---",
     `id: ${o.id}`,
@@ -61,12 +75,14 @@ export function goalTemplate(o: { id: string; title: string; created?: string })
     "",
     "## Context",
     "",
-    "Say why this work matters and who it helps, in one or two short paragraphs.",
+    o.context?.trim() ||
+      "Say why this work matters and who it helps, in one or two short paragraphs.",
     "",
     "## Success criteria",
     "",
     "- [ ] SC-1: When the issue is opened, the drawer shall show its goal within 1 s.",
     "  - verify: manual",
+    ...(links.length ? ["", "## Links", "", ...links.map((l) => linkLine(l, o.dir ?? ""))] : []),
   ].join("\n")}\n`;
 }
 

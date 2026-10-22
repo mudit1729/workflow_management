@@ -204,6 +204,7 @@ function targetFile(store: Store, op: WfOp): string {
   switch (op.op) {
     case "set_status":
     case "toggle_criterion":
+    case "add_links":
       return store.filePath(op.issue, "goal.md");
     case "set_task_status":
     case "toggle_step":

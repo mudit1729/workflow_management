@@ -4,6 +4,7 @@
 import { FileText, OctagonAlert, Target } from "lucide-react";
 import { Fragment, type ReactNode, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { CopyButton, EmptyState, MarkdownProse } from "@/components/common";
+import { AddContextButton, LinkedContext, LinkedPreview, linkKeys } from "@/features/context";
 import type { Diagnostic, IssueDetail } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { CoverageStrip } from "../CoverageStrip";
@@ -72,9 +73,33 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
         </GoalSection>
       )}
 
-      {links && (
-        <GoalSection title="Links" wf="GoalLinks">
-          <MarkdownProse md={links} issueId={summary.id} compact />
+      {(links || hasBody) && (
+        <GoalSection
+          title="Links"
+          wf="GoalLinks"
+          meta={<AddContextButton issueId={summary.id} linked={linkKeys(links, summary.path)} />}
+        >
+          {links ? (
+            <>
+              <LinkedContext
+                md={links}
+                issueId={summary.id}
+                dir={summary.path}
+                diagrams={detail.diagrams}
+              />
+              <LinkedPreview
+                md={links}
+                dir={summary.path}
+                issueId={summary.id}
+                issueTitle={summary.title}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-fg-faint">
+              Nothing linked yet. Add library items, glossary terms, files or decisions the agent
+              should read.
+            </p>
+          )}
         </GoalSection>
       )}
 

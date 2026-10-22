@@ -2,7 +2,7 @@
 // minimal text edit (ticking SC-3 flips `[ ]` to `[x]` on its line and nothing else changes).
 // Order inside each op: find the target → 409 if the client's rev is stale → 422 if the
 // move or value is not allowed → edit the text through `store.mutate`, which loads the result.
-import type { IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
+import type { ContextLink, IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
 import type { NewIssueOp, WfOp } from "@/lib/api/types";
 import {
@@ -13,6 +13,7 @@ import {
   TASK_STATUS_LABEL,
 } from "@/lib/status";
 import {
+  addLinks as addLinksText,
   answerRequestsReferring,
   answerRequest as answerRequestText,
   approveLibraryItem,
@@ -116,6 +117,8 @@ export function applyOp(store: Store, op: WfOp): OpResult {
       return newGroup(store, op);
     case "approve_library":
       return approveLibrary(store, op);
+    case "add_links":
+      return addLinks(store, op);
   }
 }
 
@@ -534,6 +537,70 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
   return result(store, m, sourceIssue);
 }
 
+// ---------------------------------------------------------------- links
+
+/** Words for a count of links: "1 link", "3 links". */
+const linkCount = (n: number) => `${n} link${n === 1 ? "" : "s"}`;
+
+/** A link must point at something that exists: a 422 names the first one that does not. */
+function checkLinks(store: Store, links: ContextLink[]): void {
+  for (const link of links) {
+    if (!link.target.trim()) reject("A link needs a target.");
+    switch (link.kind) {
+      case "library": {
+        const item = store.world.library.find((l) => l.id === link.target);
+        if (!item) reject(`Library item ${link.target} does not exist.`);
+        if (item.status === "retired") reject(`${link.target} is retired. Link a current item.`);
+        break;
+      }
+      case "entry": {
+        const [issueId, entryId] = link.target.split("#");
+        const src = store.world.issues.find((i) => i.goal.id === issueId);
+        if (!src) reject(`Issue ${issueId} does not exist.`);
+        const known = [...src.changes, ...src.decisions, ...src.learnings].some(
+          (e) => e.id === entryId,
+        );
+        if (!entryId || !known) reject(`Entry ${link.target} does not exist.`);
+        break;
+      }
+      case "term":
+        if (!store.world.glossary.some((t) => t.term === link.target))
+          reject(`Glossary term "${link.target}" does not exist.`);
+        break;
+      case "file":
+        if (store.text(link.target) === undefined && !store.assets()[link.target])
+          reject(`File ${link.target} does not exist.`);
+        break;
+      default:
+        reject("Unknown link kind. Use library, entry, term or file.");
+    }
+  }
+}
+
+function addLinks(store: Store, op: Of<"add_links">): OpResult {
+  const live = issueIn(store.world, op.issue);
+  const file = store.filePath(op.issue, "goal.md");
+  store.guard(file, "links", op.base_rev, () => ({ links: live.links ?? "" }));
+  if (op.links.length === 0) reject("Pick at least one item to link.");
+  checkLinks(store, op.links);
+
+  const by = store.me;
+  const dir = store.derived.dirs.get(op.issue) ?? file.slice(0, file.lastIndexOf("/"));
+  const m = store.mutate(by, op.issue, (w) => {
+    w.write(
+      file,
+      edit(() => addLinksText(read(w, file), op.links, dir)),
+    );
+    const title = `Linked ${linkCount(op.links.length)} in goal.md`;
+    return {
+      touches: [{ file, anchors: ["links"] }],
+      activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title }],
+    };
+  });
+  return result(store, m, op.issue);
+}
+
 // ---------------------------------------------------------------- creation
 
 function newIssue(store: Store, op: NewIssueOp): OpResult {
@@ -549,6 +616,9 @@ function newIssue(store: Store, op: NewIssueOp): OpResult {
   if (siblingIssue || siblingGroup)
     reject(`A folder named "${op.slug}" already exists in ${group.title}. Pick another slug.`);
 
+  const links = op.links ?? [];
+  checkLinks(store, links);
+
   const by = store.me;
   const id = store.newId(`${store.world.config.id_prefix}-`);
   const dir = store.derived.groupDirs.get(group.id) ?? group.slug;
@@ -563,6 +633,9 @@ function newIssue(store: Store, op: NewIssueOp): OpResult {
         size: op.size ?? "m",
         template: op.template,
         created: store.stamp(),
+        context: op.context_md,
+        links,
+        dir: `${dir}/${op.slug}`,
       }),
     );
     return {

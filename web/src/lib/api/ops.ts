@@ -8,6 +8,7 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import type {
+  ContextLink,
   Criterion,
   CriterionId,
   EntryId,
@@ -420,6 +421,18 @@ export function useApproveLibrary() {
   );
 }
 
+/** The caches that show who links what: library items (used by) and the issues that hold an entry. */
+function refreshLinked(links: ContextLink[] | undefined): void {
+  for (const link of links ?? []) {
+    if (link.kind === "library")
+      void queryClient.invalidateQueries({ queryKey: qk.library(link.target) });
+    if (link.kind === "entry") {
+      const issue = link.target.split("#")[0];
+      if (issue) void queryClient.invalidateQueries({ queryKey: qk.issue(issue) });
+    }
+  }
+}
+
 export function useNewIssue() {
   return useCallback(
     (args: {
@@ -428,6 +441,10 @@ export function useNewIssue() {
       title: string;
       template: NewIssueOp["template"];
       size?: Size;
+      /** Prose for `## Context`. Empty keeps the template's own text. */
+      context_md?: string;
+      /** Workdatabase items to link under `## Links`, in order. */
+      links?: ContextLink[];
       base_rev?: string;
     }) =>
       run<NewIssueOp>({
@@ -439,9 +456,31 @@ export function useNewIssue() {
           title: args.title,
           template: args.template,
           size: args.size,
+          ...(args.context_md?.trim() ? { context_md: args.context_md } : {}),
+          ...(args.links?.length ? { links: args.links } : {}),
         },
+        settle: () => refreshLinked(args.links),
       }),
     [],
+  );
+}
+
+/** Link Workdatabase items under `## Links` of an issue's goal.md. Items already there are skipped. */
+export function useAddLinks(issueId: IssueId) {
+  return useCallback(
+    (args: { links: ContextLink[]; base_rev?: string }) =>
+      run({
+        op: {
+          op: "add_links",
+          base_rev: args.base_rev ?? cachedFileRev(issueId, "goal.md"),
+          issue: issueId,
+          links: args.links,
+        },
+        issue: issueId,
+        rebase: async (o) => ({ ...o, base_rev: await freshRev(issueId, "goal.md") }),
+        settle: () => refreshLinked(args.links),
+      }),
+    [issueId],
   );
 }
 

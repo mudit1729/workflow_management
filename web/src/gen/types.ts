@@ -526,6 +526,21 @@ export interface Health {
 
 // ---------------------------------------------------------------- ops (POST /api/ops)
 
+/**
+ * One Workdatabase item linked from an issue: a bullet under `## Links` in goal.md.
+ * The markdown it becomes (`links.ts` in `features/context` is the grammar):
+ * - `library`: `- [[lib-4tz7c]] <label>`; `target` is the library id.
+ * - `entry`: `- [[wf-3k9x2#D-7f3k2]] <label>`; `target` is `<issue>#<entry id>`.
+ * - `term`: `- Glossary: <target> — <label>`; `target` is the term, `label` what it means.
+ * - `file`: `- [<label>](<path relative to the issue folder>)`; `target` is the
+ *   workspace-relative path of the file.
+ */
+export interface ContextLink {
+  kind: "library" | "entry" | "term" | "file";
+  target: string;
+  label: string;
+}
+
 export type Op =
   | { op: "set_status"; base_rev: Rev; issue: IssueId; status: IssueStatus; force?: boolean }
   | { op: "toggle_criterion"; base_rev: Rev; issue: IssueId; id: CriterionId; checked: boolean }
@@ -554,6 +569,11 @@ export type Op =
       slug: string;
       title: string;
       template: "default" | "bug" | "research" | "doc";
+      size?: Size;
+      /** Prose for `## Context` of the new goal.md. Empty: the template's own text. */
+      context_md?: string;
+      /** Workdatabase items to link under `## Links`, in order (see `ContextLink`). */
+      links?: ContextLink[];
     }
   | {
       op: "new_group";
@@ -563,7 +583,9 @@ export type Op =
       title: string;
       color?: number;
     }
-  | { op: "approve_library"; base_rev: Rev; id: LibId };
+  | { op: "approve_library"; base_rev: Rev; id: LibId }
+  /** Append Workdatabase items to `## Links` of goal.md. Items already linked are skipped. */
+  | { op: "add_links"; base_rev: Rev; issue: IssueId; links: ContextLink[] };
 
 export type OpName = Op["op"];
 

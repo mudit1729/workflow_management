@@ -5,7 +5,8 @@
 //
 // Files are never re-serialized, with two exceptions that the contract itself overwrites as a
 // whole: `current_state.md` (`overwriteState`) and a file that does not exist yet.
-import type { IssueStatus, LibraryStatus, TaskStatus } from "@/gen/types";
+import { linkKeys, linkLine } from "@/features/context/links";
+import type { ContextLink, IssueStatus, LibraryStatus, TaskStatus } from "@/gen/types";
 import type {
   ChangeSrc,
   DecisionSrc,
@@ -619,7 +620,11 @@ const TEMPLATES: Record<IssueTemplate, { context: string; criteria: string[]; la
     },
   };
 
-/** `goal.md` of a new issue: backlog, a scaffold of the sections, no plan and no state. */
+/**
+ * `goal.md` of a new issue: backlog, a scaffold of the sections, no plan and no state.
+ * `context` replaces the template's placeholder in `## Context`. `links` become the bullets of
+ * `## Links`, in order; a file link is written relative to `dir`, the folder of the new issue.
+ */
 export function newIssueGoal(args: {
   id: string;
   title: string;
@@ -627,8 +632,13 @@ export function newIssueGoal(args: {
   size?: IssueSrc["goal"]["size"];
   template?: IssueTemplate;
   created: string;
+  context?: string;
+  links?: ContextLink[];
+  dir?: string;
 }): string {
   const t = TEMPLATES[args.template ?? "default"];
+  const context = args.context?.replace(/\r\n/g, "\n").trim();
+  const links = dedupeLinks(args.links ?? []).map((l) => linkLine(l, args.dir ?? ""));
   const src: IssueSrc = {
     slug: "",
     group: "",
@@ -643,13 +653,82 @@ export function newIssueGoal(args: {
       blocked_by: [],
       created: args.created,
     },
-    context: t.context,
+    context: context || t.context,
     criteria: t.criteria.map((text) => ({ text, checked: false, verify: "manual" })),
+    links: links.length ? links.join("\n") : undefined,
     changes: [],
     decisions: [],
     learnings: [],
   };
   return renderGoal(src);
+}
+
+// ---------------------------------------------------------------- links
+
+const LINKS_HEADING = /^##\s+links\s*$/i;
+const OUT_OF_SCOPE_HEADING = /^##\s+out of scope\s*$/i;
+const CRITERIA_HEADING = /^##\s+.*(?:success criteria|acceptance)/i;
+const H2 = /^##\s/;
+const BULLET = /^\s*[-*+]\s/;
+
+/** The same item twice is one bullet. */
+function dedupeLinks(links: ContextLink[]): ContextLink[] {
+  const seen = new Set<string>();
+  return links.filter((l) => {
+    const key = `${l.kind}:${l.target}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** First line after `head` that starts an H2 section (or the end of the file). */
+function sectionEnd(d: Doc, head: number): number {
+  const mask = d.mask();
+  for (let i = head + 1; i < d.lines.length; i++) if (!mask[i] && H2.test(d.lines[i])) return i;
+  return d.lines.length;
+}
+
+/** The last line of `[head, end)` that holds text. */
+function lastContent(d: Doc, head: number, end: number): number {
+  let last = end - 1;
+  while (last > head && d.lines[last].trim() === "") last--;
+  return last;
+}
+
+/**
+ * Add context links to `## Links` of a goal.md: one bullet per item at the end of the section,
+ * in order, skipping items the section already links. A goal.md without the section gets it
+ * after `## Out of scope`, else after the success criteria, else at the end of the file
+ * (contract 1.3 order). Nothing else in the file moves. `fromDir` is the folder of the issue.
+ */
+export function addLinks(text: string, links: ContextLink[], fromDir: string): string {
+  const d = new Doc(text);
+  const head = find(d, LINKS_HEADING);
+  // What the section links already, with file links resolved against the issue folder.
+  const present =
+    head >= 0
+      ? linkKeys(d.lines.slice(head + 1, sectionEnd(d, head)).join("\n"), fromDir)
+      : new Set<string>();
+  const fresh = dedupeLinks(links)
+    .filter((l) => !present.has(`${l.kind}:${l.target}`))
+    .map((l) => linkLine(l, fromDir));
+  if (fresh.length === 0) return text;
+
+  if (head >= 0) {
+    const last = lastContent(d, head, sectionEnd(d, head));
+    if (last === head) d.lines.splice(head + 1, 0, "", ...fresh);
+    else d.lines.splice(last + 1, 0, ...(BULLET.test(d.lines[last]) ? [] : [""]), ...fresh);
+    return d.toString();
+  }
+
+  // The section is new: it follows the nearest earlier section of the contract order.
+  const prev =
+    find(d, OUT_OF_SCOPE_HEADING) >= 0 ? find(d, OUT_OF_SCOPE_HEADING) : find(d, CRITERIA_HEADING);
+  const at =
+    prev >= 0 ? lastContent(d, prev, sectionEnd(d, prev)) : lastContent(d, -1, d.lines.length);
+  d.lines.splice(at + 1, 0, "", "## Links", "", ...fresh);
+  return d.toString();
 }
 
 /** `_group.md` of a new group. */

@@ -16,6 +16,7 @@ export {
 export { type MoveGateState, requestMove, useMoveGate, useMoveIssue } from "./gate";
 export { qk } from "./keys";
 export {
+  useAddLinks,
   useAnswerRequest,
   useApproveLibrary,
   useNewGroup,
