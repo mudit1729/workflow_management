@@ -47,6 +47,7 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
   the nav.
 - Page and tab titles: `(3) Workflow · wf`, `Workflow · Inbox · wf`, `Workdatabase · wf` (Library),
   `Workdatabase · Glossary · wf`, `Workdatabase · Files · wf`, `Kit · wf`; 3 = my open inbox count.
+  A view's home sub-view (Board, Library) is not named in the title; the others are.
 
 ## Ground rules
 
@@ -64,7 +65,15 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
   `src/styles/base.css`): `bg-bg bg-subtle bg-muted border-border border-border-strong text-fg
   text-fg-muted text-fg-faint bg-accent text-accent bg-accent-subtle text-accent-fg
   text-status-<status> bg-status-<status> text-stale text-danger text-needs-you bg-hue-1..8
-  shadow-pop rounded-sm|md|lg font-mono`. Font sizes: `text-xs` 11, `text-sm` 12,
+  shadow-pop rounded-sm|md|lg font-mono`. Also in the vocabulary: `text-stale-text` and
+  `text-success-text` (amber and green as *readable text*, the signal color pulled toward the text
+  color; `text-stale` stays for dots, fills and borders), `text-on-hue` (text on a hue tile),
+  `bg-scrim` (the dim layer behind dialogs, the palette and the phone nav), `code-inline` (inline code
+  on the type scale: 12 px, 11 px inside a container that sets `--wf-code-size`) and the named layers
+  `z-raised z-overlay z-dialog z-popover z-tooltip` (10 / 40 / 50 / 60 / 70). Never write a
+  `color-mix()` for amber or green text in a feature, and never a raw z-index that stacks against
+  another component: pick a layer. Small local numbers (`z-[1]` to `z-30`) only order the children of
+  one component (a sticky head, the drawer's click-away layer). Font sizes: `text-xs` 11, `text-sm` 12,
   `text-base` 13, `text-md` 14, `text-lg` 16, `text-xl` 20. Spacing utilities use the
   density-aware 4 px unit (`p-2` = 8 px comfy). Weights 400/500/600 only
   (`font-normal font-medium font-semibold`). Never write raw hex colors in components;
@@ -101,10 +110,10 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | `/w/i/$id` | `BoardLayout` → `BoardPage` + `IssueDrawer id` | board search + `tab, log` |
 | `/i/$id` | `IssuePage id` | `tab, log` |
 | `/inbox` | Workflow · Inbox: `InboxView` | |
-| `/lib` | Workdatabase · Library: `LibraryView` | `kind, q` (`?tab=glossary` redirects to `/glossary`, keeping `q`) |
+| `/lib` | Workdatabase · Library: `LibraryView` (three layout modes, see its section) | `kind, q` (`?tab=glossary` redirects to `/glossary`, keeping `q`) |
 | `/lib/$id` | `LibraryView` with `LibraryItemView id` open | `kind, q` |
 | `/glossary` | Workdatabase · Glossary: `GlossaryPage` from `@/features/library` (renders its own top bar with `ViewTabs`) | `q` |
-| `/files` | Workdatabase · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed) |
+| `/files` | Workdatabase · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed), `line` (scroll to and flash that line) |
 | `/kit` | `KitPage` (component gallery) | |
 
 Every route renders inside the one `AppShell`. `subViewForPath(pathname)` (`@/components/common`) is
@@ -125,7 +134,9 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   — md = h-7, sm = h-6, icon = 7×7, icon-sm = 6×6. primary = accent bg; secondary = hairline.
 - `IconButton({ label: string, icon: ReactNode, size?: "sm"|"md", ...})` — ghost icon button with tooltip = label.
 - `Dialog, DialogTrigger, DialogContent({ title, description?, size?: "sm"|"md"|"lg"|"full", hideClose?, children }), DialogFooter, DialogClose`
-- `Sheet({ open, onOpenChange, side?: "right", width?: number, children, title })` — non-modal-looking overlay panel with `shadow-pop`.
+  — scrim is `bg-scrim` at `z-dialog`. `DialogFooter` is **sticky**: pinned to the bottom edge of a dialog whose body scrolls, so
+  the actions stay in reach on a phone (`z-raised`, hairline above).
+- `Sheet({ open, onOpenChange, side?: "right", width?: number, children, title })` — non-modal-looking overlay panel with `shadow-pop` at `z-overlay`.
 - `DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem({ icon?, shortcut?, disabled?, hint? }), DropdownMenuCheckboxItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent`
 - `Popover, PopoverTrigger, PopoverContent`, `HoverCard, HoverCardTrigger, HoverCardContent`
 - `Tooltip({ content: ReactNode, side?, shortcut?: string, children })` and `TooltipProvider`
@@ -133,9 +144,11 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - `Segmented<T extends string>({ value: T, onChange(v: T), options: { value: T, label: ReactNode, count?: number, icon?: ReactNode }[], size?: "sm"|"md", "aria-label": string })`
 - `Checkbox({ checked, onCheckedChange, variant?: "default"|"criterion", state?: "open"|"claimed"|"verified", disabled?, "aria-label"? })`
   — criterion variant: claimed = hatched fill, verified = solid fill with check.
-- `Input`, `Textarea`, `SearchInput({ value, onChange, placeholder, shortcut?: "/" })`
+- `Input`, `Textarea`, `SearchInput({ value, onChange, placeholder, shortcut?: "/" })` — the key cap shows while the field is empty and
+  unfocused, and only from 768 px (a phone has no `/` key; the placeholder gets the room back).
 - `Kbd({ combo: string })` — uses `comboKeys()`; `Kbd` renders small mono key caps.
-- `Chip({ tone?: "neutral"|"accent"|"danger"|"stale"|"success"|"outline", icon?, size?: "xs"|"sm", children, title? })`
+- `Chip({ tone?: "neutral"|"accent"|"danger"|"stale"|"success"|"outline", icon?, size?: "xs"|"sm", children, title?, onClick?, pressed? })`
+  — with `onClick` it is a button (`pressed` shows the on state; 28 px tall on a phone).
 - `Separator`, `Collapsible, CollapsibleTrigger, CollapsibleContent`, `Switch`, `Skeleton`
 - `Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem({ shortcut? }), CommandSeparator` (cmdk, styled)
 
@@ -151,7 +164,8 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   legal moves normal; illegal moves shown muted with hint "Needs Move anyway"; picking calls `useMoveIssue().move`.
 - `RelativeTime({ ts, className?, long?: boolean })` — `relativeShort`, tooltip `absolute(ts)`, re-renders every 30 s.
 - `EmptyState({ icon?, title, hint?, skill?: string, command?: string, action?: ReactNode, compact?: boolean })`
-  — quiet; shows "Run the `write-plan` skill" and a copyable `wf …` command when given.
+  — quiet; shows "Run the `write-plan` skill" and a copyable `wf …` command when given. It sizes the icon itself (14 px): callers pass the
+  bare icon.
 - `ProgressRing({ verified: number, claimed: number, total: number, size?: number (default 14), label?: boolean })`
   — solid arc = verified, hatched arc = claimed, track = border color; total 0 → dashed ring. Tooltip text
   "2 verified · 1 claimed · 5 criteria".
@@ -164,6 +178,10 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - `RefLink({ target: string, issueId?: string })` — `[[wf-3k9x2]]`, `[[wf-3k9x2#D-7f3k2]]`, `[[#T-4]]`, `[[lib-4tz7c]]`;
   resolves titles from the snapshot; dangling → dashed underline + F009 tooltip.
 - `GroupPath({ path: string[], className? })` — faint "wf / web".
+- `SourceLineMarker({ path, line, … })` — the quiet tag ("library/gotchas/rescan-subtrees.md:14") that a rendered block shows in the page's left
+  gutter on hover; it opens that line in Workdatabase · Files, or wherever its owner's `onJump` sends it. `CodeBlock({ code, lang?,
+  highlightLine?, maxHeight?, compact? })` — mono block; the marked line has a 2 px `border-danger` left bar (a real `border-l-2`, the
+  same bar `JsonSource` uses), never an inset shadow.
 - `ViewTabs({ view: "workflow" | "workdatabase", className? })` — the sub-view tabs of a view as real links (`Link`,
   `aria-current="page"` on the active one), after the view's name and icon. Workflow: Board · Inbox (accent count above
   zero); Workdatabase: Library · Glossary · Files (counts, lint dot when a file has errors). Also exports `VIEWS`,
@@ -197,7 +215,8 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
     gate via `useMoveGate`; otherwise writes. "Move anyway" sends `force: true`.
   - `useMoveGate()` (zustand): `{ open, kind: "illegal"|"done_gate", issue?, to?, reason?, gaps: string[], confirm(), cancel() }`.
   - `useToggleCriterion(issueId)`, `useToggleStep(issueId)`, `useSetTaskStatus(issueId)`, `useAnswerRequest()`,
-    `usePromote()`, `useApproveLibrary()`, `useNewIssue()`, `useNewGroup()` — each returns
+    `usePromote()`, `useApproveLibrary()`, `useNewIssue()`, `useNewGroup()`, `useAddLinks()` (adds `## Links` bullets to goal.md: the
+    "Add context" button) — each returns
     `(args) => Promise<OpResult | undefined>`.
   - `useWriteWorkspaceFile(): (args: { path, text, base_rev? }) => Promise<{ rev } | undefined>` — saves a whole file;
     toasts 409/422/other itself and resolves `undefined`. `useDeleteWorkspaceFile(): (args: { path, base_rev? }) => Promise<void>`
@@ -277,9 +296,12 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   file on disk is shifted like the rest (write it relative to `RECORDED_AT`); a time typed in the Files editor
   is taken as is, because the editor shows the working copy. `time.ts` has the formatters (`toTs`, `toDate`, `nowTs`, `dateIn`).
 - **Diagrams.** The loader finds the archify blocks, validates them (valid, or `invalid` with JSON-path errors, F011) and
-  returns a `Diagram` per block. A valid one is `ready` with a `url` only when the Prototype panel's archify switch is on
+  returns a `Diagram` per block. A valid one is `ready` with a `url` only when the archify switch is on
   and a stand-in preview page exists for its id (`mock/diagram-previews.json`, pages in `public/diagrams/<id>.html`);
-  otherwise it is `unavailable` with its JSON source. `node scripts/render-diagram-previews.mjs` redraws the pages from
+  otherwise it is `unavailable` with its JSON source. **The switch starts off** (archify is not installed in this world, so the
+  first thing a diagram card shows is the honest unavailable state). Two controls turn it on and off: the DevPanel's "Archify
+  available" switch, and the unavailable card's own "Prototype: show the stand-in preview" button (it calls
+  `setArchifyAvailable(true)`; the DevPanel switch follows the snapshot). `mock/store.ts` `archify` option: default `false`. `node scripts/render-diagram-previews.mjs` redraws the pages from
   the workspace's blocks, writing only what differs; the dev server runs it again when a file with a block changes.
 - **Lint.** Findings carry the file, line and column of the text. Implemented: F001–F014, F016, F017, S01–S03, S05–S09, S11,
   S13 (see `md/lint.ts`, `md/checks.ts`, the parsers), plus an inline `<!-- wf-lint-disable S06 -->`. `[lint] disable = ["S09"]`
@@ -300,33 +322,46 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   `"(3) Workflow · wf"` (see Naming) where 3 = my open inbox count; `tabTitle(path, workspace, count)` lives in `app/tab-title.ts`.
 - `app/router.tsx` — TanStack Router, code-based route tree per the table above; `validateSearch` for each route;
   `createHashHistory()` when `VITE_HASH_ROUTER === "1"`; register the router type.
-- `app/AppShell.tsx` — grid `[NavRail | Main]`, viewport-locked. Main hosts the route outlet.
+- `app/AppShell.tsx` — grid `[NavRail | Main]`, viewport-locked. Main hosts the route outlet. `RailSlot` is the rail's grid cell:
+  below 1100 px it is the 52 px icon rail (see NavRail) and, when opened, the full rail floats over the page in the same 52 px cell
+  (no page jump) with a click-away layer, both at `z-overlay`. Below 768 px a top bar (`MobileTopBar`: menu, name, Prototype, search)
+  opens `MobileNavSheet`, a modal sheet on `bg-scrim` (`z-overlay`) with the rail inside (`z-dialog`). A skip link ("Skip to
+  content") sits at `z-popover`.
 - `app/BoardLayout.tsx` — `/w` layout: root `<div className="relative flex h-full min-h-0 min-w-0">` holding
   `<div className="min-w-0 flex-1"><BoardPage/></div>` and the drawer `<Outlet/>`. The drawer route renders
   `IssueDrawer`, which is a flex item when docked and `absolute inset-y-0 right-0` when overlaid.
-- `app/NavRail.tsx` — collapsible (232 ↔ 52 px; ⌘B or `[`): a faint "Workspace" label above the workspace name
-  ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid icon, the
-  accent Inbox count on it) with indented sub-items Board (`g w`) and Inbox (`g i`, count), **Workdatabase** (Database icon;
-  `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`), each with a faint count; then the **Groups** tree (it
-  filters the Workflow board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme
-  (system/light/dark), density, notifications toggle, ⌘K hint, `?` hint. Collapsed: one icon per view, tooltips list
-  the sub-views. The mobile sheet mirrors the expanded rail. Active states follow the route (`useActiveSubView`).
+- `app/NavRail.tsx` — 232 px, or the 52 px icon rail. Wide screens (1100 px and up): collapsible by the saved choice (⌘B or `[`).
+  **768 to 1099 px: always the icon rail** whatever was saved (`useNavRail`, `NARROW_RAIL_QUERY`), so a tablet in portrait keeps its page
+  width; ⌘B, `[` and the expand button then open the full rail as an overlay that is saved nowhere. Content: a faint "Workspace" label
+  above the workspace name ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid
+  icon, the accent Inbox count on it) with indented sub-items Board (`g w`) and Inbox (`g i`, count), **Workdatabase** (Database icon;
+  `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`), each with a faint count; then the **Groups** tree (it filters the Workflow
+  board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme (system/light/dark), density, notifications
+  toggle, ⌘K hint, `?` hint. Icon rail: one icon per view, tooltips list the sub-views. The phone sheet mirrors the expanded rail.
+  Active states follow the route (`useActiveSubView`).
 - `app/GroupTree.tsx` — `role="tree"`; nested groups from `useGroupTree()`; each node: color dot (group hue), title,
   roll-up count, 32 px mini progress bar (status-colored segments), needs-you dot; selecting sets board `group`.
   Implicit groups show in italic. Collapsible nodes, keyboard arrows.
-- `app/CommandPalette.tsx` — ⌘K. Groups: Issues (search), Groups, Library, Actions (move open issue to…, new issue,
-  new group, toggle theme, density, "Workflow · Board", "Workflow · Inbox", "Workdatabase · Library",
-  "Workdatabase · Glossary", "Workdatabase · Files", "Kit", "Edit goal.md of <open issue>", simulate conflict,
-  play live event).
-- `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from contract §6 with `Kbd`; sections General, Go to, Workflow · Board,
-  Issue, Workdatabase · Files.
-- `app/NewIssueDialog.tsx` — `n`: group picker, slug (auto from title), title, template (default|bug|research|doc), size.
-  Calls `useNewIssue()`; opens the new issue.
-- `app/DevPanel.tsx` — a small "Prototype" pill bottom-left; opens controls: play next live event, simulate conflict
-  on next write, archify available toggle, connection state, reset data (back to the files on disk), open
-  Workdatabase · Files, jump to Kit. Hidden behind `.` key too.
+- `app/CommandPalette.tsx` — ⌘K. Result groups in order: Issues ("Recent issues" while the field is empty), Groups, Library, Glossary
+  (a term opens `/glossary?q=<term>`), Files (opens the file), Actions. Actions: new issue, new group, move open issue to…, open it as a
+  full page, "Edit goal.md of <open issue>", copy `wf context`, "Workflow · Board", "Workflow · Inbox", "Workdatabase · Library",
+  "Workdatabase · Glossary", "Workdatabase · Files", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
+  play the next live event.
+- `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from `SHORTCUTS` in `app/shortcuts.tsx` with `Kbd`; sections General, Go to,
+  Workflow · Board, Issue, Workdatabase · Files. Go to rows: "Workflow · Board" `g w`, "Workflow · Inbox" `g i`, "Workdatabase · Library"
+  `g l` or `g d`, "Workdatabase · Glossary" `g g`, "Workdatabase · Files" `g f`, "Kit" `g k`.
+- `app/NewIssueDialog.tsx` — `n`: group picker, slug (auto from title), title, template (default|bug|research|doc), size, and a
+  "Context from the Workdatabase" field (`ContextPicker`, see the context section) with a preview of what the agent will receive and
+  the file that will be created. Calls `useNewIssue()`; opens the new issue.
+- `app/RouteStates.tsx` — `RouteError`: "This view failed to load", the message, **Try again** (`router.invalidate()` then the
+  boundary's `reset()`; it does not reload the page, so the mock's in-memory edits survive), Copy details, Go to Workflow.
+  `RouteNotFound`.
+- `app/DevPanel.tsx` — a small "Prototype" pill bottom-left (expanded nav; an icon in the icon rail and the phone bar); opens controls:
+  play next live event, connection state, simulate conflict on next write, **archify available** (off by default; the unavailable
+  diagram card's "Prototype" button turns it on and the switch follows), reset data (back to the files on disk), open
+  Workdatabase · Files, jump to Kit. Toggled by the `.` key too.
 - `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g i` Inbox, `g d` Workdatabase (Library),
-  `g l` Library, `g g` Glossary, `g f` Files, `g k` Kit, `n`, `?`.
+  `g l` Library, `g g` Glossary, `g f` Files, `g k` Kit, `n`, `?`, `.`.
 
 ### board builder: `src/features/board/**`
 
@@ -336,7 +371,9 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   and the count summary (container queries: the summary needs 1280 px of board width; the breadcrumb shows its whole
   chain from 1152 px and only the current scope below that, the full path in its tooltip), swimlanes toggle (child groups | none), author filter
   (AuthorStack + menu), text filter (`/` focuses), "Show cancelled", count summary, "New issue" button.
-- 6 columns (`BOARD_COLUMNS`), cancelled only with `show=cancelled`. Column width `var(--wf-col-w)`. Backlog and Done
+- 6 columns (`BOARD_COLUMNS`), cancelled only with `show=cancelled` (when the column appears the board scrolls it into view: a link
+  that opens with it jumps, the toggle glides; at 1440 px the columns before it are then partly off to the left, inside the board's own
+  scroll container). Column width `var(--wf-col-w)`. Backlog and Done
   fold to a 36 px vertical rail (`usePrefs().foldedColumns`) showing the vertical label + count; click to unfold.
   Columns scroll horizontally inside the board; each column body scrolls vertically; virtualize above 40 cards
   (`@tanstack/react-virtual`). Card order: priority, then last activity.
@@ -345,11 +382,18 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   Drops across swimlanes are disabled (visibly: no drop indicator, `not-allowed` cursor).
 - Drag (pragmatic-drag-and-drop): drop into another column → `useMoveIssue().move` (optimistic; the gate dialog
   handles illegal moves and the done gate). Drop indicator: accent 2 px line + column highlight.
-- `IssueCard` anatomy: title (2-line clamp, 13 px medium); relative group path (faint, 11 px); 14 px `ProgressRing`
-  top-right; then signal chips **only when present**: needs-you (accent, count), blocked (danger), stale (amber),
-  lease holders (`AuthorStack`), lint dot. Priority glyph (urgent/high only) before the title. On hover/focus:
-  a footer line "3/8 tasks · 2 ready" and the last-activity time. Selected (open in drawer) = accent hairline.
-  `useRecentlyChanged` → `wf-flash`. Context menu / "…" button: Move to…, Open in new page, Copy link.
+- `IssueCard` anatomy: title (2-line clamp, 13 px medium) with the 14 px `ProgressRing` top-right; under it the **id row**: the relative
+  group path (faint, truncates) on the left, and at the right one quiet cluster in a fixed order: lint dot, lease holders
+  (`AuthorStack`), priority glyph (urgent: filled danger tile with "!"; high: three bars; others nothing), then the mono id. Priority sits
+  here, not before the title, so every title shares one left edge. Then signal chips **only when present** (wrapping, never clipped):
+  needs-you (accent, count), blocked (danger), stale / lease expired (amber). Selected (open in drawer) = accent hairline.
+  `useRecentlyChanged` → `wf-flash`.
+  **Hover footer = an overlay.** `data-wf="IssueCardFooter"` is `absolute` on the card's bottom edge and grows from 0 with
+  `grid-template-rows` (`0fr` to `1fr`), so the card never changes height and nothing below it moves while the pointer sweeps down a
+  column. It shows "3/8 tasks · 2 ready", the last-activity author and time, and the "…" menu (Move to…, Open in new page, Copy link).
+  One card shows it at a time: the hovered one while the pointer was the last input, the focused one while the keyboard was; the board
+  root carries `data-input="pointer|keyboard"` (set by `useBoardKeys`) for that. The footer covers the card's last row while open. Below
+  768 px and on `(hover: none)` screens there is no hover, so the footer is a plain, always-open last row in the flow.
 - Keyboard: `j/k` move card focus, `h/l` move column, Enter opens drawer, `o` full page, `s` opens the status menu
   of the focused card, `/` filter, `n` new issue (shell handles), Esc closes drawer.
 
@@ -375,7 +419,8 @@ before the other files exist.)
 - `tabs/FilesTab.tsx` `FilesTab({ detail })` — `DocsList` + `LintPanel`.
 - `DocsList({ docs, onOpen })`, `DocView({ doc })` (markdown via MarkdownProse; images inline; other files: size + open raw).
 - `LintPanel({ diagnostics })` — grouped by file, severity icon, rule id (mono), message, "line 12" jump link
-  (copies `path:line`), fix hint.
+  (copies `path:line`), fix hint, and "Edit at this line": `useEditAtLine()` calls `useFilesNav().edit(path, { line })`, so the editor opens with
+  the caret and the scroll on that line (`EditIntent.line`). The Goal tab's F001 banner "Fix in editor" does the same.
 - Tab components from other builders, all with props `({ detail: IssueDetail, variant: "drawer" | "page" })`:
   `tabs/NowTab.tsx → NowTab`, `tabs/GoalTab.tsx → GoalTab`, `tabs/PlanTab.tsx → PlanTab`, `tabs/LogTab.tsx → LogTab`.
 
@@ -449,24 +494,41 @@ before the other files exist.)
 - `ArchifyCard({ diagram: Diagram, compact?: boolean })` — card with title, type chip, node count, "Open" button;
   body height `clamp(220px, 32vh, 420px)`, iframe `src={url + "?embed=1&theme=" + theme}`,
   `sandbox="allow-scripts"`, mounted only when an IntersectionObserver sees the card; listens for `wf:size` to grow up to
-  the cap; posts `wf:theme` on theme change. States: rendering (skeleton), invalid (error list with JSON paths, the JSON
-  source in a mono block, "Copy for agent" = errors + source), unavailable (JSON source + hint "Run `wf doctor`").
-  Click/Open → `DiagramDialog`.
+  the cap; posts `wf:theme` on theme change. The full-size open button covers the frame, so it forwards its wheel events as
+  `{ type: "wf:scroll", dy }` and a page taller than the card scrolls in place (the stand-in pages handle the message; a real archify
+  page needs the same in its bridge). States: rendering (skeleton while the lazy chunk or the iframe loads), invalid (error list with
+  JSON paths, the JSON source in a mono block, "Copy for agent" = errors + source), unavailable (JSON source + hint "Run `wf doctor`" and the
+  "Prototype: show the stand-in preview" button, which switches archify on for the whole prototype). Click/Open → `DiagramDialog`.
 - `DiagramDialog({ diagram, open, onOpenChange })` — fullscreen dialog, iframe without `embed`,
   `sandbox="allow-scripts allow-downloads"`, header with title, type, source location (`plan.md:40`), copy JSON.
 
 ### library-inbox builder: `src/features/library/**`, `src/features/inbox/**`
 
-`library/index.ts` exports `LibraryView, LibraryItemView, PromoteDialog`. `inbox/index.ts` exports `InboxView`.
-- `LibraryView` — Workdatabase · Library (the Glossary is its own page, `/glossary`, `GlossaryPage`); Items: facets (kind, status, tags) at left, search (server
-  `useSearch(q, "library")`), list of item rows (kind icon, title, "Use when…" description, status chip
-  (draft = outline, reviewed = success, retired = faint strike), used by N, review overdue amber); selecting opens
-  `LibraryItemView` in a right pane (`/lib/$id`). Glossary: term list with kind, means, avoid (struck synonyms → term),
-  see links; a "Check text" box is optional.
-- `LibraryItemView({ id })` — title, kind, status, description, sections by kind (Rule/When to use/Example/Evidence …),
-  source backlinks (RefLinks to the entries it came from), backlinks panel "Used by N issues", reviewed_by,
-  review_after (amber when past), actions: Approve (draft → reviewed via `useApproveLibrary`), Retire (disabled stub).
-  Draft items show a banner: "Draft — not injected into agent context until reviewed".
+`library/index.ts` exports `LibraryView, LibraryItemView, GlossaryPage, GlossaryView, MarkdownDocument, PromoteDialog`. `inbox/index.ts` exports `InboxView`.
+- `LibraryView` — Workdatabase · Library (the Glossary is its own page, `/glossary`, `GlossaryPage`): one 44 px top bar (`ViewTabs` first), then
+  facets (kind, status, review overdue, tags), search (server `useSearch(q, "library")`, `/` focuses it) and the list of item rows (kind icon,
+  title, "Use when…" description, status chip (draft = outline, reviewed = success, retired = faint strike), used by N, review overdue amber);
+  selecting a row opens `LibraryItemView` (`/lib/$id`). **Three layout modes, by the measured width of the page** (the rail counts as page;
+  `useElementWidth` on the root):
+  - **1100 px and up, docked:** facets, list and item side by side; the pane is 520 to 640 px (40% of the page).
+  - **860 to 1099 px, beside the list:** an open item takes the facets' place; the facets become filter chips above the list
+    (`LibraryFilterChips`), the item sits beside it, the list keeps its status column and at least 360 px.
+  - **under 860 px (and on a phone): its own screen.** An open item replaces the list; "← Library" goes back. On a phone the facets are
+    the filter chip row (it scrolls sideways on purpose) under a full-width search.
+  The list never sits half under the item.
+- `LibraryItemView({ id, variant?: "pane" | "screen" })` — a toolbar (kind, status chip, **Rendered | Source** switch, **Edit**, Close), a
+  path row, the draft / retired / overdue banners ("Draft — not injected into agent context until reviewed"), then the page: the file
+  rendered from its markdown (`MarkdownDocument`: frontmatter as properties, every section in file order, each block tied to its
+  source line with a `SourceLineMarker`), where it came from (RefLinks), "Used by N issues", Approve (draft → reviewed via
+  `useApproveLibrary`), Retire (disabled stub). **Source** shows `SourceView embedded` edge to edge under the toolbar, with lint
+  markers. **Edit edits inline, in either view**: it calls `requestFileEdit({ path })` (the source view starts its editor in place; the
+  person never leaves the Library), shows Edit as taken while the editor is open (`onEditingChange`), returns focus to the Edit button after
+  a save or cancel (`returnFocusTo`), and refuses a switch of view with a toast while an edit is open. "Open in Files" is a link in the
+  source meta line.
+- `GlossaryPage` (`/glossary`) — a 44 px top bar (`ViewTabs`, then a search box; the filter lives in `?q=`) over `GlossaryView`: the terms
+  read from `glossary.md`, each with its kind, meaning, the avoided synonyms struck through with an arrow to the term, and a "See:" list whose
+  entries are buttons (24 px hit area, 28 px on a phone) that jump to that term; every term names its source line and opens it in
+  Workdatabase · Files.
 - `PromoteDialog({ open, onOpenChange, issueId, entry: LearningEntry | DecisionEntry })` — kind (prefilled from the
   entry: gotcha/pattern/tip→pattern, decision→decision), slug (auto), preview of the draft item, dedupe suggestion
   ("Similar: lib-… — merge instead?" when the mock search finds a close title), Create draft → `usePromote()`;
@@ -479,37 +541,68 @@ before the other files exist.)
 
 ### workspace-files builder: `src/features/files/**` (+ View source in `features/issue/{tabs/FilesTab,DocsList,DocView}.tsx`)
 
-The prototype's way to see and change the markdown the board is built from. Route `/files?path=<workspace-relative path>`;
+The prototype's way to see and change the markdown the board is built from. Route `/files?path=<workspace-relative path>[&line=n]`;
 a Workdatabase sub-view: nav item "Files" (`g f`); palette "Workdatabase · Files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
-A "Prototype" chip in the top bar says it is a prototype surface (the product edits files in an editor, not the browser).
+There is no "Prototype" chip on the page (the top bar's one-line explanation has a tooltip that says edits stay in the browser tab).
 `index.ts` exports `WorkspaceView`, `WorkspaceTree`, `SourceView`, `SourceEditor`, `NewFileDialog`, `useFilesNav`, `FilesLink`, `filesHref`,
 `requestFileEdit`, `ISSUE_FILE_NAMES`, `issueFileTemplate`, `templateForPath`, `type FilesSearch`; `@/app/search` has `validateFilesSearch`.
-- `WorkspaceView({ path? })` — 44 px top bar (`ViewTabs` for the Workdatabase, one-line explanation, Prototype chip, "New file"), a 280 px tree at the left
-  and `SourceView` at the right. Below 768 px the tree and the file are separate screens with a back arrow.
+- `WorkspaceView({ path? })` — 44 px top bar (`ViewTabs` for the Workdatabase, a one-line explanation from 1360 px, "New file"), a 280 px tree at
+  the left and `SourceView` at the right. **Single-screen layout under 720 px of page width** (measured on the view's root, so the rail counts
+  as page; not a viewport query): the tree and the file are separate screens with a back arrow. A 280 px tree leaves 440 px for a file, which
+  is the least the source needs.
 - `WorkspaceTree({ selectedPath?, onSelect, onNewFile?, className? })` — `role="tree"`. Issue folders show the issue's
   `StatusIcon`, title and a faint slug; group folders their color dot (italic when implicit); root files sit under "Workspace";
   the library lists its kinds in a fixed order. A file with findings has a dot and count; a collapsed folder rolls up its
   children. Folders default open down to issue level and open down to the selected file. The filter matches path, issue title
   or issue id. Arrow keys, Home/End, Enter.
-- `SourceView({ path, variant?: "pane" | "inline", pathLabel?, onBack?, onDeleted?, className? })` — header with the mono path
-  and copy button, rev, size, line count, a one-line note on what the file drives, "Open issue" / "Open library item" /
-  "Open group", Edit and a ⋯ menu (copy path, copy text, Delete with a confirm dialog). The text has line numbers, light
-  highlighting (tokens only; archify fences marked) and a gutter marker per finding (tooltip `S06 · message Fix: …`);
-  "N findings" cycles through them. Images show with their size, other binaries get a "no preview" state, a missing path
-  "No file at …" with "Create this file". `workflow.toml` is editable (saving it re-applies `[lint]`, leases and staleness).
-- Edit mode (`SourceEditor`, rendered by `SourceView`) — a mono textarea with the same metrics as the view. Save is ⌘S / ⌘↵ with `base_rev`,
-  Cancel is Esc, an "Unsaved" dot shows when edited. On success the toast reads "Saved goal.md · the board re-read it" with an
+- `SourceView({ path, variant?: "pane" | "inline", pathLabel?, onBack?, onDeleted?, line?, defaultView?: "source" | "rendered",
+  showViewToggle?, embedded?, returnFocusTo?, onEditingChange?, className? })` — header with the mono path and copy button, rev, size,
+  line count, a one-line note on what the file drives, "Open issue" / "Open library item" / "Open group", Edit and a ⋯ menu (copy path, copy
+  text, Delete with a confirm dialog). The text has line numbers, light highlighting (tokens only; archify fences marked) and a gutter
+  marker per finding (tooltip `S06 · message Fix: …`); "N findings" cycles through them. **Wrap:** prose (markdown) wraps and the line numbers
+  stay one per file line; code and settings (toml, json) scroll sideways; a wrap switch in the meta line (and in the editor) flips it.
+  A markdown file can also be read as the page it renders to (**Rendered | Source** switch; `defaultView`, `showViewToggle={false}` for a host
+  that has its own switch). Images show with their size, other binaries get a "no preview" state, a missing path "No file at …" with
+  "Create this file". `workflow.toml` is editable (saving it re-applies `[lint]`, leases and staleness).
+  `embedded`: edge to edge in a host that has its own header (the Library item pane): no path row, no card border, the text fills the
+  height; the meta line stays, with a link to the file in Files. The host starts an edit with `requestFileEdit({ path })`, says where focus
+  returns after a save or cancel (`returnFocusTo`, its own Edit button) and hears when the editor opens or closes (`onEditingChange`,
+  to show that button as taken). `line` scrolls to and flashes a line once the text is on screen (in the pane, `?line=` does the same).
+- Edit mode (`SourceEditor`, rendered by `SourceView`) — a mono textarea with the same metrics as the view (on a phone the whole editor box,
+  its gutter and wrap mirror included, is 16 px so iOS does not zoom on focus; line height stays `--wf-src-lh`). Save is ⌘S / ⌘↵ with
+  `base_rev`, Cancel is Esc, an "Unsaved" dot shows when edited. On success the toast reads "Saved goal.md · the board re-read it" with an
   "Open board" action, and the view returns scrolled to the first changed line with the changed lines faded. If the file's rev
   moved past the one the editor opened from, a bar says "This file changed while you edited it" (Reload / Overwrite). Esc on a
   dirty draft asks "Discard?"; leaving the route with a dirty draft opens a dialog (`useBlocker`, no `window.confirm`).
+- **Edit intent** (`intent.ts`): `requestFileEdit({ path, draft?, append?, h1?, select?, line? })` asks the `SourceView` of `path` to open its
+  editor within 15 s. `draft` is a starting text (a template), `append` an entry added at the bottom, `select` text to select (a title
+  placeholder), `line` the 1-based line to put the caret and the scroll on ("Fix in editor", lint "Edit at this line"). `useFilesNav().edit(path,
+  intent)` requests the edit and opens the file.
 - `NewFileDialog({ open, onOpenChange, defaultGroup?, defaultIssue?, onCreated, onEdit })` — templates "New issue (goal.md)"
   (title, group folder, slug; writes a valid backlog `goal.md` with a fresh `wf-xxxxx` id), "Change entry" (opens the issue's
   `changes.md` with a new entry appended and its title selected) and "Empty file". The path input is always visible and
-  validated (workspace-relative, `.md` or `.toml`, no `..`, no ignored folders, no duplicates).
-- Issue Files tab — every issue file and doc row has "View source" (inline `SourceView`, with Edit and "Open in Workspace
-  files"); a missing issue file has "Create", which opens the editor with a starting text. `DocView` has "View source" too.
+  validated (workspace-relative, `.md` or `.toml`, no `..`, no ignored folders, no duplicates). It also takes context from the Workdatabase.
+- Issue Files tab — every issue file and doc row has "View source" (inline `SourceView`, with Edit and "Open in Files"); a missing issue file
+  has "Create", which opens the editor with a starting text. `DocView` has "View source" too.
 - Data: only `useWorkspaceFiles`, `useWorkspaceFile`, `useWriteWorkspaceFile`, `useDeleteWorkspaceFile` from `@/lib/api`.
   The editor never holds data of its own; what you save is read back through the same loader as a file saved on disk.
+
+### context builder: `src/features/context/**`
+
+Context from the Workdatabase: library items, glossary terms, files and decisions an agent should read with an issue. `index.ts` exports
+`ContextPicker` (a field with removable chips and an "Add" button that opens a command-style search right under it, in the flow of the form: used
+by the New issue and New file dialogs), `ContextSearch`, `ContextPreview` (what the agent will get, against a token budget; draft library items
+are marked "not injected until reviewed"), `AddContextButton` (the Goal tab's Links section: a pick is written at once with `useAddLinks`),
+`LinkedContext` (the `## Links` bullets as rows, with remove-and-undo), `LinkedPreview`, `useWorkdatabase` (the pickable list, built from the same
+queries as the Library, Glossary and Files views) and the link grammar (`links.ts`: `linkLine`, `parseLinkLine`, `parseLinks`).
+
+### kit builder: `src/features/kit/**`
+
+`/kit` is the component gallery (not a view): a left index and one section per element, so the user can review element by element and answer
+as "ElementName: change". `?el=<ComponentName>` opens the page at that element's section (for example `/kit?el=IssueCard`); `?view=side` shows
+light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name. Foundations shows the tokens live (surfaces,
+accent and signals, readable signal text, scrim and the z scale, status colors, the hue scale). The "hover footer (forced open)" board variant
+forces the footer open with a selector on `IssueCardFooter`; the real footer is an overlay on the card's last row, and so is this one.
 
 ## Mock world (the workspace folder; others may rely on these ids)
 
