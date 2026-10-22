@@ -61,13 +61,11 @@ export function InboxView() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[880px] flex-col gap-5 px-4 py-5">
-          <NotifyBanner blocking={blockingForMe} />
-
           {loading ? (
             <InboxSkeleton />
           ) : failed ? (
             <EmptyState
-              icon={<TriangleAlert />}
+              icon={<TriangleAlert strokeWidth={1.75} />}
               title="Could not load the inbox"
               hint="The server did not answer. Your files are safe."
               action={
@@ -83,7 +81,7 @@ export function InboxView() {
                   items={lists.mine}
                   empty={
                     <EmptyState
-                      icon={<CircleCheck className="text-status-done" />}
+                      icon={<CircleCheck strokeWidth={1.75} className="text-status-done" />}
                       title="Nothing needs you"
                       hint={
                         lists.all.length > 0
@@ -107,7 +105,7 @@ export function InboxView() {
                   items={lists.all}
                   empty={
                     <EmptyState
-                      icon={<Inbox />}
+                      icon={<Inbox strokeWidth={1.75} />}
                       title="No open requests"
                       hint="No agent is waiting on anyone right now."
                     />
@@ -120,7 +118,7 @@ export function InboxView() {
                   grouped={false}
                   empty={
                     <EmptyState
-                      icon={<MessageSquareReply />}
+                      icon={<MessageSquareReply strokeWidth={1.75} />}
                       title="No answers waiting"
                       hint="An answer stays here until the agent runs wf resolve."
                     />
@@ -129,6 +127,9 @@ export function InboxView() {
               )}
             </>
           )}
+
+          {/* A setting, not a request: it waits below the requests, quiet. */}
+          <NotifyBanner blocking={blockingForMe} />
         </div>
       </div>
     </div>

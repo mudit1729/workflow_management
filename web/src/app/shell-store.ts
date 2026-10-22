@@ -15,12 +15,15 @@ interface ShellState {
   newGroupParent?: GroupId;
   devPanelOpen: boolean;
   mobileNavOpen: boolean;
+  /** 768–1099 px: the rail is an icon rail; this is the person asking to see it open (an overlay). */
+  narrowNavOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   setNewIssueOpen: (open: boolean, group?: GroupId) => void;
   setNewGroupOpen: (open: boolean, parent?: GroupId) => void;
   setDevPanelOpen: (open: boolean) => void;
   setMobileNavOpen: (open: boolean) => void;
+  setNarrowNavOpen: (open: boolean) => void;
 }
 
 export const useShell = create<ShellState>()((set) => ({
@@ -32,6 +35,7 @@ export const useShell = create<ShellState>()((set) => ({
   newGroupParent: undefined,
   devPanelOpen: false,
   mobileNavOpen: false,
+  narrowNavOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setNewIssueOpen: (newIssueOpen, group) =>
@@ -40,6 +44,7 @@ export const useShell = create<ShellState>()((set) => ({
     set(newGroupOpen ? { newGroupOpen, newGroupParent: parent } : { newGroupOpen }),
   setDevPanelOpen: (devPanelOpen) => set({ devPanelOpen }),
   setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
+  setNarrowNavOpen: (narrowNavOpen) => set({ narrowNavOpen }),
 }));
 
 /** Open the New issue dialog, optionally preselecting a group. */

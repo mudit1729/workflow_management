@@ -39,6 +39,7 @@ import { type Density, type ThemePref, usePrefs } from "@/lib/prefs";
 import { DevPanel } from "./DevPanel";
 import { GroupTree } from "./GroupTree";
 import { useShell } from "./shell-store";
+import { useNavRail } from "./useNavRail";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -99,7 +100,8 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
           >
             <Search {...ICON} aria-hidden />
             <span className="min-w-0 flex-1 truncate text-left">Search or jump…</span>
-            <Kbd combo="mod+k" />
+            {/* A touch screen has no ⌘K. */}
+            {variant === "rail" && <Kbd combo="mod+k" />}
           </button>
         )}
       </div>
@@ -135,7 +137,7 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
         {variant === "rail" && !isCollapsed && <DevPanel placement="nav" />}
       </div>
 
-      <NavFooter collapsed={isCollapsed} showCollapse={variant === "rail"} />
+      <NavFooter collapsed={isCollapsed} sheet={variant === "sheet"} />
     </nav>
   );
 }
@@ -156,6 +158,7 @@ function WorkspaceMark() {
 function NavHeader({ collapsed }: { collapsed: boolean }) {
   const name = useSnapshot().data?.config.name;
   const me = useMe();
+  const live = useLiveStatus().state === "live";
 
   if (collapsed) {
     return (
@@ -175,13 +178,20 @@ function NavHeader({ collapsed }: { collapsed: boolean }) {
       className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 pr-3 pl-4"
     >
       <WorkspaceMark />
-      <div className="flex min-w-0 flex-col">
-        <span className="text-fg-faint text-xs leading-[14px]">Workspace</span>
-        <span className="truncate font-medium text-base text-fg leading-[16px]">
+      <div className="flex min-w-0 flex-col items-start">
+        {/* The connection state takes the micro-label's line while it is not live, so the two
+            never fight for the same few pixels beside the name. */}
+        {live ? (
+          <span className="max-w-full truncate text-fg-faint text-xs leading-[14px]">
+            Workspace
+          </span>
+        ) : (
+          <LiveBadge />
+        )}
+        <span className="max-w-full truncate font-medium text-base text-fg leading-[16px]">
           {name ?? "wf"}
         </span>
       </div>
-      <LiveBadge />
       {me && (
         <Tooltip content={`Acting as @${me}`} side="bottom">
           <span className="ml-auto flex shrink-0" data-wf="ActingAs">
@@ -230,7 +240,7 @@ export function LiveBadge({ compact = false }: { compact?: boolean }) {
             reconnecting ? (
               <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-stale" />
             ) : (
-              <WifiOff aria-hidden />
+              <WifiOff size={12} strokeWidth={1.75} aria-hidden />
             )
           }
         >
@@ -521,12 +531,12 @@ function useNotificationToggle() {
   return { notifications, toggle };
 }
 
-function NavFooter({ collapsed, showCollapse }: { collapsed: boolean; showCollapse: boolean }) {
+function NavFooter({ collapsed, sheet }: { collapsed: boolean; sheet: boolean }) {
   const theme = usePrefs((s) => s.theme);
   const setTheme = usePrefs((s) => s.setTheme);
   const density = usePrefs((s) => s.density);
   const setDensity = usePrefs((s) => s.setDensity);
-  const toggleNav = usePrefs((s) => s.toggleNav);
+  const toggleNav = useNavRail().toggle;
   const setShortcutsOpen = useShell((s) => s.setShortcutsOpen);
   const { notifications, toggle: toggleNotifications } = useNotificationToggle();
 
@@ -593,7 +603,7 @@ function NavFooter({ collapsed, showCollapse }: { collapsed: boolean; showCollap
             ?
           </Button>
         </Tooltip>
-        {showCollapse && (
+        {!sheet && (
           <Tooltip content="Expand sidebar" shortcut="mod+b" side="right">
             <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={toggleNav}>
               <PanelLeftOpen {...ICON} />
@@ -626,17 +636,18 @@ function NavFooter({ collapsed, showCollapse }: { collapsed: boolean; showCollap
         {densityButton}
         {notifyButton}
       </div>
-      <div className="flex items-center">
-        <button
-          type="button"
-          onClick={() => setShortcutsOpen(true)}
-          className="flex h-6 items-center gap-2 rounded-md px-1 text-fg-faint text-xs transition-colors duration-100 ease-wf hover:text-fg-muted"
-        >
-          <Kbd combo="?" />
-          Shortcuts
-        </button>
-        <span className="flex-1" />
-        {showCollapse && (
+      {/* Shortcuts and the collapse control are for a keyboard and a wide screen: not on a phone. */}
+      {!sheet && (
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="flex h-6 items-center gap-2 rounded-md px-1 text-fg-faint text-xs transition-colors duration-100 ease-wf hover:text-fg-muted"
+          >
+            <Kbd combo="?" />
+            Shortcuts
+          </button>
+          <span className="flex-1" />
           <Tooltip content="Collapse sidebar" shortcut="mod+b" side="top">
             <Button
               variant="ghost"
@@ -647,8 +658,8 @@ function NavFooter({ collapsed, showCollapse }: { collapsed: boolean; showCollap
               <PanelLeftClose {...ICON} />
             </Button>
           </Tooltip>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

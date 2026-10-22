@@ -67,9 +67,18 @@ export function optionLabel(o: GroupOption): string {
 export function GroupDot({ node, root = false }: { node: GroupNode; root?: boolean }) {
   // The root has no identity color: it is the top of the tree, not a group.
   if (root)
-    return <Layers aria-hidden size={12} strokeWidth={1.75} className="shrink-0 text-fg-faint" />;
+    return (
+      <Layers
+        data-wf="GroupDot"
+        aria-hidden
+        size={12}
+        strokeWidth={1.75}
+        className="shrink-0 text-fg-faint"
+      />
+    );
   return (
     <span
+      data-wf="GroupDot"
       aria-hidden
       className="size-2 shrink-0 rounded-full"
       style={{ background: `var(--wf-hue-${node.color})` }}
@@ -91,7 +100,7 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div data-wf="Field" className="flex min-w-0 flex-col gap-1.5">
       {htmlFor ? (
         <label htmlFor={htmlFor} className="font-medium text-fg-muted text-sm">
           {label}

@@ -4,12 +4,12 @@
 import { Outlet } from "@tanstack/react-router";
 import { Menu, Search } from "lucide-react";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
+import { useEffect, useRef } from "react";
 import { MoveGateDialog } from "@/components/common";
 import { Button } from "@/components/ui";
 import { useInbox, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
-import { usePrefs } from "@/lib/prefs";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
 import { LiveBadge, NavRail } from "./NavRail";
@@ -18,12 +18,14 @@ import { NewIssueDialog } from "./NewIssueDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
 import { GlobalShortcuts } from "./shortcuts";
+import { useNavRail } from "./useNavRail";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
+const OPEN_NAV_ID = "wf-open-nav";
 
 export function AppShell() {
   const mobile = useLayoutMode() === "mobile";
-  const navCollapsed = usePrefs((s) => s.navCollapsed);
+  const mainRef = useRef<HTMLElement>(null);
 
   return (
     <div
@@ -37,9 +39,24 @@ export function AppShell() {
           : "grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]",
       )}
     >
-      {mobile ? <MobileTopBar /> : <NavRail collapsed={navCollapsed} />}
+      {/* The first stop for the keyboard: past the nav, onto the page. */}
+      <button
+        type="button"
+        data-wf="SkipLink"
+        onClick={() => mainRef.current?.focus()}
+        className="absolute top-2 left-2 z-[60] -translate-y-16 rounded-md border border-border bg-bg px-3 py-1.5 font-medium text-base text-fg shadow-pop focus:translate-y-0"
+      >
+        Skip to content
+      </button>
 
-      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+      {mobile ? <MobileTopBar /> : <RailSlot />}
+
+      <main
+        id="main"
+        ref={mainRef}
+        tabIndex={-1}
+        className="flex min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+      >
         <Outlet />
       </main>
 
@@ -51,6 +68,35 @@ export function AppShell() {
       <NewGroupDialog />
       <MoveGateDialog />
       <GlobalShortcuts />
+    </div>
+  );
+}
+
+/**
+ * The rail's grid cell. Between 768 and 1099 px it is the 52 px icon rail; opened there, the full
+ * rail floats over the page (same cell width, so the page does not jump) with a click-away layer.
+ */
+function RailSlot() {
+  const rail = useNavRail();
+
+  // Back at a wide width the overlay must not be waiting to reappear.
+  const { narrow } = rail;
+  useEffect(() => {
+    if (!narrow) useShell.getState().setNarrowNavOpen(false);
+  }, [narrow]);
+
+  if (!rail.overlay) return <NavRail collapsed={rail.collapsed} />;
+
+  return (
+    <div
+      data-wf="NavRailOverlay"
+      className="relative h-full"
+      style={{ width: "var(--wf-nav-w-collapsed)" }}
+    >
+      <div aria-hidden className="fixed inset-0 z-40" onClick={rail.close} />
+      <div className="absolute inset-y-0 left-0 z-40 shadow-pop">
+        <NavRail collapsed={false} onNavigate={rail.close} />
+      </div>
     </div>
   );
 }
@@ -67,6 +113,7 @@ function MobileTopBar() {
       className="flex min-w-0 items-center gap-2 border-border border-b bg-subtle px-2"
     >
       <Button
+        id={OPEN_NAV_ID}
         variant="ghost"
         size="icon"
         aria-label={count > 0 ? `Open navigation, ${count} need you` : "Open navigation"}
@@ -108,6 +155,11 @@ function MobileNavSheet() {
         <DialogPrimitive.Content
           data-wf="MobileNavSheet"
           aria-describedby={undefined}
+          // The sheet has no Radix trigger, so hand focus back to the button that opened it.
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            document.getElementById(OPEN_NAV_ID)?.focus();
+          }}
           className="fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col bg-subtle shadow-pop outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
         >
           <VisuallyHidden.Root>

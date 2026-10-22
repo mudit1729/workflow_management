@@ -288,7 +288,7 @@ function GroupRow({
     .join(", ");
 
   const marker = isRoot ? (
-    <Layers size={12} strokeWidth={1.75} className="text-fg-faint" aria-hidden />
+    <Layers size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" aria-hidden />
   ) : (
     <span
       aria-hidden
@@ -364,8 +364,8 @@ function GroupRow({
       >
         {hasChildren && (
           <ChevronRight
-            size={12}
-            strokeWidth={2}
+            size={14}
+            strokeWidth={1.75}
             className={cn("transition-transform duration-150 ease-wf", expanded && "rotate-90")}
           />
         )}

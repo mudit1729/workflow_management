@@ -169,7 +169,7 @@ export function InboxRow({ item }: InboxRowProps) {
             <>
               <Sep />
               <span className="inline-flex min-w-0 items-center gap-1">
-                <Link2 size={12} strokeWidth={1.75} aria-hidden className="shrink-0" />
+                <Link2 size={14} strokeWidth={1.75} aria-hidden className="shrink-0" />
                 <span className="sr-only">Related:</span>
                 <RefLink target={refTarget} issueId={item.issue} />
               </span>
@@ -247,7 +247,7 @@ function InlineCode({ text }: { text: string }) {
     <>
       {text.split("`").map((part, i) =>
         i % 2 === 1 ? (
-          <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-[12px] text-fg">
+          <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-fg text-sm">
             {part}
           </code>
         ) : (

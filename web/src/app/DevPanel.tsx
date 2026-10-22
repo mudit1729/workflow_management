@@ -2,7 +2,7 @@
 // phone top bar) that opens a popover for driving the mock server (live events, connection
 // state, conflicts, archify, reset). "." toggles it. Nothing floats over board content.
 import { ArrowRight, Check, FlaskConical, FolderTree, Play, RotateCcw } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Button,
@@ -105,7 +105,14 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
   const go = useGo();
   const files = useFilesNav();
   const [conflictArmed, setConflictArmed] = useState(false);
-  const [archify, setArchify] = useState(snapshot?.config.archify !== "unavailable");
+  // The snapshot is the truth: the diagram card can flip archify too. `pending` only carries the
+  // switch over the moment between the click and the refetched snapshot.
+  const real = snapshot?.config.archify !== "unavailable";
+  const [pending, setPending] = useState<boolean | undefined>();
+  const archify = pending ?? real;
+  useEffect(() => {
+    if (pending === real) setPending(undefined);
+  }, [pending, real]);
   const disabled = !mock;
 
   return (
@@ -139,7 +146,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             disabled={disabled}
             onClick={() => mock?.playNextEvent()}
           >
-            <Play size={12} strokeWidth={1.75} aria-hidden />
+            <Play {...ICON} aria-hidden />
             Play next event
           </Button>
         </Row>
@@ -165,7 +172,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
           hint="The next write answers 409 and rolls back. One shot."
         >
           {conflictArmed ? (
-            <Chip tone="accent" icon={<Check size={12} strokeWidth={2} />}>
+            <Chip tone="accent" icon={<Check size={12} strokeWidth={1.75} />}>
               Armed
             </Chip>
           ) : (
@@ -192,7 +199,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             checked={archify}
             disabled={disabled}
             onCheckedChange={(on) => {
-              setArchify(on);
+              setPending(on);
               mock?.setArchifyAvailable(on);
             }}
           />
@@ -212,7 +219,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             void files.open();
           }}
         >
-          <FolderTree size={12} strokeWidth={1.75} aria-hidden />
+          <FolderTree {...ICON} aria-hidden />
           Open Workdatabase · Files
         </Button>
       </Section>
@@ -229,7 +236,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             toast.success("Mock data reset", { description: "The workspace is back to its seed." });
           }}
         >
-          <RotateCcw size={12} strokeWidth={1.75} aria-hidden />
+          <RotateCcw {...ICON} aria-hidden />
           Reset data
         </Button>
         <Button
@@ -242,7 +249,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
           }}
         >
           Kit
-          <ArrowRight size={12} strokeWidth={1.75} aria-hidden />
+          <ArrowRight {...ICON} aria-hidden />
         </Button>
       </footer>
       <p className="flex items-center gap-1 border-border border-t bg-subtle px-3 py-1.5 text-fg-faint text-xs">

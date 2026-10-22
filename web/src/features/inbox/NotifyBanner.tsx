@@ -1,6 +1,7 @@
 // Opt-in for browser notifications when an agent is blocked on you. It shows only while it can help:
 // there is a blocking request for you, notifications are off, the browser supports them and has not
-// blocked them, and you have not dismissed the banner.
+// blocked them, and you have not dismissed the banner. It is a setting, not a request, so it is a
+// quiet line (no accent) that the inbox puts below the requests.
 import { BellRing, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -68,13 +69,11 @@ export function NotifyBanner({ blocking }: { blocking: number }) {
     <section
       data-wf="NotifyBanner"
       aria-label="Notifications"
-      className="flex items-center gap-3 rounded-lg border border-accent/20 bg-accent-subtle py-2 pr-2 pl-3"
+      className="flex items-center gap-2 rounded-md bg-subtle py-1 pr-1 pl-3 text-fg-muted text-sm"
     >
-      <BellRing aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-accent" />
-      <p className="min-w-0 flex-1 text-base text-fg">
-        Get a browser notification when an agent is blocked on you.
-      </p>
-      <Button variant="primary" size="sm" disabled={busy} onClick={turnOn}>
+      <BellRing aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
+      <p className="min-w-0 flex-1">Get a browser notification when an agent is blocked on you.</p>
+      <Button variant="ghost" size="sm" disabled={busy} onClick={turnOn}>
         Turn on
       </Button>
       <IconButton

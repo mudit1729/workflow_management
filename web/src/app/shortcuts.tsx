@@ -2,15 +2,15 @@
 // o, s, /, 1–5, Esc) are registered by those features; this file owns the rest.
 // SHORTCUTS is also the source for the ShortcutsDialog.
 //
-// Go to: `g w` Workflow (its Board), `g i` Inbox, `g d` Workdatabase (its Library), `g l` Library,
+// Go to: `g w` Workflow · Board, `g i` Workflow · Inbox, `g l` (or `g d`) Workdatabase · Library,
 // `g g` Glossary, `g f` Files, `g k` Kit.
 
 import { useNavigate } from "@tanstack/react-router";
 import { useFilesNav } from "@/features/files";
 import { useHotkey, useLayoutMode } from "@/lib/hooks";
 import { useGo } from "@/lib/nav";
-import { usePrefs } from "@/lib/prefs";
 import { useShell } from "./shell-store";
+import { useNavRail } from "./useNavRail";
 
 export interface ShortcutDef {
   /** One or more combos in `useHotkey` grammar; several render as "A or B". */
@@ -39,10 +39,9 @@ export const SHORTCUTS: ShortcutSection[] = [
   {
     title: "Go to",
     items: [
-      { combos: ["g w"], label: "Workflow (Board)" },
+      { combos: ["g w"], label: "Workflow · Board" },
       { combos: ["g i"], label: "Workflow · Inbox" },
-      { combos: ["g d"], label: "Workdatabase (Library)" },
-      { combos: ["g l"], label: "Workdatabase · Library" },
+      { combos: ["g l", "g d"], label: "Workdatabase · Library" },
       { combos: ["g g"], label: "Workdatabase · Glossary" },
       { combos: ["g f"], label: "Workdatabase · Files" },
       { combos: ["g k"], label: "Kit" },
@@ -83,7 +82,7 @@ export function GlobalShortcuts() {
   const navigate = useNavigate();
   const files = useFilesNav();
   const mobile = useLayoutMode() === "mobile";
-  const toggleNav = usePrefs((s) => s.toggleNav);
+  const toggleNav = useNavRail().toggle;
   const shell = useShell();
 
   useHotkey("mod+k", () => shell.setPaletteOpen(!shell.paletteOpen), {

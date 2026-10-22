@@ -18,6 +18,7 @@ import { type ContextItem, toLink } from "@/features/context/types";
 import type { GroupId, Size } from "@/gen/types";
 import { useGroupTree, useIssueMap, useNewIssue, useSnapshot } from "@/lib/api";
 import { useBoardSearch, useOpenIssue, useOpenIssueId } from "@/lib/nav";
+import { usePrefs } from "@/lib/prefs";
 import {
   Field,
   flattenGroupOptions,
@@ -34,15 +35,13 @@ export { slugify } from "./dialog-parts";
 
 type Template = "default" | "bug" | "research" | "doc";
 
+// The hints say what goal.md really gets: a different prompt in ## Context, the criteria and a
+// label (see TEMPLATES in mock/md/edit.ts). No extra sections.
 const TEMPLATES: { value: Template; label: string; hint: string }[] = [
-  { value: "default", label: "Default", hint: "Context and success criteria." },
-  { value: "bug", label: "Bug", hint: "Adds steps to reproduce, expected and actual." },
-  {
-    value: "research",
-    label: "Research",
-    hint: "Questions to answer and what counts as an answer.",
-  },
-  { value: "doc", label: "Doc", hint: "A document to write, with review criteria." },
+  { value: "default", label: "Default", hint: "Context and one success criterion." },
+  { value: "bug", label: "Bug", hint: "Asks for the steps; adds a regression test." },
+  { value: "research", label: "Research", hint: "Asks for the question and who decides." },
+  { value: "doc", label: "Doc", hint: "Asks who reads it and what they can do." },
 ];
 
 const SIZES: { value: Size; label: string }[] = [
@@ -99,11 +98,18 @@ export function NewIssueDialog() {
         className="transition-[max-width] duration-150 ease-wf"
         title="New issue"
         description="Creates goal.md in a new issue folder. It starts in Backlog."
+        bodyClassName="pt-1"
       >
         <NewIssueForm preset={preset} onWide={setWide} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );
+}
+
+/** A new issue starts in Backlog, which the board folds by default: unfold it so the card shows. */
+function revealBacklog() {
+  const { foldedColumns, toggleColumnFold } = usePrefs.getState();
+  if (foldedColumns.includes("backlog")) toggleColumnFold("backlog");
 }
 
 function useDefaultGroup(options: GroupOption[]): GroupId | undefined {
@@ -146,6 +152,8 @@ function NewIssueForm({
   const [items, setItems] = useState<ContextItem[]>(preset.items ?? []);
   const [submitting, setSubmitting] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  // In the Context box Enter writes a new line, so the footer names the key that creates.
+  const [contextFocused, setContextFocused] = useState(false);
   const ids = { title: useId(), slug: useId(), group: useId(), context: useId() };
 
   // Adding context is what makes the dialog grow; clearing it all shrinks it back.
@@ -190,6 +198,7 @@ function NewIssueForm({
       if (!result) return; // the data layer already explained the failure
       onDone();
       if (result.created) {
+        revealBacklog();
         toast.success(`Created ${result.created}`, { description: `${folder}/goal.md` });
         void openIssue(result.created);
       }
@@ -256,7 +265,7 @@ function NewIssueForm({
             options={TEMPLATES.map(({ value, label }) => ({ value, label }))}
           />
         </Field>
-        <Field label="Size" hint={size === "xs" || size === "s" ? "May skip plan.md." : " "}>
+        <Field label="Size" hint="xs and s may skip plan.md.">
           <Segmented<Size> aria-label="Size" value={size} onChange={setSize} options={SIZES} />
         </Field>
       </div>
@@ -266,6 +275,8 @@ function NewIssueForm({
           id={ids.context}
           value={context}
           onChange={(e) => setContext(e.target.value)}
+          onFocus={() => setContextFocused(true)}
+          onBlur={() => setContextFocused(false)}
           onKeyDown={(e) => {
             // Enter writes a new line here; the form submits with ⌘↵ or Ctrl↵.
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -294,7 +305,7 @@ function NewIssueForm({
 
       <DialogFooter className="mt-1">
         <span className="mr-auto hidden items-center gap-1 text-fg-faint text-xs sm:flex">
-          <Kbd combo="Enter" /> to create
+          <Kbd combo={contextFocused ? "mod+Enter" : "Enter"} /> to create
         </span>
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancel

@@ -1,4 +1,4 @@
-// ⌘K — search issues, groups and library items, and run actions. Filters the
+// ⌘K — search issues, groups, library items, glossary terms and files, and run actions. Filters the
 // snapshot on the client (cmdk's scorer, capped per section). "Move … to…" opens
 // a second page listing statuses; Esc or Backspace on an empty field goes back.
 import { useNavigate } from "@tanstack/react-router";
@@ -9,6 +9,7 @@ import {
   BookText,
   Component,
   FilePenLine,
+  FileText,
   FolderPlus,
   FolderTree,
   Inbox,
@@ -36,8 +37,22 @@ import {
   Kbd,
 } from "@/components/ui";
 import { useFilesNav } from "@/features/files";
-import type { GroupNode, IssueStatus, IssueSummary, LibrarySummary } from "@/gen/types";
-import { useGroupTree, useIssueMap, useMoveIssue, useSnapshot } from "@/lib/api";
+import type {
+  GlossaryTerm,
+  GroupNode,
+  IssueStatus,
+  IssueSummary,
+  LibrarySummary,
+} from "@/gen/types";
+import type { WorkspaceFileInfo } from "@/lib/api";
+import {
+  useGlossary,
+  useGroupTree,
+  useIssueMap,
+  useMoveIssue,
+  useSnapshot,
+  useWorkspaceFiles,
+} from "@/lib/api";
 import { parseTs } from "@/lib/format";
 import { useGo, useOpenIssue, useOpenIssueId } from "@/lib/nav";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
@@ -45,10 +60,11 @@ import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { copyText } from "./clipboard";
 import { withMockControls } from "./mock-controls";
 import { useShell } from "./shell-store";
+import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
-const LIMIT = { issues: 8, groups: 5, library: 5, recent: 6 };
+const LIMIT = { issues: 8, groups: 5, library: 5, glossary: 4, files: 5, recent: 6 };
 
 type Page = "root" | "move";
 
@@ -109,7 +125,7 @@ function PaletteBody({ close }: { close: () => void }) {
         placeholder={
           page === "move" && openIssue
             ? `Move ${openIssue.id} to…`
-            : "Search issues, groups and library, or type a command…"
+            : "Search issues, library, glossary and files, or type a command…"
         }
         aria-label="Search or run a command"
         onKeyDown={(e) => {
@@ -145,23 +161,46 @@ interface Ranked<T> {
   best: number;
 }
 
+/** Keep the items `score` rates at least MIN_SCORE, best first (stable among equals), up to `limit`. */
+function rankBy<T>(items: T[], query: string, score: (t: T) => number, limit: number): Ranked<T> {
+  if (!query) return { items: [], best: 0 };
+  const scored = items
+    .map((item) => ({ item, score: score(item) }))
+    .filter((r) => r.score >= MIN_SCORE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return { items: scored.map((r) => r.item), best: scored[0]?.score ?? 0 };
+}
+
 function rank<T>(
   items: T[],
   query: string,
   text: (t: T) => [string, string[]],
   limit: number,
 ): Ranked<T> {
-  if (!query) return { items: [], best: 0 };
-  const scored = items
-    .map((item) => {
+  return rankBy(
+    items,
+    query,
+    (item) => {
       const [value, keywords] = text(item);
-      return { item, score: defaultFilter(value, query, keywords) };
-    })
-    .filter((r) => r.score >= MIN_SCORE)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  return { items: scored.map((r) => r.item), best: scored[0]?.score ?? 0 };
+      return defaultFilter(value, query, keywords);
+    },
+    limit,
+  );
 }
+
+/**
+ * Glossary terms and files hold words that are also the names of places ("files", "library",
+ * "glossary.md"), so they must not outrank the navigation action of that name: cmdk scores a word
+ * match 0.89 and a prefix 0.99. A term or file named exactly like the query (0.95) beats a word
+ * match elsewhere; anything looser sits below the actions, and meaning-only matches below that.
+ */
+const EXACT_NAME_SCORE = 0.95;
+const LOOSE_NAME_WEIGHT = 0.85;
+const MEANING_WEIGHT = 0.5;
+
+const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
 
 function flattenGroups(root: GroupNode): { node: GroupNode; path: string[] }[] {
   const out: { node: GroupNode; path: string[] }[] = [];
@@ -204,6 +243,8 @@ function RootPage({
   const root = useGroupTree();
   const open = useOpenIssue();
   const go = useGo();
+  const navigate = useNavigate();
+  const filesNav = useFilesNav();
   const selectGroup = useSelectGroup();
   const actions = useActions(openIssue, setPage);
   const q = query.trim();
@@ -253,6 +294,49 @@ function RootPage({
     [snapshot, q],
   );
 
+  const glossaryTerms = useGlossary().data;
+  const terms = useMemo(
+    () =>
+      rankBy(
+        glossaryTerms ?? [],
+        q,
+        (t) => {
+          if (t.term.toLowerCase() === q.toLowerCase()) return EXACT_NAME_SCORE;
+          return Math.max(
+            LOOSE_NAME_WEIGHT * defaultFilter(t.term, q),
+            MEANING_WEIGHT * defaultFilter(t.term, q, [t.means, ...t.avoid]),
+          );
+        },
+        LIMIT.glossary,
+      ),
+    [glossaryTerms, q],
+  );
+
+  const workspaceFiles = useWorkspaceFiles().data;
+  const issueTitles = useMemo(
+    () => new Map((snapshot?.issues ?? []).map((i) => [i.id, i.title])),
+    [snapshot],
+  );
+  const files = useMemo(() => {
+    // Among equal matches (every issue has a goal.md) the open issue's own files come first.
+    const own = openIssue ? `${openIssue.path}/` : undefined;
+    const list = own
+      ? [...(workspaceFiles ?? [])].sort(
+          (a, b) => Number(b.path.startsWith(own)) - Number(a.path.startsWith(own)),
+        )
+      : (workspaceFiles ?? []);
+    return rankBy(
+      list,
+      q,
+      (f) => {
+        const name = baseName(f.path);
+        if (name.toLowerCase() === q.toLowerCase()) return EXACT_NAME_SCORE;
+        return LOOSE_NAME_WEIGHT * defaultFilter(name, q, [f.path]);
+      },
+      LIMIT.files,
+    );
+  }, [workspaceFiles, openIssue, q]);
+
   const matchedActions = useMemo<Ranked<Action>>(() => {
     if (!q) return { items: actions, best: 0.5 };
     const scored = actions
@@ -267,7 +351,7 @@ function RootPage({
     a.run();
   };
 
-  type SectionKey = "issues" | "groups" | "library" | "actions";
+  type SectionKey = "issues" | "groups" | "library" | "glossary" | "files" | "actions";
   const sections: Record<SectionKey, ReactNode> = {
     issues: issues.items.length > 0 && (
       <CommandGroup key="issues" heading={q ? "Issues" : "Recent issues"}>
@@ -332,6 +416,42 @@ function RootPage({
         ))}
       </CommandGroup>
     ),
+    glossary: terms.items.length > 0 && (
+      <CommandGroup key="glossary" heading="Glossary">
+        {terms.items.map((t: GlossaryTerm) => (
+          <CommandItem
+            key={t.term}
+            value={`term:${t.term}`}
+            icon={<BookText {...ICON} />}
+            hint={t.means}
+            onSelect={() => {
+              close();
+              void navigate({ to: "/glossary", search: { q: t.term } });
+            }}
+          >
+            {t.term}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
+    files: files.items.length > 0 && (
+      <CommandGroup key="files" heading="Files">
+        {files.items.map((f: WorkspaceFileInfo) => (
+          <CommandItem
+            key={f.path}
+            value={`file:${f.path}`}
+            icon={<FileText {...ICON} />}
+            hint={(f.issue && issueTitles.get(f.issue)) || dirOf(f.path)}
+            onSelect={() => {
+              close();
+              void filesNav.open(f.path);
+            }}
+          >
+            {baseName(f.path)}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
     actions: matchedActions.items.length > 0 && (
       <CommandGroup key="actions" heading="Actions">
         {matchedActions.items.map((a) => (
@@ -349,15 +469,25 @@ function RootPage({
       </CommandGroup>
     ),
   };
-  // The section holding the best match comes first, so Enter runs what you typed.
-  // Ties keep the default order. Without a query: recent issues, then actions.
-  const order = (["issues", "groups", "library", "actions"] as const)
+  // The section holding the best match comes first, so Enter runs what you typed. Scores within
+  // 0.05 of each other are a tie (cmdk scores "glossary" 0.8910 in an action and 0.8912 in an
+  // issue title), and on a tie the actions win: "files", "glossary" and "board" are names of
+  // places, and a command named like the query is what the person means before an issue that
+  // merely contains the word. Other ties keep the default order. Without a query: recent issues,
+  // then actions.
+  const tier = (score: number) => Math.round(score * 20);
+  const order = (["issues", "groups", "library", "glossary", "files", "actions"] as const)
     .map((key, i) => ({
       key,
       i,
-      best: { issues, groups, library, actions: matchedActions }[key].best,
+      best: tier(
+        { issues, groups, library, glossary: terms, files, actions: matchedActions }[key].best,
+      ),
     }))
-    .sort((x, y) => y.best - x.best || x.i - y.i)
+    .sort(
+      (x, y) =>
+        y.best - x.best || Number(y.key === "actions") - Number(x.key === "actions") || x.i - y.i,
+    )
     .map((x) => x.key);
 
   return (
@@ -382,8 +512,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   const setTheme = usePrefs((s) => s.setTheme);
   const density = usePrefs((s) => s.density);
   const setDensity = usePrefs((s) => s.setDensity);
-  const navCollapsed = usePrefs((s) => s.navCollapsed);
-  const toggleNav = usePrefs((s) => s.toggleNav);
+  const { collapsed: navCollapsed, toggle: toggleNav } = useNavRail();
   const shell = useShell();
 
   const dark = resolveTheme(theme) === "dark";
@@ -478,16 +607,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       label: "Workdatabase · Files",
       icon: <FolderTree {...ICON} />,
       shortcut: "g f",
-      keywords: [
-        "go to files",
-        "open workspace files",
-        "source",
-        "markdown",
-        "edit",
-        "goal.md",
-        "plan.md",
-        "tree",
-      ],
+      keywords: ["go to files", "open workspace files", "source", "markdown", "edit", "tree"],
       run: () => void files.open(),
     },
     {

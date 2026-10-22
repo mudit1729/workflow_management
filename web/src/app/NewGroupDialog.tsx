@@ -34,6 +34,7 @@ export function NewGroupDialog() {
         size="sm"
         title="New group"
         description="Creates a folder with a _group.md. Issues inside it roll up to the group."
+        bodyClassName="pt-1"
       >
         <NewGroupForm onDone={() => setOpen(false)} />
       </DialogContent>
@@ -169,13 +170,13 @@ function NewGroupForm({ onDone }: { onDone: () => void }) {
               value={String(h)}
               aria-label={`Color ${h}`}
               className={cn(
-                "flex size-5 cursor-default items-center justify-center rounded-full text-white",
+                "flex size-5 cursor-default items-center justify-center rounded-full text-accent-fg",
                 "outline-offset-2 transition-transform duration-100 ease-wf hover:scale-110",
                 "data-[state=on]:ring-2 data-[state=on]:ring-border-strong data-[state=on]:ring-offset-2 data-[state=on]:ring-offset-bg",
               )}
               style={{ background: `var(--wf-hue-${h})` }}
             >
-              {h === color && <Check aria-hidden size={10} strokeWidth={3.25} />}
+              {h === color && <Check aria-hidden size={14} strokeWidth={1.75} />}
             </ToggleGroup.Item>
           ))}
         </ToggleGroup.Root>

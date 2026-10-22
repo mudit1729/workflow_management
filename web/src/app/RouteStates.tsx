@@ -1,5 +1,5 @@
 // Default route states: pending, error and not found. Calm, centered, one action.
-import type { ErrorComponentProps } from "@tanstack/react-router";
+import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
 import { Compass, Copy, LoaderCircle, RotateCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui";
@@ -36,7 +36,22 @@ function errorText(error: unknown): { message: string; details: string } {
 
 export function RouteError({ error, reset }: ErrorComponentProps) {
   const { message, details } = errorText(error);
+  const router = useRouter();
+  const go = useGo();
   const [copied, setCopied] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  // A page reload would throw away the in-memory edits of the mock; re-run the route's loaders
+  // and reset the boundary instead.
+  async function retry() {
+    setRetrying(true);
+    try {
+      await router.invalidate();
+    } finally {
+      setRetrying(false);
+      reset();
+    }
+  }
 
   async function copy() {
     if (!(await copyText(details, "Error details copied"))) return;
@@ -56,22 +71,22 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
           <h1 className="font-medium text-md">This view failed to load</h1>
         </div>
         <p className="text-fg-muted">
-          Your files are safe. Reload to try again, or copy the details for a bug report.
+          Your files are safe. Try again, or copy the details for a bug report.
         </p>
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-subtle px-3 py-2 font-mono text-fg-muted text-sm">
           {message}
         </pre>
         <div className="flex items-center gap-2">
-          <Button variant="primary" onClick={() => window.location.reload()}>
+          <Button variant="primary" onClick={retry} disabled={retrying}>
             <RotateCw size={14} strokeWidth={1.75} aria-hidden />
-            Reload
+            Try again
           </Button>
           <Button variant="secondary" onClick={copy}>
             <Copy size={14} strokeWidth={1.75} aria-hidden />
             {copied ? "Copied" : "Copy details"}
           </Button>
-          <Button variant="ghost" className="ml-auto" onClick={reset}>
-            Try again
+          <Button variant="ghost" className="ml-auto" onClick={() => go.board()}>
+            Go to Workflow
           </Button>
         </div>
       </div>
@@ -88,7 +103,7 @@ export function RouteNotFound() {
       className="flex h-full min-h-0 w-full items-center justify-center p-6"
     >
       <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-        <Compass size={20} strokeWidth={1.5} className="text-fg-faint" aria-hidden />
+        <Compass size={14} strokeWidth={1.75} className="text-fg-faint" aria-hidden />
         <div className="flex flex-col gap-1">
           <h1 className="font-medium text-md">Nothing lives at this address</h1>
           <p className="text-fg-muted">
