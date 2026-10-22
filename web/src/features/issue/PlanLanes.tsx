@@ -19,7 +19,7 @@ import { TaskDetail } from "./TaskDetail";
 import { plainTitle, TaskPill } from "./TaskPill";
 
 const LANE_W = 96;
-const LEVEL_W = 200;
+const LEVEL_W = 240;
 const FADE_RIGHT = "linear-gradient(to right, black calc(100% - 40px), transparent)";
 
 export interface PlanLanesProps {
@@ -272,6 +272,7 @@ function LanePill({
           ref={pillRef}
           task={task}
           size="md"
+          wrap
           selected={selected}
           highlightReady={highlightReady}
           className={cn("w-full", dimmed && "opacity-50")}

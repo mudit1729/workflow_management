@@ -155,7 +155,7 @@ export interface InlineTextProps {
 export function InlineText({ text, keywords, issueId, codeClassName, className }: InlineTextProps) {
   const segments = useMemo(() => segment(text, keywordMask(text, keywords)), [text, keywords]);
   return (
-    <span className={className}>
+    <span data-wf="InlineText" className={className}>
       {segments.map((s, i) => {
         if (s.kind === "ref") return <RefLink key={i} target={s.target} issueId={issueId} />;
         if (s.kind === "handle")

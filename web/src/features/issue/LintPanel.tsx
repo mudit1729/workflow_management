@@ -1,15 +1,29 @@
 // Lint findings for one issue, grouped by file, with a severity filter.
-import { CircleCheck, CircleX, FileText, Info, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, FileText, Info, Pencil, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { copyText, EmptyState } from "@/components/common";
-import { Segmented, Tooltip } from "@/components/ui";
+import { CopyButton, EmptyState } from "@/components/common";
+import { IconButton, Segmented, Tooltip } from "@/components/ui";
+import { FilesLink, useFilesNav } from "@/features/files";
 import type { Diagnostic, LintCounts, Severity } from "@/gen/types";
 import { cn } from "@/lib/cn";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 type Filter = "all" | Severity;
+
+type EditOptions = NonNullable<Parameters<ReturnType<typeof useFilesNav>["edit"]>[1]>;
+
+/**
+ * Opens `path` in Workdatabase · Files with its editor on, the caret on `line`. The editor
+ * reads `line` from the edit intent; until it does, the file opens at the top.
+ */
+export function useEditAtLine() {
+  const files = useFilesNav();
+  return (path: string, line: number) => {
+    const intent: EditOptions & { line?: number } = { line };
+    return files.edit(path, intent);
+  };
+}
 
 interface LintPanelProps {
   diagnostics: Diagnostic[];
@@ -70,7 +84,11 @@ export function LintPanel({ diagnostics, basePath }: LintPanelProps) {
             </div>
             <ul className="divide-y divide-border">
               {g.items.map((d) => (
-                <LintRow key={`${d.rule}:${d.line}:${d.col}:${d.span[0]}`} d={d} rel={g.rel} />
+                <LintRow
+                  key={`${d.rule}:${d.line}:${d.col}:${d.span[0]}`}
+                  d={d}
+                  path={workspacePath(d.file, basePath)}
+                />
               ))}
             </ul>
           </section>
@@ -80,12 +98,9 @@ export function LintPanel({ diagnostics, basePath }: LintPanelProps) {
   );
 }
 
-function LintRow({ d, rel }: { d: Diagnostic; rel: string }) {
-  const location = `${rel}:${d.line}`;
-  const copyLocation = async () => {
-    if (await copyText(location)) toast(`Copied ${location}`);
-    else toast.error("Could not copy to the clipboard");
-  };
+function LintRow({ d, path }: { d: Diagnostic; path: string }) {
+  const editAtLine = useEditAtLine();
+  const location = `${path}:${d.line}`;
 
   return (
     <li
@@ -109,16 +124,25 @@ function LintRow({ d, rel }: { d: Diagnostic; rel: string }) {
           </p>
         )}
       </div>
-      <Tooltip content={`Copy ${location}`}>
-        <button
-          type="button"
-          onClick={() => void copyLocation()}
-          aria-label={`Copy location ${location}`}
-          className="h-[19px] whitespace-nowrap rounded-sm px-1 text-fg-faint text-xs tabular transition-colors duration-100 hover:bg-muted hover:text-fg"
+      <div className="-my-0.5 flex items-center gap-0.5">
+        <FilesLink
+          path={path}
+          line={d.line}
+          title={`Open ${location} in Files`}
+          aria-label={`Open ${location} in Files`}
+          className="inline-flex h-5 items-center whitespace-nowrap rounded-sm px-1 text-fg-faint text-xs tabular transition-colors duration-100 hover:bg-muted hover:text-fg"
         >
           line {d.line}
-        </button>
-      </Tooltip>
+        </FilesLink>
+        <IconButton
+          size="sm"
+          label="Edit at this line"
+          icon={<Pencil {...ICON} />}
+          onClick={() => void editAtLine(path, d.line)}
+          className="text-fg-faint hover:text-fg"
+        />
+        <CopyButton text={location} label={`Copy ${location}`} />
+      </div>
     </li>
   );
 }
@@ -129,7 +153,7 @@ export function CodeSpans({ text }: { text: string }) {
   // An odd number of backticks leaves the last span open: show it as plain text.
   const balanced = parts.length % 2 === 1;
   return (
-    <>
+    <span data-wf="CodeSpans">
       {parts.map((part, i) =>
         i % 2 === 1 && (balanced || i < parts.length - 1) ? (
           <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-[0.9em] text-fg">
@@ -142,7 +166,7 @@ export function CodeSpans({ text }: { text: string }) {
           </span>
         ),
       )}
-    </>
+    </span>
   );
 }
 
@@ -173,6 +197,12 @@ const EMPTY_FILTER: Record<Filter, string> = {
   warn: "No warnings.",
   info: "No info findings.",
 };
+
+/** The workspace-relative path of a finding's file (a bare name is taken as inside `basePath`). */
+function workspacePath(file: string, basePath?: string): string {
+  if (!basePath || file.includes("/")) return file;
+  return `${basePath.replace(/\/$/, "")}/${file}`;
+}
 
 function relativeTo(file: string, basePath?: string): string {
   if (!basePath) return file;

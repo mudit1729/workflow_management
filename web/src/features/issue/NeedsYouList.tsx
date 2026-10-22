@@ -43,7 +43,7 @@ export function TimeAgo({ ts, className }: { ts: Ts; className?: string }) {
   const now = useNow();
   return (
     <Tooltip content={absolute(ts)}>
-      <time dateTime={ts} className={cn("tabular", className)}>
+      <time data-wf="TimeAgo" dateTime={ts} className={cn("tabular", className)}>
         {agoLabel(ts, now)}
       </time>
     </Tooltip>

@@ -4,6 +4,7 @@ import {
   Ban,
   Calendar,
   Check,
+  ChevronDown,
   CircleX,
   FileText,
   Link2,
@@ -12,7 +13,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AuthorChip,
@@ -23,7 +24,7 @@ import {
   StatusSelect,
   useNow,
 } from "@/components/common";
-import { Button, Chip, IconButton, Tooltip } from "@/components/ui";
+import { Button, IconButton, Tooltip } from "@/components/ui";
 import type { IssueDetail, Lease, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs } from "@/lib/format";
@@ -48,6 +49,8 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
   const closeIssue = useCloseIssue();
   const close = onClose ?? closeIssue;
   const drawer = variant === "drawer";
+  // Under 640 px the reference properties fold behind "Details"; status and owner stay.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const lint = countBySeverity(detail.diagnostics);
   const lintTotal = lint.error + lint.warn + lint.info;
 
@@ -57,6 +60,50 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
   const copyLink = () =>
     copyWithToast(new URL(hrefFor(`/i/${s.id}`), window.location.href).href, "Link copied");
   const copyContext = () => copyWithToast(`wf context ${s.id}`, `Copied wf context ${s.id}`);
+
+  const metas: { key: string; always?: boolean; node: ReactNode }[] = [];
+  if (s.priority !== "none") {
+    metas.push({
+      key: "priority",
+      node: (
+        <Meta wf="PriorityPill" tip="Priority">
+          <PriorityGlyph priority={s.priority} />
+          {PRIORITY_LABEL[s.priority]}
+        </Meta>
+      ),
+    });
+  }
+  metas.push({
+    key: "size",
+    node: (
+      <Meta wf="SizePill" tip="Size">
+        Size {s.size.toUpperCase()}
+      </Meta>
+    ),
+  });
+  if (s.owner) {
+    metas.push({
+      key: "owner",
+      always: true,
+      node: (
+        <Meta wf="OwnerPill" tip="Owner">
+          <AuthorChip handle={s.owner} size="xs" variant="avatar" />
+          <span>@{s.owner}</span>
+        </Meta>
+      ),
+    });
+  }
+  if (s.due) {
+    metas.push({
+      key: "due",
+      node: <DueMeta due={s.due} done={s.status === "done" || s.status === "cancelled"} />,
+    });
+  }
+  if (s.blocked_by.length > 0)
+    metas.push({ key: "blocked", node: <BlockedByMeta ids={s.blocked_by} /> });
+
+  // The board page already owns the h1 ("Workflow · Board"), so the drawer title is an h2.
+  const Title = drawer ? "h2" : "h1";
 
   const actions = (
     <>
@@ -109,7 +156,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
       )}
 
       <div className={cn("flex items-start gap-3", drawer ? "mt-1" : "")}>
-        <h1
+        <Title
           className={cn(
             "line-clamp-2 min-w-0 flex-1 font-semibold text-fg",
             drawer ? "text-lg" : "text-xl",
@@ -117,7 +164,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
           title={s.title}
         >
           {s.title}
-        </h1>
+        </Title>
         {!drawer && (
           <div data-wf="IssueActions" className="flex shrink-0 items-center gap-1">
             {onOpenFiles && (
@@ -137,47 +184,65 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
 
       <div
         data-wf="IssueProperties"
-        className={cn("flex flex-wrap items-center gap-1.5", drawer ? "mt-2" : "mt-3")}
+        className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1.5", drawer ? "mt-2" : "mt-3")}
       >
+        {/* The live signals keep their pills: status and the coordinator lease. */}
         <StatusSelect issue={s} size="sm" variant="pill" />
-        {s.priority !== "none" && (
-          <Pill wf="PriorityPill" tip="Priority">
-            <PriorityGlyph priority={s.priority} />
-            {PRIORITY_LABEL[s.priority]}
-          </Pill>
+        {s.coordinator && (
+          <span className={foldable(detailsOpen)}>
+            <LeasePill lease={s.coordinator} />
+          </span>
         )}
-        <Pill wf="SizePill" tip="Size">
-          Size {s.size.toUpperCase()}
-        </Pill>
-        {s.owner && (
-          <Pill wf="OwnerPill" tip="Owner">
-            <AuthorChip handle={s.owner} size="xs" variant="avatar" />
-            <span>@{s.owner}</span>
-          </Pill>
-        )}
-        {s.coordinator && <LeasePill lease={s.coordinator} />}
-        {s.due && <DuePill due={s.due} done={s.status === "done" || s.status === "cancelled"} />}
-        {s.blocked_by.length > 0 && <BlockedByPill ids={s.blocked_by} />}
-        {s.labels.map((label) => (
-          <Chip
-            key={label}
-            data-wf="LabelChip"
-            tone="outline"
-            size="sm"
-            className="h-6 rounded-md px-2 font-normal text-sm"
-            title={`Label: ${label}`}
-          >
-            {label}
-          </Chip>
-        ))}
-        {lintTotal > 0 && (
-          <LintBadge
-            counts={lint}
-            variant="badge"
-            onClick={onOpenFiles}
-            className="h-6 rounded-md px-2"
+        {/* Reference data reads as one quiet line: no borders, faint dots between. It wraps as a
+            whole below the pills when the header is narrow, so a dot never ends a row. */}
+        <div
+          data-wf="IssuePropertyLine"
+          className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
+        >
+          {metas.map((m, i) => (
+            <Fragment key={m.key}>
+              {i > 0 && (
+                <span aria-hidden className={cn("text-fg-faint", foldable(detailsOpen, "inline"))}>
+                  ·
+                </span>
+              )}
+              {m.always ? m.node : <span className={foldable(detailsOpen)}>{m.node}</span>}
+            </Fragment>
+          ))}
+          {s.labels.length > 0 && (
+            <span
+              data-wf="IssueLabels"
+              className={cn(
+                "ml-1 items-center gap-1.5 text-fg-faint text-sm",
+                foldable(detailsOpen, "flex"),
+              )}
+            >
+              {s.labels.map((label) => (
+                <span key={label} data-wf="LabelChip" title={`Label: ${label}`}>
+                  #{label}
+                </span>
+              ))}
+            </span>
+          )}
+          {lintTotal > 0 && (
+            <span className={foldable(detailsOpen)}>
+              <LintBadge counts={lint} variant="badge" onClick={onOpenFiles} />
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((v) => !v)}
+          className="-mr-1.5 ml-auto px-1.5 text-fg-muted min-[640px]:hidden"
+        >
+          Details
+          <ChevronDown
+            {...ICON}
+            className={cn("transition-transform duration-150 ease-wf", detailsOpen && "rotate-180")}
           />
-        )}
+        </Button>
       </div>
 
       <IssueSignals detail={detail} />
@@ -261,6 +326,44 @@ function Pill({
   return tip ? <Tooltip content={tip}>{pill}</Tooltip> : pill;
 }
 
+/** Classes that hide a non-essential property under 640 px until "Details" is open. */
+function foldable(open: boolean, display: "contents" | "flex" | "inline" = "contents"): string {
+  // Whole class names, so Tailwind sees them.
+  const closed = {
+    contents: "hidden min-[640px]:contents",
+    flex: "hidden min-[640px]:flex",
+    inline: "hidden min-[640px]:inline",
+  } as const;
+  return open ? display : closed[display];
+}
+
+/** A property without a pill: icon and text on the quiet line (priority, size, owner, due). */
+function Meta({
+  wf,
+  children,
+  tip,
+  tone = "neutral",
+}: {
+  /** The element name the user gives feedback on, e.g. "PriorityPill". */
+  wf: string;
+  children: ReactNode;
+  tip?: ReactNode;
+  tone?: "neutral" | "danger";
+}) {
+  const meta = (
+    <span
+      data-wf={wf}
+      className={cn(
+        "inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap text-sm",
+        tone === "danger" ? "text-danger" : "text-fg-muted",
+      )}
+    >
+      {children}
+    </span>
+  );
+  return tip ? <Tooltip content={tip}>{meta}</Tooltip> : meta;
+}
+
 /** Amber text darkened toward the text color, so it stays readable on white (as Chip does). */
 const STALE_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
 
@@ -327,7 +430,7 @@ function LeasePill({ lease }: { lease: Lease }) {
   );
 }
 
-function DuePill({ due, done }: { due: string; done: boolean }) {
+function DueMeta({ due, done }: { due: string; done: boolean }) {
   const now = useNow();
   const { label, days } = dueInfo(due, now);
   const overdue = days < 0 && !done;
@@ -337,20 +440,17 @@ function DuePill({ due, done }: { due: string; done: boolean }) {
       ? "Due today"
       : `Due ${due}`;
   return (
-    <Pill wf="DuePill" tip={tip} tone={overdue ? "danger" : "neutral"}>
+    <Meta wf="DuePill" tip={tip} tone={overdue ? "danger" : "neutral"}>
       <Calendar {...ICON} className={overdue ? "text-danger" : "text-fg-faint"} />
       <span className="tabular">{label}</span>
-    </Pill>
+    </Meta>
   );
 }
 
-function BlockedByPill({ ids }: { ids: string[] }) {
+function BlockedByMeta({ ids }: { ids: string[] }) {
   const openIssue = useOpenIssue();
   return (
-    <span
-      data-wf="BlockedByPill"
-      className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-sm"
-    >
+    <span data-wf="BlockedByPill" className="inline-flex h-6 items-center gap-1.5 text-sm">
       <Ban {...ICON} className="text-danger" />
       <span className="text-fg-muted">Blocked by</span>
       {ids.map((id, i) => (

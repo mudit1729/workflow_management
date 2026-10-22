@@ -1,6 +1,6 @@
 // The issue frame: header plus tabs (drawer, narrow page) or columns (page).
 import { CircleAlert, FileX, X } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 import { EmptyState, LintBadge } from "@/components/common";
 import {
   Button,
@@ -170,7 +170,8 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
   const [filesOpen, setFilesOpen] = useState(false);
   const { setTab } = useIssueTab();
   const narrow = useMediaQuery("(max-width: 767px)");
-  const wide = useMediaQuery("(min-width: 1100px)");
+  // Three columns by the width of the page region, not the viewport: the nav rail takes 232 px.
+  const wide = useElementWidth(rootRef) >= THREE_COLUMNS_MIN;
   const counts = tabCounts(detail);
 
   // A file picked in the Files sheet: close the sheet and bring its section into view.
@@ -194,7 +195,10 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
       {narrow ? (
         <IssueTabs detail={detail} variant="page" />
       ) : wide ? (
-        <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-border">
+        <div
+          data-wf="IssueColumns"
+          className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(480px,1.3fr)_minmax(0,1fr)] divide-x divide-border"
+        >
           <Column label="Now and goal">
             <NowGoalSections detail={detail} counts={counts} />
           </Column>
@@ -230,6 +234,24 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
       </Sheet>
     </div>
   );
+}
+
+/** The page region needs this much width for Now and goal, a 480 px Plan and the Log side by side. */
+const THREE_COLUMNS_MIN = 1080;
+
+/** Live width of an element's box. 0 until measured (a layout effect, so before first paint). */
+function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setWidth(el.getBoundingClientRect().width);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
 }
 
 function NowGoalSections({ detail, counts }: { detail: IssueDetail; counts: TabCounts }) {

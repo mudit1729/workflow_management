@@ -81,7 +81,12 @@ export function IssueDrawer({ id }: { id: IssueId }) {
   return (
     <>
       {/* Transparent click-catcher: a click on the board closes the overlay. */}
-      <div aria-hidden className="absolute inset-0 z-20" onClick={() => void close()} />
+      <div
+        aria-hidden
+        data-wf="IssueDrawerScrim"
+        className="absolute inset-0 z-20"
+        onClick={() => void close()}
+      />
       <aside
         ref={panelRef}
         tabIndex={-1}

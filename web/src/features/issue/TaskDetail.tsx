@@ -223,7 +223,7 @@ function StatusMenu({
         >
           <StatusIcon status={status} size={14} />
           {TASK_STATUS_LABEL[status]}
-          <ChevronDown size={12} strokeWidth={1.75} className="text-fg-faint" />
+          <ChevronDown size={14} strokeWidth={1.75} className="text-fg-faint" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-44">
@@ -282,7 +282,7 @@ function CriterionChip({ id, criterion }: { id: string; criterion?: Criterion })
       size="sm"
       icon={
         criterion?.state === "verified" ? (
-          <Check size={11} strokeWidth={2} className="text-status-done" />
+          <Check size={12} strokeWidth={1.75} className="text-status-done" />
         ) : undefined
       }
     >

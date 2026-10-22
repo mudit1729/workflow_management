@@ -1,6 +1,6 @@
 // PlanList: the plan as a phase stepper. Each phase shows its progress; finished
 // phases start collapsed. A task row expands its TaskDetail inline.
-import { Check, ChevronRight, ListChecks } from "lucide-react";
+import { ChevronRight, ListChecks } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { AuthorChip, EmptyState, StatusIcon } from "@/components/common";
 import {
@@ -211,11 +211,7 @@ function PhaseMarker({
   finished: boolean;
 }) {
   if (finished) {
-    return (
-      <span className="grid size-4 place-items-center rounded-full bg-status-done text-accent-fg">
-        <Check size={10} strokeWidth={3} />
-      </span>
-    );
+    return <StatusIcon status="done" size={16} />;
   }
   const r = 6.25;
   const c = 2 * Math.PI * r;
@@ -323,7 +319,7 @@ function TaskRow({
         {task.steps.length > 0 && (
           <Tooltip content={`${stepsDone} of ${task.steps.length} steps done`}>
             <span className="flex items-center gap-1 text-fg-faint text-xs tabular">
-              <ListChecks size={12} strokeWidth={1.75} aria-hidden />
+              <ListChecks size={14} strokeWidth={1.75} aria-hidden />
               {stepsDone}/{task.steps.length}
             </span>
           </Tooltip>

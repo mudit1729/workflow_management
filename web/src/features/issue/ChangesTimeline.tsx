@@ -6,6 +6,7 @@ import {
   FunnelX,
   GitCommitHorizontal,
   GitPullRequest,
+  ListFilter,
   Logs,
   ShieldCheck,
   X,
@@ -29,7 +30,15 @@ import {
   MarkdownProse,
   RelativeTime,
 } from "@/components/common";
-import { Button, Chip, chipVariants, Tooltip } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  chipVariants,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+} from "@/components/ui";
 import type { Author, ChangeEntry, ChangeKind } from "@/gen/types";
 import { useAuthors, useIssue } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -131,21 +140,30 @@ export function ChangesTimeline({
   };
   const showAuthors = authorCounts.size > 1;
   const showKinds = kinds.length > 1;
-  // "Clear" (while filtering) and the count close the last row of chips.
-  const summary = (
-    <>
-      {filtering && (
-        <Button variant="ghost" size="sm" onClick={clear}>
-          <X size={12} strokeWidth={1.75} aria-hidden />
-          Clear
-        </Button>
-      )}
-      <span className="ml-auto pl-2 text-fg-faint text-xs tabular" aria-live="polite">
-        {filtering
-          ? `${visible.length} of ${changes.length}`
-          : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
-      </span>
-    </>
+  const activeCount = authorSel.size + kindSel.size;
+  const authorChip = (h: string) => (
+    <FilterChip
+      key={h}
+      pressed={authorSel.has(h)}
+      count={authorCounts.get(h) ?? 0}
+      icon={<AuthorChip handle={h} size="xs" variant="avatar" />}
+      onClick={() => setAuthorSel((s) => toggle(s, h))}
+    >
+      @{h}
+    </FilterChip>
+  );
+  const kindChip = (k: ChangeKind) => (
+    <FilterChip
+      key={k}
+      pressed={kindSel.has(k)}
+      count={kindCounts.get(k) ?? 0}
+      icon={
+        <KindIcon kind={k} size={12} className={k === "failure" ? "text-danger" : "opacity-70"} />
+      }
+      onClick={() => setKindSel((s) => toggle(s, k))}
+    >
+      {CHANGE_KIND_LABEL[k]}
+    </FilterChip>
   );
 
   return (
@@ -154,47 +172,59 @@ export function ChangesTimeline({
         data-wf="TimelineFilters"
         role="toolbar"
         aria-label="Filter changes"
-        className="flex flex-col gap-1 pt-1 pb-3"
+        className="flex flex-wrap items-center gap-1 pt-1 pb-3"
       >
-        {showAuthors && (
-          <div className="flex flex-wrap items-center gap-1">
-            {[...authorCounts.keys()].map((h) => (
-              <FilterChip
-                key={h}
-                pressed={authorSel.has(h)}
-                count={authorCounts.get(h) ?? 0}
-                icon={<AuthorChip handle={h} size="xs" variant="avatar" />}
-                onClick={() => setAuthorSel((s) => toggle(s, h))}
-              >
-                @{h}
-              </FilterChip>
-            ))}
-            {!showKinds && summary}
-          </div>
+        {(showAuthors || showKinds) && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="secondary" size="sm" className="gap-1.5">
+                <ListFilter aria-hidden />
+                Filter
+                {activeCount > 0 && (
+                  <span className="font-medium text-accent tabular">
+                    <span className="sr-only">, </span>
+                    {activeCount}
+                    <span className="sr-only"> active</span>
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              data-wf="TimelineFilterMenu"
+              align="start"
+              className="flex w-[340px] max-w-[calc(100vw-32px)] flex-col gap-3"
+            >
+              {showAuthors && (
+                <FilterGroup label="Author">
+                  {[...authorCounts.keys()].map((h) => authorChip(h))}
+                </FilterGroup>
+              )}
+              {showKinds && <FilterGroup label="Kind">{kinds.map((k) => kindChip(k))}</FilterGroup>}
+              {filtering && (
+                <div className="-mb-1 flex justify-end border-border border-t pt-2">
+                  <Button variant="ghost" size="sm" onClick={clear}>
+                    <X aria-hidden />
+                    Clear
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         )}
-        {showKinds && (
-          <div className="flex flex-wrap items-center gap-1">
-            {kinds.map((k) => (
-              <FilterChip
-                key={k}
-                pressed={kindSel.has(k)}
-                count={kindCounts.get(k) ?? 0}
-                icon={
-                  <KindIcon
-                    kind={k}
-                    size={12}
-                    className={k === "failure" ? "text-danger" : "opacity-70"}
-                  />
-                }
-                onClick={() => setKindSel((s) => toggle(s, k))}
-              >
-                {CHANGE_KIND_LABEL[k]}
-              </FilterChip>
-            ))}
-            {summary}
-          </div>
+        {/* Chips show inline only for the filters that are on; a click turns one off. */}
+        {[...authorSel].filter((h) => authorCounts.has(h)).map((h) => authorChip(h))}
+        {kinds.filter((k) => kindSel.has(k)).map((k) => kindChip(k))}
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clear}>
+            <X aria-hidden />
+            Clear
+          </Button>
         )}
-        {!showAuthors && !showKinds && <div className="flex items-center">{summary}</div>}
+        <span className="ml-auto pl-2 text-fg-faint text-xs tabular" aria-live="polite">
+          {filtering
+            ? `${visible.length} of ${changes.length}`
+            : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
+        </span>
       </div>
 
       {days.length === 0 ? (
@@ -214,7 +244,7 @@ export function ChangesTimeline({
       ) : (
         days.map((day) => (
           <section key={day.label} aria-label={day.label}>
-            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-10 flex items-baseline gap-2 border-border border-b bg-bg/95 py-1.5 font-medium text-fg-muted text-sm backdrop-blur-sm">
+            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-10 flex items-baseline gap-2 border-border border-b bg-bg py-1.5 font-medium text-fg-muted text-sm">
               {day.label}
               <span className="font-normal text-fg-faint text-xs tabular">
                 {day.entries.length}
@@ -613,6 +643,15 @@ export function MetaChip({
   return tooltip ? <Tooltip content={tooltip}>{el}</Tooltip> : el;
 }
 
+function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="font-medium text-fg-faint text-xs">{label}</p>
+      <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  );
+}
+
 /** A toggle chip in the filter row: pressed = accent, with the entry count. */
 function FilterChip({
   pressed,
@@ -716,9 +755,9 @@ export function ClampedProse({
 /** A one-line title with `backtick` spans rendered as inline code. */
 export function TitleText({ text }: { text: string }) {
   const parts = text.split("`");
-  if (parts.length < 3) return <>{text}</>;
+  if (parts.length < 3) return <span data-wf="TitleText">{text}</span>;
   return (
-    <>
+    <span data-wf="TitleText">
       {parts.map((part, i) =>
         i % 2 === 1 && i < parts.length - 1 ? (
           <code
@@ -731,7 +770,7 @@ export function TitleText({ text }: { text: string }) {
           <span key={i}>{part}</span>
         ),
       )}
-    </>
+    </span>
   );
 }
 

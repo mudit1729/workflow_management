@@ -206,7 +206,7 @@ function DecisionCard({
               {rejected.map((opt) => (
                 <li key={opt} className="flex items-baseline gap-2 text-base text-fg-muted">
                   <X
-                    size={12}
+                    size={14}
                     strokeWidth={1.75}
                     className="relative top-[1px] shrink-0 text-fg-faint"
                     aria-hidden

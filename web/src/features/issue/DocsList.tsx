@@ -225,10 +225,8 @@ function Row({
           type="button"
           data-path={path}
           onClick={onClick}
-          className={cn(
-            main,
-            "outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--wf-focus)]",
-          )}
+          // The base.css focus ring, drawn inside the row so the list's rounded clip keeps it whole.
+          className={cn(main, "focus-visible:-outline-offset-2")}
         >
           {content}
           <ChevronRight

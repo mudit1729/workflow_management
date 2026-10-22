@@ -23,6 +23,8 @@ export interface TaskPillProps extends Omit<ComponentProps<"button">, "children"
   showTitle?: boolean;
   /** The plan's "Ready" highlight: ready tasks get an accent hairline. */
   highlightReady?: boolean;
+  /** Lets the title run to two lines (the id, glyph and claimant stay on the first). Size md only. */
+  wrap?: boolean;
   ref?: Ref<HTMLElement>;
 }
 
@@ -33,12 +35,14 @@ export function TaskPill({
   selected = false,
   showTitle = true,
   highlightReady = false,
+  wrap = false,
   className,
   ref,
   ...rest
 }: TaskPillProps) {
   const interactive = onClick != null;
   const md = size === "md";
+  const wrapped = wrap && md;
   // Titles may hold `code` spans; a one-line pill shows them as plain text.
   const title = plainTitle(task.title);
   const leaseExpired = task.lease === "expired";
@@ -47,7 +51,11 @@ export function TaskPill({
   const classes = cn(
     "inline-flex min-w-0 max-w-full shrink-0 items-center rounded-md border bg-bg text-left align-middle",
     "transition-[border-color,background-color,opacity] duration-150 ease-wf",
-    md ? "h-6 gap-1.5 px-1.5" : "h-5 gap-1 px-1",
+    wrapped
+      ? "min-h-6 items-start gap-1.5 px-1.5 py-[3px]"
+      : md
+        ? "h-6 gap-1.5 px-1.5"
+        : "h-5 gap-1 px-1",
     selected
       ? "border-accent bg-accent-subtle"
       : highlightReady && task.ready
@@ -61,10 +69,18 @@ export function TaskPill({
   const content = (
     <>
       {/* The status is spoken once, in the sr-only text below. */}
-      <StatusIcon status={task.status} size={md ? 12 : 11} aria-hidden="true" />
+      {wrapped ? (
+        // Every first-line part is one 18 px line box, so a wrapped title never shifts them.
+        <span className="flex h-[18px] shrink-0 items-center">
+          <StatusIcon status={task.status} size={12} aria-hidden="true" />
+        </span>
+      ) : (
+        <StatusIcon status={task.status} size={md ? 12 : 11} aria-hidden="true" />
+      )}
       <span
         className={cn(
-          "shrink-0 font-mono text-xs tabular leading-none",
+          "shrink-0 font-mono text-xs tabular",
+          wrapped ? "leading-[18px]" : "leading-none",
           task.stale ? "text-stale" : "text-fg-muted",
         )}
       >
@@ -73,7 +89,8 @@ export function TaskPill({
       {showTitle && (
         <span
           className={cn(
-            "min-w-0 truncate",
+            wrapped ? "line-clamp-2 break-words leading-[18px]" : "min-w-0 truncate",
+            "min-w-0",
             md ? "text-sm" : "text-xs",
             finished ? "text-fg-muted" : "text-fg",
             task.status === "cancelled" && "line-through",
@@ -82,7 +99,7 @@ export function TaskPill({
           {title}
         </span>
       )}
-      <PillMarkers task={task} leaseExpired={leaseExpired} />
+      <PillMarkers task={task} leaseExpired={leaseExpired} wrapped={wrapped} />
       <span className="sr-only">
         {!showTitle && ` ${title}`}
         {`, ${TASK_STATUS_LABEL[task.status]}`}
@@ -129,10 +146,18 @@ export function plainTitle(title: string): string {
   return title.replace(/`/g, "");
 }
 
-function PillMarkers({ task, leaseExpired }: { task: Task; leaseExpired: boolean }) {
+function PillMarkers({
+  task,
+  leaseExpired,
+  wrapped,
+}: {
+  task: Task;
+  leaseExpired: boolean;
+  wrapped: boolean;
+}) {
   if (!task.ready && !leaseExpired && !task.claimed_by) return null;
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1 pl-0.5">
+    <span className={cn("ml-auto flex shrink-0 items-center gap-1 pl-0.5", wrapped && "h-[18px]")}>
       {task.ready && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
       {leaseExpired && <span aria-hidden className="size-1.5 rounded-full bg-stale" />}
       {task.claimed_by && (

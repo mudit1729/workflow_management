@@ -109,7 +109,7 @@ function NoPlan({ detail }: { detail: IssueDetail }) {
   return (
     <div data-wf="PlanTab" data-state="empty" className="py-6">
       <EmptyState
-        icon={<Waypoints size={20} strokeWidth={1.75} />}
+        icon={<Waypoints size={14} strokeWidth={1.75} />}
         title="No plan yet"
         hint={hint}
         skill="write-plan"

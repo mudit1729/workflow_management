@@ -1,15 +1,16 @@
 // Goal tab: goal.md. Why the issue exists, how we know it is done, and what it
 // leaves out. A file with broken frontmatter still shows: the finding, the raw
 // file with the bad line marked, and whatever body the tolerant reader salvaged.
-import { FileText, OctagonAlert, Target } from "lucide-react";
+import { FileText, OctagonAlert, Pencil, Target } from "lucide-react";
 import { Fragment, type ReactNode, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { CopyButton, EmptyState, MarkdownProse } from "@/components/common";
+import { Button } from "@/components/ui";
 import { AddContextButton, LinkedContext, LinkedPreview, linkKeys } from "@/features/context";
 import type { Diagnostic, IssueDetail } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { CoverageStrip } from "../CoverageStrip";
 import { CriteriaChecklist } from "../CriteriaChecklist";
-import { CodeSpans } from "../LintPanel";
+import { CodeSpans, useEditAtLine } from "../LintPanel";
 
 export interface GoalTabProps {
   detail: IssueDetail;
@@ -170,6 +171,8 @@ function FrontmatterError({
     diagnostics.find((d) => d.rule === "F001" && d.file.endsWith("goal.md")) ??
     diagnostics.find((d) => d.rule === "F001");
   const fileName = file.split("/").pop() || "goal.md";
+  const editAtLine = useEditAtLine();
+  const path = finding?.file ?? file;
 
   return (
     <section
@@ -212,13 +215,23 @@ function FrontmatterError({
               <CodeSpans text={finding.fix} />
             </p>
           )}
+          <div className="mt-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void editAtLine(path, finding?.line ?? 1)}
+            >
+              <Pencil aria-hidden />
+              Fix in editor
+            </Button>
+          </div>
         </div>
       </div>
 
       {raw !== undefined && <RawFile text={raw} fileName={fileName} errorLine={finding?.line} />}
 
       <p className="text-sm text-fg-faint">
-        Fix the YAML by hand or ask an agent to run{" "}
+        Fix the YAML in the editor, or ask an agent to run{" "}
         <code className="rounded-sm bg-muted px-1 py-px font-mono text-xs text-fg-muted">
           write-goal
         </code>
