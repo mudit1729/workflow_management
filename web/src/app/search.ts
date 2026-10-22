@@ -1,6 +1,7 @@
 // Search-param validators for the route tree. Each returns every key the route
 // knows, set to `undefined` when the value is missing or invalid, so a bad value
 // in the URL (`?swim=sideways`) never reaches a component.
+import type { FilesSearch } from "@/features/files";
 import type { LibraryKind } from "@/gen/types";
 import {
   type BoardSearch,
@@ -63,4 +64,9 @@ export function validateLibrarySearch(raw: Raw): LibrarySearch {
     kind: oneOf<LibraryKind>(raw.kind, LIBRARY_KINDS),
     q: text(raw.q),
   };
+}
+
+export function validateFilesSearch(raw: Raw): FilesSearch {
+  // A path is kept exactly as typed: no trimming, no case change.
+  return { path: text(raw.path) };
 }

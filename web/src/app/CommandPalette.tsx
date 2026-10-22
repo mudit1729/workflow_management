@@ -6,7 +6,9 @@ import {
   ArrowRight,
   ArrowUpRight,
   Component,
+  FilePenLine,
   FolderPlus,
+  FolderTree,
   Inbox,
   Keyboard,
   LayoutGrid,
@@ -31,6 +33,7 @@ import {
   CommandList,
   Kbd,
 } from "@/components/ui";
+import { useFilesNav } from "@/features/files";
 import type { GroupNode, IssueStatus, IssueSummary, LibrarySummary } from "@/gen/types";
 import { useGroupTree, useIssueMap, useMoveIssue, useSnapshot } from "@/lib/api";
 import { parseTs } from "@/lib/format";
@@ -371,6 +374,7 @@ function RootPage({
 
 function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => void): Action[] {
   const go = useGo();
+  const files = useFilesNav();
   const theme = usePrefs((s) => s.theme);
   const setTheme = usePrefs((s) => s.setTheme);
   const density = usePrefs((s) => s.density);
@@ -417,6 +421,13 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         run: () => go.issuePage(openIssue.id),
       },
       {
+        id: "edit-goal",
+        label: `Edit goal.md of ${openIssue.id}`,
+        icon: <FilePenLine {...ICON} />,
+        keywords: ["source", "markdown", "file", "edit", openIssue.title],
+        run: () => void files.edit(`${openIssue.path}/goal.md`),
+      },
+      {
         id: "copy-context",
         label: `Copy “wf context ${openIssue.id}”`,
         icon: <Terminal {...ICON} />,
@@ -449,6 +460,14 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       shortcut: "g l",
       keywords: ["glossary", "patterns"],
       run: () => go.library(),
+    },
+    {
+      id: "open-files",
+      label: "Open workspace files",
+      icon: <FolderTree {...ICON} />,
+      shortcut: "g f",
+      keywords: ["source", "markdown", "files", "edit", "goal.md", "plan.md", "tree"],
+      run: () => void files.open(),
     },
     {
       id: "go-kit",

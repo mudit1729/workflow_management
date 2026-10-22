@@ -1,8 +1,16 @@
 // One extra doc or asset: markdown rendered, images inline (click to zoom), others as a raw link.
-import { ArrowLeft, ExternalLink, File, FileImage, FileText, ImageOff } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  File,
+  FileCode,
+  FileImage,
+  FileText,
+  ImageOff,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState, MarkdownProse } from "@/components/common";
-import { Dialog, DialogContent, IconButton, Skeleton } from "@/components/ui";
+import { Button, Dialog, DialogContent, IconButton, Skeleton } from "@/components/ui";
 import type { Diagram, DocFile, IssueId } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
@@ -17,9 +25,11 @@ interface DocViewProps {
   /** Diagrams of the issue, for `wf-diagram` fences inside markdown docs. */
   diagrams?: Diagram[];
   issueId?: IssueId;
+  /** Shows "View source": the file's text, with Edit, instead of the rendered doc. */
+  onViewSource?: () => void;
 }
 
-export function DocView({ doc, onBack, diagrams, issueId }: DocViewProps) {
+export function DocView({ doc, onBack, diagrams, issueId, onViewSource }: DocViewProps) {
   const rootRef = useRef<HTMLElement>(null);
   const hasBack = onBack != null;
   useHotkey("Escape", () => onBack?.(), { enabled: hasBack });
@@ -62,15 +72,23 @@ export function DocView({ doc, onBack, diagrams, issueId }: DocViewProps) {
           {doc.path}
         </h3>
         <span className="shrink-0 text-fg-faint text-xs tabular">{formatBytes(doc.size)}</span>
-        <a
-          href={doc.url}
-          target="_blank"
-          rel="noreferrer"
-          className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
-        >
-          Open raw
-          <ExternalLink {...ICON} aria-hidden />
-        </a>
+        <span className="ml-auto flex shrink-0 items-center gap-0.5">
+          {onViewSource && (
+            <Button variant="ghost" size="sm" onClick={onViewSource} className="text-fg-muted">
+              <FileCode {...ICON} aria-hidden />
+              View source
+            </Button>
+          )}
+          <a
+            href={doc.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
+          >
+            Open raw
+            <ExternalLink {...ICON} aria-hidden />
+          </a>
+        </span>
       </div>
 
       {doc.kind === "markdown" ? (

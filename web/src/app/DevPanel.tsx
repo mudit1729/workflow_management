@@ -1,7 +1,7 @@
 // Prototype controls: a "Prototype" pill (expanded nav) or an icon button (collapsed rail,
 // phone top bar) that opens a popover for driving the mock server (live events, connection
 // state, conflicts, archify, reset). "." toggles it. Nothing floats over board content.
-import { ArrowRight, Check, FlaskConical, Play, RotateCcw } from "lucide-react";
+import { ArrowRight, Check, FlaskConical, FolderTree, Play, RotateCcw } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,7 @@ import {
   Segmented,
   Switch,
 } from "@/components/ui";
+import { useFilesNav } from "@/features/files";
 import { queryClient, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLiveStatus } from "@/lib/live";
@@ -102,6 +103,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
   const live = useLiveStatus();
   const snapshot = useSnapshot().data;
   const go = useGo();
+  const files = useFilesNav();
   const [conflictArmed, setConflictArmed] = useState(false);
   const [archify, setArchify] = useState(snapshot?.config.archify !== "unavailable");
   const disabled = !mock;
@@ -195,6 +197,24 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             }}
           />
         </Row>
+      </Section>
+
+      <Section title="Source of truth">
+        <p className="text-fg-faint text-xs">
+          The board is read from markdown files. Edit one and the board changes.
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="self-start"
+          onClick={() => {
+            onClose();
+            void files.open();
+          }}
+        >
+          <FolderTree size={12} strokeWidth={1.75} aria-hidden />
+          Open workspace files
+        </Button>
       </Section>
 
       <footer className="flex items-center gap-2 border-border border-t px-3 py-2.5">

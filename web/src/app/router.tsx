@@ -8,6 +8,7 @@ import {
   redirect,
   useParams,
 } from "@tanstack/react-router";
+import { WorkspaceView } from "@/features/files";
 import { InboxView } from "@/features/inbox";
 import { IssueDrawer, IssuePage } from "@/features/issue";
 import { KitPage } from "@/features/kit";
@@ -15,7 +16,12 @@ import { LibraryView } from "@/features/library";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
 import { RouteError, RouteNotFound, RoutePending } from "./RouteStates";
-import { validateBoardSearch, validateIssueSearch, validateLibrarySearch } from "./search";
+import {
+  validateBoardSearch,
+  validateFilesSearch,
+  validateIssueSearch,
+  validateLibrarySearch,
+} from "./search";
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -91,6 +97,17 @@ const inboxRoute = createRoute({
   component: InboxView,
 });
 
+// /files — the workspace as the markdown files it is. `?path=` selects a file.
+const filesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "files",
+  validateSearch: validateFilesSearch,
+  component: function FilesRoute() {
+    const { path } = filesRoute.useSearch();
+    return <WorkspaceView path={path} />;
+  },
+});
+
 const kitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "kit",
@@ -103,6 +120,7 @@ const routeTree = rootRoute.addChildren([
   issueRoute,
   libraryRoute.addChildren([libraryIndexRoute, libraryItemRoute]),
   inboxRoute,
+  filesRoute,
   kitRoute,
 ]);
 

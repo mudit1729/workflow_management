@@ -1,6 +1,7 @@
 // Every element in the kit, in index order. A group's entries keep the order of their file.
 import { boardEntries } from "./entries/board";
 import { diagramEntries } from "./entries/diagrams";
+import { filesEntries } from "./entries/files";
 import { foundationEntries } from "./entries/foundations";
 import { inboxEntries } from "./entries/inbox";
 import { issueFilesEntries } from "./entries/issue-files";
@@ -25,6 +26,7 @@ const ALL: KitEntry[] = [
   ...issuePlanEntries,
   ...issueLogEntries,
   ...issueFilesEntries,
+  ...filesEntries,
   ...diagramEntries,
   ...libraryEntries,
   ...inboxEntries,

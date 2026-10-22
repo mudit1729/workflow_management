@@ -1,6 +1,9 @@
-// Files tab: the issue folder (DocsList, with DocView inline) and its lint findings.
+// Files tab: the issue folder (DocsList, with DocView or SourceView inline) and its lint findings.
+// Every file can show its source here, with Edit, and link out to Workspace files.
 import { type ReactNode, useState } from "react";
+import { requestFileEdit, SourceView, templateForPath } from "@/features/files";
 import type { IssueDetail } from "@/gen/types";
+import { useMe } from "@/lib/api";
 import { type IssueTab, type LogView, useIssueTab } from "@/lib/nav";
 import { DocsList, type IssueFileName } from "../DocsList";
 import { DocView } from "../DocView";
@@ -25,9 +28,35 @@ interface FilesTabProps {
 
 export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
   const { setTab, setLog } = useIssueTab();
+  const me = useMe();
   const [openPath, setOpenPath] = useState<string | null>(null);
+  const [sourceRel, setSourceRel] = useState<string | null>(null);
+  // Where focus returns when a doc or a source view closes.
   const [returnPath, setReturnPath] = useState<string | undefined>();
+  const [returnSource, setReturnSource] = useState<string | undefined>();
   const doc = openPath ? detail.docs.find((d) => d.path === openPath) : undefined;
+  const base = detail.summary.path;
+
+  if (sourceRel) {
+    const full = `${base}/${sourceRel}`;
+    const back = () => {
+      setReturnSource(sourceRel);
+      setReturnPath(undefined);
+      setSourceRel(null);
+    };
+    return (
+      <div data-wf="FilesTab" data-variant={variant} data-view="source">
+        <SourceView
+          key={full}
+          path={full}
+          variant="inline"
+          pathLabel={sourceRel}
+          onBack={back}
+          onDeleted={back}
+        />
+      </div>
+    );
+  }
 
   if (doc) {
     return (
@@ -38,7 +67,12 @@ export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
           issueId={detail.summary.id}
           onBack={() => {
             setReturnPath(doc.path);
+            setReturnSource(undefined);
             setOpenPath(null);
+          }}
+          onViewSource={() => {
+            setOpenPath(null);
+            setSourceRel(doc.path);
           }}
         />
       </div>
@@ -52,6 +86,13 @@ export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
     onNavigate?.(target.tab);
   };
 
+  // A missing file opens in the editor with a valid starting text.
+  const create = (name: IssueFileName) => {
+    const full = `${base}/${name}`;
+    requestFileEdit({ path: full, draft: templateForPath(full, { author: me ?? "shruti" }) });
+    setSourceRel(name);
+  };
+
   return (
     <div data-wf="FilesTab" data-variant={variant} className="flex flex-col gap-6">
       <Section title="Files">
@@ -60,7 +101,10 @@ export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
           detail={detail}
           onOpen={(d) => setOpenPath(d.path)}
           onOpenIssueFile={openIssueFile}
+          onViewSource={setSourceRel}
+          onCreate={create}
           focusPath={returnPath}
+          focusSourcePath={returnSource}
         />
       </Section>
       <Section title="Lint" count={detail.diagnostics.length}>

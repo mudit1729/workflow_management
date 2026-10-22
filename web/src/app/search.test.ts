@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateBoardSearch, validateLibrarySearch } from "./search";
+import { validateBoardSearch, validateFilesSearch, validateLibrarySearch } from "./search";
 
 describe("search validators", () => {
   it("keeps the board filter text exactly as typed, spaces included", () => {
@@ -32,5 +32,15 @@ describe("search validators", () => {
       q: undefined,
       show: "cancelled",
     });
+  });
+
+  it("keeps the files path exactly as typed", () => {
+    expect(validateFilesSearch({ path: "issues/wf/web/live/goal.md" }).path).toBe(
+      "issues/wf/web/live/goal.md",
+    );
+    expect(validateFilesSearch({ path: " odd path.md" }).path).toBe(" odd path.md");
+    expect(validateFilesSearch({ path: "   " }).path).toBeUndefined();
+    expect(validateFilesSearch({}).path).toBeUndefined();
+    expect(validateFilesSearch({ path: 42 }).path).toBe("42");
   });
 });

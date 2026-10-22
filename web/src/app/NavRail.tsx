@@ -6,6 +6,7 @@ import {
   Bell,
   BellOff,
   Component,
+  FolderTree,
   Inbox,
   LayoutGrid,
   Library,
@@ -221,7 +222,7 @@ export function LiveBadge({ compact = false }: { compact?: boolean }) {
 
 // ---------------------------------------------------------------- items
 
-type NavTo = "/w" | "/inbox" | "/lib" | "/kit";
+type NavTo = "/w" | "/inbox" | "/lib" | "/files" | "/kit";
 
 function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const path = usePathname();
@@ -269,6 +270,13 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
       active: path.startsWith("/lib"),
       count: snapshot ? libraryItems : undefined,
       countLabel: "items",
+    },
+    {
+      to: "/files",
+      label: "Files",
+      icon: <FolderTree {...ICON} />,
+      shortcut: "g f",
+      active: path.startsWith("/files"),
     },
     {
       to: "/kit",

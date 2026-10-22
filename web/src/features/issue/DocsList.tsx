@@ -1,7 +1,8 @@
 // The issue folder as a list: the six issue files with their presence, then extra docs and assets.
-import { ChevronRight, File, FileImage, FileText } from "lucide-react";
+import { ChevronRight, File, FileCode, FileImage, FileText, Plus } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import { LintBadge, RelativeTime } from "@/components/common";
+import { Button } from "@/components/ui";
 import type { Diagnostic, DocFile, IssueDetail, LintCounts } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
@@ -34,20 +35,37 @@ interface DocsListProps {
   onOpenIssueFile?: (name: IssueFileName) => void;
   /** A doc path to focus on mount, so focus returns to the row after DocView's Back. */
   focusPath?: string;
+  /** Shows "View source" on each present file. `rel` is the path inside the issue folder. */
+  onViewSource?: (rel: string) => void;
+  /** Shows "Create" on a missing issue file. */
+  onCreate?: (name: IssueFileName) => void;
+  /** Like `focusPath`, but focuses that file's "View source" button. */
+  focusSourcePath?: string;
 }
 
-export function DocsList({ docs, onOpen, detail, onOpenIssueFile, focusPath }: DocsListProps) {
+export function DocsList({
+  docs,
+  onOpen,
+  detail,
+  onOpenIssueFile,
+  focusPath,
+  onViewSource,
+  onCreate,
+  focusSourcePath,
+}: DocsListProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const basePath = detail?.summary.path;
   const diagnostics = detail?.diagnostics ?? [];
 
   useEffect(() => {
-    if (!focusPath) return;
-    const row = rootRef.current?.querySelector<HTMLElement>(
-      `[data-path="${CSS.escape(focusPath)}"]`,
-    );
-    row?.focus({ preventScroll: false });
-  }, [focusPath]);
+    const target = focusSourcePath
+      ? `[data-source-path="${CSS.escape(focusSourcePath)}"]`
+      : focusPath
+        ? `[data-path="${CSS.escape(focusPath)}"]`
+        : undefined;
+    if (!target) return;
+    rootRef.current?.querySelector<HTMLElement>(target)?.focus({ preventScroll: false });
+  }, [focusPath, focusSourcePath]);
 
   const sorted = [...docs].sort(
     (a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.path.localeCompare(b.path),
@@ -69,6 +87,20 @@ export function DocsList({ docs, onOpen, detail, onOpenIssueFile, focusPath }: D
                     name={f.name}
                     secondary={f.role}
                     missing
+                    actions={
+                      onCreate && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Create ${f.name}`}
+                          onClick={() => onCreate(f.name)}
+                          className="text-fg-muted"
+                        >
+                          <Plus {...ICON} aria-hidden />
+                          Create
+                        </Button>
+                      )
+                    }
                     meta={
                       optional ? (
                         <span>Optional for size {detail.summary.size.toUpperCase()}</span>
@@ -93,7 +125,9 @@ export function DocsList({ docs, onOpen, detail, onOpenIssueFile, focusPath }: D
                   secondary={f.role}
                   meta={issueFileMeta(f.name, detail)}
                   lint={lint}
+                  path={f.name}
                   onClick={onOpenIssueFile ? () => onOpenIssueFile(f.name) : undefined}
+                  actions={onViewSource && <ViewSource rel={f.name} onViewSource={onViewSource} />}
                 />
               </li>
             );
@@ -124,6 +158,9 @@ export function DocsList({ docs, onOpen, detail, onOpenIssueFile, focusPath }: D
                   meta={<span className="tabular">{formatBytes(doc.size)}</span>}
                   lint={lintFor(diagnostics, doc.path, basePath)}
                   onClick={() => onOpen(doc)}
+                  actions={
+                    onViewSource && <ViewSource rel={doc.path} onViewSource={onViewSource} />
+                  }
                 />
               </li>
             ))}
@@ -145,6 +182,7 @@ function Row({
   missing = false,
   onClick,
   path,
+  actions,
 }: {
   icon: ReactNode;
   name: ReactNode;
@@ -154,6 +192,8 @@ function Row({
   missing?: boolean;
   onClick?: () => void;
   path?: string;
+  /** Buttons at the end of the row: "View source", "Create". */
+  actions?: ReactNode;
 }) {
   const hasLint = lint != null && lint.error + lint.warn + lint.info > 0;
   const content = (
@@ -170,37 +210,56 @@ function Row({
       {!secondary && <span className="flex-1" />}
       {hasLint && lint && <LintBadge counts={lint} variant="dot" />}
       {meta && <span className="shrink-0 whitespace-nowrap text-fg-faint text-xs">{meta}</span>}
-      {onClick && (
-        <ChevronRight
-          {...ICON}
-          aria-hidden
-          className="-mr-0.5 shrink-0 text-fg-faint opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100"
-        />
-      )}
     </>
   );
 
-  const base = "flex h-9 w-full min-w-0 items-center gap-2.5 px-2.5 text-left";
-  if (!onClick) {
-    return (
-      <div data-wf="DocsListRow" data-missing={missing || undefined} className={base}>
-        {content}
-      </div>
-    );
-  }
+  const main = "flex h-full min-w-0 flex-1 items-center gap-2.5 px-2.5 text-left";
   return (
-    <button
-      type="button"
+    <div
       data-wf="DocsListRow"
-      data-path={path}
-      onClick={onClick}
-      className={cn(
-        base,
-        "group outline-none transition-colors duration-100 hover:bg-subtle focus-visible:bg-subtle focus-visible:shadow-[inset_0_0_0_2px_var(--wf-focus)]",
-      )}
+      data-missing={missing || undefined}
+      className="group @container flex h-9 w-full min-w-0 items-center transition-colors duration-100 focus-within:bg-subtle hover:bg-subtle"
     >
-      {content}
-    </button>
+      {onClick ? (
+        <button
+          type="button"
+          data-path={path}
+          onClick={onClick}
+          className={cn(
+            main,
+            "outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--wf-focus)]",
+          )}
+        >
+          {content}
+          <ChevronRight
+            {...ICON}
+            aria-hidden
+            className="-mr-0.5 shrink-0 text-fg-faint opacity-0 transition-opacity duration-100 group-focus-within:opacity-100 group-hover:opacity-100"
+          />
+        </button>
+      ) : (
+        <div className={main}>{content}</div>
+      )}
+      {actions && <div className="flex shrink-0 items-center pr-1.5">{actions}</div>}
+    </div>
+  );
+}
+
+/** "View source": the file's text, inline. The label shrinks to an icon in a narrow list. */
+function ViewSource({ rel, onViewSource }: { rel: string; onViewSource: (rel: string) => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      data-source-path={rel}
+      aria-label={`View source of ${rel}`}
+      title="View source"
+      onClick={() => onViewSource(rel)}
+      className="text-fg-muted"
+    >
+      <FileCode {...ICON} aria-hidden />
+      <span className="hidden @[420px]:inline">View source</span>
+    </Button>
   );
 }
 
