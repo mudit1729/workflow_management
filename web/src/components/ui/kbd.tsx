@@ -1,4 +1,5 @@
-// Small mono key caps for shortcuts. "mod+k" → ⌘ K; "g w" → G then W.
+// Small key caps for shortcuts. "mod+k" → ⌘ K; "g w" → G then W.
+// Set in the sans face on purpose: in the mono face the letter O reads as a zero.
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { comboKeys } from "@/lib/hooks";
@@ -13,7 +14,7 @@ export interface KbdProps extends Omit<ComponentProps<"kbd">, "children"> {
 }
 
 const cap =
-  "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-mono text-[10.5px] leading-none font-medium";
+  "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-sans text-[10.5px] leading-none font-medium";
 
 const tones = {
   default: "border border-border bg-subtle text-fg-muted",

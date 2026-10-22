@@ -124,6 +124,7 @@ export function IssueCardMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               icon={<SquareArrowOutUpRight {...ICON} />}
+              shortcut="o"
               onSelect={() => openIssue(issue.id, { page: true })}
             >
               Open in new page
