@@ -430,6 +430,7 @@ function NavFooter({ collapsed, showCollapse }: { collapsed: boolean; showCollap
         data-wf="NavFooter"
         className="flex shrink-0 flex-col items-center gap-1 border-border border-t px-2 py-2"
       >
+        <DevPanel placement="rail" />
         <Tooltip content={`Theme: ${THEME_LABEL[theme]}`} side="right">
           <Button
             variant="ghost"

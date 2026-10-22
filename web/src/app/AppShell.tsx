@@ -44,7 +44,6 @@ export function AppShell() {
       </main>
 
       {mobile && <MobileNavSheet />}
-      {(mobile || navCollapsed) && <DevPanel placement="floating" />}
 
       <CommandPalette />
       <ShortcutsDialog />
@@ -85,6 +84,7 @@ function MobileTopBar() {
       <span className="min-w-0 truncate font-medium text-base">{name}</span>
       <LiveBadge />
       <span className="flex-1" />
+      <DevPanel placement="bar" />
       <Button
         variant="ghost"
         size="icon"

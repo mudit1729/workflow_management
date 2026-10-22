@@ -1,7 +1,6 @@
-// Prototype controls: a small "Prototype" pill that opens a popover for driving
-// the mock server (live events, connection state, conflicts, archify, reset).
-// "." toggles it. In the nav it sits above the footer; when the nav is collapsed
-// or on a phone it floats at the bottom-left of the main area.
+// Prototype controls: a "Prototype" pill (expanded nav) or an icon button (collapsed rail,
+// phone top bar) that opens a popover for driving the mock server (live events, connection
+// state, conflicts, archify, reset). "." toggles it. Nothing floats over board content.
 import { ArrowRight, Check, FlaskConical, Play, RotateCcw } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -17,12 +16,15 @@ import {
 } from "@/components/ui";
 import { queryClient, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { useLayoutMode } from "@/lib/hooks";
 import { useLiveStatus } from "@/lib/live";
 import { useGo } from "@/lib/nav";
 import { getMockControls, type MockConnection } from "./mock-controls";
 import { useShell } from "./shell-store";
 
+/** nav: the pill above the expanded nav footer. rail: icon for the collapsed rail. bar: phone top bar. */
+type Placement = "nav" | "rail" | "bar";
+
+const ICON = { size: 14, strokeWidth: 1.75 } as const;
 const STATE_DOT: Record<MockConnection, string> = {
   live: "bg-status-done",
   reconnecting: "bg-stale animate-pulse",
@@ -34,44 +36,57 @@ const STATE_LABEL: Record<MockConnection, string> = {
   offline: "Offline",
 };
 
-export function DevPanel({ placement }: { placement: "nav" | "floating" }) {
+export function DevPanel({ placement }: { placement: Placement }) {
   const open = useShell((s) => s.devPanelOpen);
   const setOpen = useShell((s) => s.setDevPanelOpen);
-  const mobile = useLayoutMode() === "mobile";
   const { state } = useLiveStatus();
+  const nav = placement === "nav";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <div
-        data-wf="DevPanel"
-        className={cn(placement === "floating" && "fixed bottom-3 z-40")}
-        style={
-          placement === "floating"
-            ? { left: mobile ? 12 : "calc(var(--wf-nav-w-collapsed) + 12px)" }
-            : undefined
-        }
-      >
+      <div data-wf="DevPanel">
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label="Prototype controls"
-            aria-keyshortcuts="."
-            className={cn(
-              "inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-bg px-2.5 font-medium text-fg-muted text-xs",
-              "transition-colors duration-100 ease-wf hover:border-border-strong hover:text-fg data-[state=open]:border-border-strong data-[state=open]:text-fg",
-            )}
-          >
-            <FlaskConical size={12} strokeWidth={1.75} aria-hidden />
-            Prototype
-            {state !== "live" && (
-              <span aria-hidden className={cn("size-1.5 rounded-full", STATE_DOT[state])} />
-            )}
-          </button>
+          {nav ? (
+            <button
+              type="button"
+              aria-label="Prototype controls"
+              aria-keyshortcuts="."
+              className={cn(
+                "inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-bg px-2.5 font-medium text-fg-muted text-xs",
+                "transition-colors duration-100 ease-wf hover:border-border-strong hover:text-fg data-[state=open]:border-border-strong data-[state=open]:text-fg",
+              )}
+            >
+              <FlaskConical size={12} strokeWidth={1.75} aria-hidden />
+              Prototype
+              {state !== "live" && (
+                <span aria-hidden className={cn("size-1.5 rounded-full", STATE_DOT[state])} />
+              )}
+            </button>
+          ) : (
+            <Button
+              variant="ghost"
+              size={placement === "bar" ? "icon" : "icon-sm"}
+              aria-label="Prototype controls"
+              aria-keyshortcuts="."
+              className="relative"
+            >
+              <FlaskConical {...ICON} aria-hidden />
+              {state !== "live" && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute top-1 right-1 size-1.5 rounded-full ring-2 ring-subtle",
+                    STATE_DOT[state],
+                  )}
+                />
+              )}
+            </Button>
+          )}
         </PopoverTrigger>
       </div>
       <PopoverContent
-        side="top"
-        align="start"
+        side={nav ? "top" : placement === "rail" ? "right" : "bottom"}
+        align={nav ? "start" : "end"}
         sideOffset={8}
         className="w-80 p-0"
         aria-label="Prototype controls"
