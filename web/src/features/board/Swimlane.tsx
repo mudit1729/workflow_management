@@ -251,9 +251,9 @@ const BAR_ORDER: IssueStatus[] = ["done", "review", "in_progress", "blocked", "p
 /** 32 px bar of status-colored segments, done first. Cancelled issues are left out. */
 export function MiniStatusBar({ issues }: { issues: IssueSummary[] }) {
   const live = issues.filter((i) => i.status !== "cancelled");
-  const parts = BAR_ORDER.map((s) => [s, live.filter((i) => i.status === s).length] as const).filter(
-    ([, n]) => n > 0,
-  );
+  const parts = BAR_ORDER.map(
+    (s) => [s, live.filter((i) => i.status === s).length] as const,
+  ).filter(([, n]) => n > 0);
   const label = parts.length
     ? parts.map(([s, n]) => `${n} ${STATUS_LABEL[s].toLowerCase()}`).join(" · ")
     : "No open issues";

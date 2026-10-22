@@ -65,26 +65,26 @@ export function IssueCardMenu({
 
   const statusItems = (
     <>
-      <DropdownMenuItem
-        disabled
-        icon={<StatusIcon status={issue.status} size={14} />}
-        hint="Current"
-      >
+      <DropdownMenuItem selected icon={<StatusIcon status={issue.status} size={14} />}>
         {STATUS_LABEL[issue.status]}
       </DropdownMenuItem>
       {legal.map((s) => (
-        <DropdownMenuItem key={s} icon={<StatusIcon status={s} size={14} />} onSelect={() => pick(s)}>
+        <DropdownMenuItem
+          key={s}
+          icon={<StatusIcon status={s} size={14} />}
+          onSelect={() => pick(s)}
+        >
           {STATUS_LABEL[s]}
         </DropdownMenuItem>
       ))}
       {gated.length > 0 && (
         <>
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Needs Move anyway</DropdownMenuLabel>
+          <DropdownMenuLabel>Needs confirmation</DropdownMenuLabel>
           {gated.map((s) => (
             <DropdownMenuItem
               key={s}
-              className="text-fg-muted"
+              muted
               icon={<StatusIcon status={s} size={14} />}
               onSelect={() => pick(s)}
             >
@@ -116,8 +116,7 @@ export function IssueCardMenu({
         ) : (
           <>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <ArrowRightLeft {...ICON} className="text-fg-muted" />
+              <DropdownMenuSubTrigger icon={<ArrowRightLeft {...ICON} />}>
                 Move to…
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-52">{statusItems}</DropdownMenuSubContent>
@@ -125,7 +124,6 @@ export function IssueCardMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               icon={<SquareArrowOutUpRight {...ICON} />}
-              shortcut="o"
               onSelect={() => openIssue(issue.id, { page: true })}
             >
               Open in new page

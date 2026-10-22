@@ -3,7 +3,7 @@
 // A card is a draggable carrying `CardDragData`. Every (status, lane) cell is a
 // drop target carrying `CellDropData`. Drops are allowed only inside the card's
 // own lane; the board monitor turns a drop on another status into a move.
-import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
+
 import {
   draggable,
   dropTargetForElements,
@@ -11,6 +11,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { pointerOutsideOfPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/pointer-outside-of-preview";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
+import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -19,21 +20,21 @@ import type { IssueId, IssueStatus, IssueSummary, Priority } from "@/gen/types";
 const CARD = "wf-board-card";
 const CELL = "wf-board-cell";
 
-export interface CardDragData {
-  [key: string]: unknown;
+// Type aliases, not interfaces: the adapter wants `Record<string | symbol, unknown>`,
+// which only object literal types satisfy without an explicit index signature.
+export type CardDragData = {
   type: typeof CARD;
   id: IssueId;
   status: IssueStatus;
   priority: Priority;
   lane: string;
-}
+};
 
-export interface CellDropData {
-  [key: string]: unknown;
+export type CellDropData = {
   type: typeof CELL;
   status: IssueStatus;
   lane: string;
-}
+};
 
 export function isCardData(data: Record<string | symbol, unknown>): data is CardDragData {
   return data.type === CARD;

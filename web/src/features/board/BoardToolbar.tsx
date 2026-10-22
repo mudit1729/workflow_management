@@ -1,7 +1,8 @@
 // The 44 px board toolbar. Left: the scope breadcrumb and a faint count summary.
 // Right: text filter, author filter, swimlanes, cancelled, and New issue.
 import { CircleX, Plus, Rows3, UsersRound, X } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useState } from "react";
+import { openNewIssue } from "@/app/shell-store";
 import { AuthorChip, AuthorStack } from "@/components/common";
 import {
   Button,
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui";
 import type { GroupNode } from "@/gen/types";
 import { cn } from "@/lib/cn";
-import { useHotkey } from "@/lib/hooks";
 import { useBoardSearch } from "@/lib/nav";
 import { type BoardSummary, formatAuthorParam, parseAuthorParam } from "./filter";
 
@@ -59,17 +59,21 @@ export function BoardToolbar({
   cancelledCount,
 }: BoardToolbarProps) {
   const [search, setSearch] = useBoardSearch();
-  const searchWrap = useRef<HTMLDivElement>(null);
   const selected = chain[chain.length - 1];
   const showCancelled = search.show === "cancelled";
   const selectedAuthors = parseAuthorParam(search.author);
 
-  useHotkey("/", () => searchWrap.current?.querySelector("input")?.focus());
+  // The route trims `q`, which would eat the space in "live bo". Keep what the
+  // person types in local state and let the URL follow.
+  const urlQuery = search.q ?? "";
+  const [draft, setDraft] = useState(urlQuery);
+  useEffect(() => setDraft((d) => (d.trim() === urlQuery ? d : urlQuery)), [urlQuery]);
+  const onQuery = (value: string) => {
+    setDraft(value);
+    setSearch({ q: value.trim() || undefined });
+  };
 
-  const newIssue = () =>
-    window.dispatchEvent(
-      new CustomEvent("wf:new-issue", { detail: { group: chain.length > 1 ? selected?.id : undefined } }),
-    );
+  const newIssue = () => openNewIssue(chain.length > 1 ? selected?.id : undefined);
 
   return (
     <header
@@ -80,14 +84,15 @@ export function BoardToolbar({
       <SummaryLine summary={summary} scopedTotal={scopedTotal} filtered={filtered} />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <div ref={searchWrap} className="w-32 sm:w-44 xl:w-56">
-          <SearchInput
-            value={search.q ?? ""}
-            onChange={(q: string) => setSearch({ q: q || undefined })}
-            placeholder="Filter by id, title, label"
-            shortcut="/"
-          />
-        </div>
+        <SearchInput
+          size="sm"
+          value={draft}
+          onChange={onQuery}
+          placeholder="Filter issues"
+          aria-label="Filter issues by id, title or label"
+          shortcut="/"
+          className="w-32 @xl/board:w-40 @4xl/board:w-52"
+        />
 
         <AuthorFilter
           options={authors}
@@ -108,21 +113,20 @@ export function BoardToolbar({
             variant="ghost"
             size="sm"
             aria-pressed={showCancelled}
+            aria-label="Show cancelled issues"
             onClick={() => setSearch({ show: showCancelled ? undefined : "cancelled" })}
-            className={cn("hidden md:inline-flex", showCancelled && "bg-muted text-fg")}
+            className="hidden @xl/board:inline-flex"
           >
             <CircleX {...ICON} />
-            <span className="hidden lg:inline">Cancelled</span>
-            {cancelledCount > 0 && (
-              <span className="text-fg-faint tabular">{cancelledCount}</span>
-            )}
+            <span className="hidden @4xl/board:inline">Cancelled</span>
+            {cancelledCount > 0 && <span className="text-fg-faint tabular">{cancelledCount}</span>}
           </Button>
         </Tooltip>
 
         <Tooltip content="New issue" shortcut="n">
           <Button variant="primary" size="sm" onClick={newIssue} aria-label="New issue">
             <Plus {...ICON} />
-            <span className="hidden sm:inline">New issue</span>
+            <span className="hidden @lg/board:inline">New issue</span>
           </Button>
         </Tooltip>
       </div>
@@ -215,7 +219,7 @@ function SummaryLine({
     <span
       data-wf="BoardSummary"
       aria-live="polite"
-      className="hidden min-w-0 truncate text-fg-faint text-sm tabular lg:block"
+      className="hidden min-w-0 truncate text-fg-faint text-sm tabular @3xl/board:block"
     >
       {parts.join(" · ")}
     </span>
@@ -258,7 +262,7 @@ function AuthorFilter({
           ) : (
             <>
               <UsersRound {...ICON} />
-              <span className="hidden md:inline">Author</span>
+              <span className="hidden @2xl/board:inline">Author</span>
             </>
           )}
         </Button>
@@ -305,41 +309,30 @@ function SwimlaneToggle({
   groupTitle?: string;
   onChange: (v: "child" | "none") => void;
 }) {
-  const control = (
-    <Segmented<"child" | "none">
-      size="sm"
-      aria-label="Swimlanes"
-      value={value}
-      onChange={onChange}
-      options={[
-        { value: "child", label: "Groups", icon: <Rows3 {...ICON} /> },
-        { value: "none", label: "None" },
-      ]}
-    />
-  );
+  const tip = canSwim
+    ? "Split the board into one band per child group"
+    : groupTitle
+      ? `${groupTitle} has no subgroups, so there is nothing to split by`
+      : "There are no groups to split by";
 
   return (
-    <div data-wf="SwimlaneToggle" className="hidden items-center gap-2 md:flex">
-      <span className="hidden text-fg-faint text-sm xl:inline">Swimlanes</span>
-      {canSwim ? (
-        <Tooltip content="Swimlanes by child group">
-          <span className="inline-flex">{control}</span>
-        </Tooltip>
-      ) : (
-        <Tooltip
-          content={
-            groupTitle
-              ? `${groupTitle} has no subgroups, so there is nothing to split by`
-              : "There are no groups to split by"
-          }
-        >
-          <span aria-disabled="true" className="inline-flex cursor-not-allowed">
-            <span inert className="pointer-events-none opacity-50">
-              {control}
-            </span>
-          </span>
-        </Tooltip>
-      )}
+    <div data-wf="SwimlaneToggle" className="hidden items-center gap-2 @xl/board:flex">
+      <span className="hidden text-fg-faint text-sm @5xl/board:inline">Swimlanes</span>
+      <Tooltip content={tip}>
+        <span className={cn("inline-flex", !canSwim && "cursor-not-allowed")}>
+          <Segmented<"child" | "none">
+            size="sm"
+            aria-label="Swimlanes"
+            disabled={!canSwim}
+            value={canSwim ? value : "none"}
+            onChange={onChange}
+            options={[
+              { value: "child", label: "Groups", icon: <Rows3 {...ICON} /> },
+              { value: "none", label: "None" },
+            ]}
+          />
+        </span>
+      </Tooltip>
     </div>
   );
 }
@@ -354,7 +347,7 @@ export function BoardToolbarSkeleton() {
       className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-3 border-border border-b bg-bg px-3"
     >
       <Skeleton className="h-3.5 w-28" />
-      <Skeleton className="hidden h-3 w-40 lg:block" />
+      <Skeleton className="hidden h-3 w-40 @3xl/board:block" />
       <div className="ml-auto flex items-center gap-1.5">
         <Skeleton className="h-6 w-44" />
         <Skeleton className="h-6 w-20" />

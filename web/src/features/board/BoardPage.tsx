@@ -2,9 +2,10 @@
 // (group, swim, author, q, show) and hands it to the toolbar and the board.
 import { FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { openNewIssue } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
-import type { WorkspaceSnapshot } from "@/gen/types";
+import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
 import { issuesInGroup, useMe, useSnapshot } from "@/lib/api";
 import { type BoardSearch, useBoardSearch } from "@/lib/nav";
 import { BoardToolbar, BoardToolbarSkeleton } from "./BoardToolbar";
@@ -33,8 +34,10 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
 
   const inScope = issuesInGroup(selected, data.issues);
   const filter = filterFromSearch(search);
-  const cancelledCount = inScope.filter((i) => i.status === "cancelled").length;
-  const scoped = filter.showCancelled ? inScope : inScope.filter((i) => i.status !== "cancelled");
+  const cancelledCount = inScope.filter((i: IssueSummary) => i.status === "cancelled").length;
+  const scoped = filter.showCancelled
+    ? inScope
+    : inScope.filter((i: IssueSummary) => i.status !== "cancelled");
   const visible = applyFilter(inScope, filter);
   const filtered = hasActiveFilter(filter);
 
@@ -51,7 +54,7 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
   const authors = [...handles]
     .map((handle) => ({
       handle,
-      count: scoped.filter((i) => issueAuthors(i).includes(handle)).length,
+      count: scoped.filter((i: IssueSummary) => issueAuthors(i).includes(handle)).length,
     }))
     .sort(
       (a, b) =>
@@ -137,12 +140,7 @@ export function BoardPage() {
     />
   );
 
-  const newIssue = () =>
-    window.dispatchEvent(
-      new CustomEvent("wf:new-issue", {
-        detail: { group: model.chain.length > 1 ? model.selected.id : undefined },
-      }),
-    );
+  const newIssue = () => openNewIssue(model.chain.length > 1 ? model.selected.id : undefined);
 
   let body: ReactNode;
   if (model.missing) {
@@ -170,7 +168,11 @@ export function BoardPage() {
             title={`No open issues in ${title}`}
             hint={`${model.cancelledCount} cancelled issue${model.cancelledCount === 1 ? " is" : "s are"} hidden.`}
             action={
-              <Button variant="secondary" size="sm" onClick={() => setSearch({ show: "cancelled" })}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSearch({ show: "cancelled" })}
+              >
                 Show cancelled
               </Button>
             }
@@ -180,7 +182,7 @@ export function BoardPage() {
             title={`No issues in ${title} yet`}
             hint="Create one here, or let an agent write the goal."
             skill="write-goal"
-            command={`wf new issue ${model.slugPath ? `${model.slugPath}/` : ""}<slug> --title "…"`}
+            command={`wf new issue ${model.slugPath || "<group-path>"}/<slug> --title "…"`}
             action={
               <Button variant="primary" size="sm" onClick={newIssue}>
                 <Plus size={14} strokeWidth={1.75} />
@@ -241,7 +243,12 @@ function filterHint(q?: string, author?: string): string {
 
 function Frame({ toolbar, children }: { toolbar: ReactNode; children: ReactNode }) {
   return (
-    <div data-wf="BoardPage" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
+    // `@container`: the toolbar adapts to the board's own width, which shrinks
+    // when the drawer docks beside it.
+    <div
+      data-wf="BoardPage"
+      className="@container/board flex h-full min-h-0 min-w-0 flex-col bg-bg"
+    >
       {toolbar}
       <div className="relative min-h-0 min-w-0 flex-1 bg-subtle">{children}</div>
     </div>

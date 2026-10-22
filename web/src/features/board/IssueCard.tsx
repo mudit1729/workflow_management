@@ -75,11 +75,15 @@ export function IssueCard({
     preview: () => <IssueCardPreview issue={issue} />,
   });
 
-  // `s` on the board asks the focused card to open its Move menu.
+  // `s` on the board asks the focused card to open its Move menu. The card takes
+  // the request, so a card that remounts later (moved, scrolled back in) stays shut.
   const menuRequest = board?.menuRequest;
+  const clearMenuRequest = board?.clearMenuRequest;
   useEffect(() => {
-    if (menuRequest && menuRequest.id === issue.id) setMenu({ open: true, view: "move" });
-  }, [menuRequest, issue.id]);
+    if (!menuRequest || menuRequest.id !== issue.id) return;
+    setMenu({ open: true, view: "move" });
+    clearMenuRequest?.();
+  }, [menuRequest, clearMenuRequest, issue.id]);
 
   const isSelected = selected ?? (board != null && board.selectedId === issue.id);
   const tabIndex = board == null || board.tabStopId === issue.id ? 0 : -1;
@@ -159,6 +163,7 @@ export function IssueCard({
           href={href}
           draggable={false}
           tabIndex={tabIndex}
+          aria-current={isSelected ? "true" : undefined}
           onClick={onLinkClick}
           onKeyDown={onLinkKeyDown}
           className={cn(
@@ -189,9 +194,12 @@ export function IssueCard({
 
       {(chips.length > 0 || holders.length > 0) && (
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">{chips}</div>
+          {/* Wrap rather than clip: a hidden signal is worse than a second row. */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+            {chips}
+          </div>
           {holders.length > 0 && (
-            <span className="ml-auto shrink-0">
+            <span className="shrink-0">
               <AuthorStack handles={holders} max={3} size="xs" />
             </span>
           )}
@@ -200,6 +208,7 @@ export function IssueCard({
 
       {/* Hover / focus footer: animates 0 → auto height with the grid-rows trick. */}
       <div
+        data-wf="IssueCardFooter"
         data-expanded={menu.open || undefined}
         className={cn(
           "grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-wf",
@@ -225,8 +234,8 @@ export function IssueCard({
               onOpenChange={(next) =>
                 setMenu((m) => (next ? { open: true, view: "all" } : { ...m, open: false }))
               }
-              onMoved={() => {
-                if (menu.view === "move") board?.focusCard(issue.id);
+              onMoved={(to) => {
+                if (menu.view === "move") board?.focusCard(issue.id, to);
               }}
             >
               <button
@@ -257,6 +266,7 @@ function PriorityGlyph({ priority }: { priority: Priority }) {
   if (priority === "urgent") {
     return (
       <span
+        data-wf="PriorityGlyph"
         role="img"
         aria-label="Urgent priority"
         title="Urgent"
@@ -269,6 +279,7 @@ function PriorityGlyph({ priority }: { priority: Priority }) {
   if (priority === "high") {
     return (
       <svg
+        data-wf="PriorityGlyph"
         role="img"
         aria-label="High priority"
         viewBox="0 0 14 14"
@@ -306,6 +317,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
     out.push(
       <Chip
         key="needs-you"
+        data-wf="NeedsYouChip"
         tone="accent"
         size="xs"
         icon={<MessageCircleQuestionMark {...ICON} />}
@@ -324,6 +336,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
     out.push(
       <Chip
         key="blocked"
+        data-wf="BlockedChip"
         tone="danger"
         size="xs"
         icon={<Ban {...ICON} />}
@@ -339,6 +352,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
     out.push(
       <Chip
         key="stale"
+        data-wf="StaleChip"
         tone="stale"
         size="xs"
         icon={<Hourglass {...ICON} />}
@@ -353,6 +367,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
     out.push(
       <Chip
         key="lease"
+        data-wf="LeaseExpiredChip"
         tone="stale"
         size="xs"
         icon={<TimerOff {...ICON} />}
@@ -369,6 +384,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
     out.push(
       <Chip
         key="unmet"
+        data-wf="CriteriaUnmetChip"
         tone="danger"
         size="xs"
         icon={<CircleAlert {...ICON} />}

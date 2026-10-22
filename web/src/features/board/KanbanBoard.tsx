@@ -65,6 +65,7 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
       selectedId: keys.selectedId,
       basePath,
       menuRequest: keys.menuRequest,
+      clearMenuRequest: keys.clearMenuRequest,
       setFocusedId: keys.setFocusedId,
       focusCard: keys.focusCard,
     }),
@@ -73,6 +74,7 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
       keys.selectedId,
       basePath,
       keys.menuRequest,
+      keys.clearMenuRequest,
       keys.setFocusedId,
       keys.focusCard,
     ],
@@ -199,12 +201,7 @@ function SwimlaneBoard({
         <div className="sticky top-0 z-20 flex gap-2 border-border border-b bg-subtle px-3 pt-1">
           {columns.map((s) =>
             isFolded(s) ? (
-              <FoldedHeader
-                key={s}
-                status={s}
-                count={count(s)}
-                onUnfold={() => onToggleFold(s)}
-              />
+              <FoldedHeader key={s} status={s} count={count(s)} onUnfold={() => onToggleFold(s)} />
             ) : (
               <ColumnHeader
                 key={s}
@@ -274,6 +271,7 @@ export function BoardSkeleton() {
   return (
     <div
       data-wf="BoardSkeleton"
+      role="status"
       aria-busy="true"
       aria-label="Loading the board"
       className="flex h-full min-h-0 gap-2 overflow-hidden p-3"

@@ -163,6 +163,7 @@ export function FoldedColumn({
 export function DropLine() {
   return (
     <span
+      data-wf="DropLine"
       aria-hidden
       className="pointer-events-none absolute inset-x-0 top-[calc(var(--wf-card-gap)*-0.5_-_1px)] z-10 h-[2px] rounded-full bg-accent"
     />
@@ -265,6 +266,7 @@ export function EmptyDropArea({
 }) {
   return (
     <div
+      data-wf="EmptyDropArea"
       className={cn(
         "flex h-16 items-center justify-center rounded-md border border-dashed text-sm",
         "transition-colors duration-150 ease-wf",

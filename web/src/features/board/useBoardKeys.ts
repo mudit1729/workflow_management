@@ -25,11 +25,16 @@ export interface BoardCardApi {
   selectedId?: IssueId;
   /** Titles of the selected group below the root; cards show paths relative to it. */
   basePath: string[];
-  /** Set by `s`: the card with this id opens its Move menu. */
+  /** Set by `s`: the card with this id opens its Move menu, then clears the request. */
   menuRequest: MenuRequest | null;
+  clearMenuRequest: () => void;
   setFocusedId: (id: IssueId) => void;
-  /** Make `id` the tab stop and move DOM focus to it once it renders. */
-  focusCard: (id: IssueId) => void;
+  /**
+   * Make `id` the tab stop and move DOM focus to it once it renders. With `status`,
+   * wait until the card shows in that column: a move remounts the card, and focus
+   * set on the old copy would be lost.
+   */
+  focusCard: (id: IssueId, status?: IssueStatus) => void;
 }
 
 export const BoardCardContext = createContext<BoardCardApi | null>(null);
@@ -42,7 +47,9 @@ function findCard(id: IssueId): HTMLElement | null {
 
 function isInteractive(el: Element | null): boolean {
   if (!el || el === document.body) return false;
-  return el.closest("a, button, input, textarea, select, [role='menuitem'], [contenteditable]") != null;
+  return (
+    el.closest("a, button, input, textarea, select, [role='menuitem'], [contenteditable]") != null
+  );
 }
 
 export function useBoardKeys(columns: NavColumn[], enabled = true) {
@@ -77,7 +84,7 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
     if (openId) setFocusedId(openId);
   }, [openId]);
 
-  const focusCard = useCallback((id: IssueId) => {
+  const focusCard = useCallback((id: IssueId, status?: IssueStatus) => {
     setFocusedId(id);
     pending.current = id;
     let tries = 0;
@@ -85,21 +92,29 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
       if (pending.current !== id) return;
       const card = findCard(id);
       const target = card?.querySelector<HTMLElement>("[data-card-link]");
-      if (card && target) {
+      if (card && target && (!status || card.dataset.status === status)) {
         target.focus({ preventScroll: true });
         card.scrollIntoView({ block: "nearest", inline: "nearest" });
         pending.current = null;
         return;
       }
       // Virtualized columns and optimistic moves render a frame or two later.
-      if (++tries < 20) requestAnimationFrame(tick);
+      if (++tries < 30) requestAnimationFrame(tick);
       else pending.current = null;
     };
     requestAnimationFrame(tick);
   }, []);
 
+  const clearMenuRequest = useCallback(() => setMenuRequest(null), []);
+
   const step = useCallback(
     (dCol: number, dRow: number) => {
+      // From outside the board (page body, drawer), the first key lands on the
+      // keyboard anchor instead of skipping past it.
+      if (tabStopId && !document.activeElement?.closest(CARD_SELECTOR)) {
+        focusCard(tabStopId);
+        return;
+      }
       const here = locate(tabStopId);
       if (!here) {
         const first = columns.find((c) => c.ids.length > 0)?.ids[0];
@@ -163,5 +178,13 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
     preventDefault: false,
   });
 
-  return { tabStopId, focusedId, setFocusedId, focusCard, menuRequest, selectedId: openId };
+  return {
+    tabStopId,
+    focusedId,
+    setFocusedId,
+    focusCard,
+    menuRequest,
+    clearMenuRequest,
+    selectedId: openId,
+  };
 }
