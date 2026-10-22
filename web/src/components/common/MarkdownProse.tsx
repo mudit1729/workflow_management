@@ -2,7 +2,15 @@
 // is sanitized. [[refs]] become RefLinks, @handles become author mentions, and
 // ```wf-diagram fences become ArchifyCards.
 import { Check } from "lucide-react";
-import { type ComponentProps, lazy, type ReactNode, Suspense, useMemo } from "react";
+import {
+  type ComponentProps,
+  createContext,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useContext,
+  useMemo,
+} from "react";
 import Markdown, { type Components, defaultUrlTransform, type ExtraProps } from "react-markdown";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -65,15 +73,17 @@ function fence(node: ExtraProps["node"]): { lang?: string; code: string } {
   return { lang, code: textOf(code).replace(/\n$/, "") };
 }
 
-function DiagramFence({
-  id,
-  diagrams,
-  compact,
-}: {
-  id: string;
-  diagrams?: Diagram[];
-  compact: boolean;
-}) {
+/**
+ * The diagrams of the issue, read by `DiagramFence` through context instead of through the
+ * memoized `components` map. A refetch that changes any diagram (archify turning available,
+ * a re-render) then re-renders the fences in place; keying `components` on the array would
+ * hand react-markdown new component types and remount every ArchifyCard (iframes reload,
+ * an open dialog is lost).
+ */
+const DiagramsContext = createContext<Diagram[] | undefined>(undefined);
+
+function DiagramFence({ id, compact }: { id: string; compact: boolean }) {
+  const diagrams = useContext(DiagramsContext);
   const diagram = diagrams?.find((d) => d.id === id || d.hash === id);
   if (!diagram) {
     return (
@@ -110,12 +120,8 @@ function hasClass(cls: unknown, name: string): boolean {
 
 type P<K extends keyof React.JSX.IntrinsicElements> = ComponentProps<K> & ExtraProps;
 
-function buildComponents(opts: {
-  issueId?: string;
-  diagrams?: Diagram[];
-  compact: boolean;
-}): Components {
-  const { issueId, diagrams, compact } = opts;
+function buildComponents(opts: { issueId?: string; compact: boolean }): Components {
+  const { issueId, compact } = opts;
   const heading = "mt-2 first:mt-0 font-semibold text-fg leading-snug";
   return {
     p: ({ node: _n, className, ...p }: P<"p">) => <p className={cn("min-w-0", className)} {...p} />,
@@ -214,8 +220,7 @@ function buildComponents(opts: {
     ),
     pre: ({ node }: P<"pre">) => {
       const { lang, code } = fence(node);
-      if (lang === "wf-diagram")
-        return <DiagramFence id={code.trim()} diagrams={diagrams} compact={compact} />;
+      if (lang === "wf-diagram") return <DiagramFence id={code.trim()} compact={compact} />;
       return <CodeBlock code={code} lang={lang} compact={compact} />;
     },
     input: ({ node: _n, type, checked, ...p }: P<"input">) =>
@@ -276,10 +281,8 @@ export function MarkdownProse({
   className,
   empty = null,
 }: MarkdownProseProps) {
-  const components = useMemo(
-    () => buildComponents({ issueId, diagrams, compact }),
-    [issueId, diagrams, compact],
-  );
+  // Stable across refetches: only `issueId` and `compact` shape the component types.
+  const components = useMemo(() => buildComponents({ issueId, compact }), [issueId, compact]);
   if (!md.trim()) return <>{empty}</>;
   return (
     <div
@@ -290,15 +293,17 @@ export function MarkdownProse({
         className,
       )}
     >
-      <Markdown
-        remarkPlugins={[remarkGfm, remarkWfRefs]}
-        rehypePlugins={[[rehypeSanitize, schema]]}
-        components={components}
-        urlTransform={urlTransform}
-        skipHtml
-      >
-        {md}
-      </Markdown>
+      <DiagramsContext.Provider value={diagrams}>
+        <Markdown
+          remarkPlugins={[remarkGfm, remarkWfRefs]}
+          rehypePlugins={[[rehypeSanitize, schema]]}
+          components={components}
+          urlTransform={urlTransform}
+          skipHtml
+        >
+          {md}
+        </Markdown>
+      </DiagramsContext.Provider>
     </div>
   );
 }
