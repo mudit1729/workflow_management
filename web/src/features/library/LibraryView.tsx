@@ -1,7 +1,11 @@
 // The Library page, the first view of the Workdatabase: facets, the list and the item open in a
-// detail pane, under one 44 px top bar that starts with the Workdatabase tabs. The detail pane
-// docks at 1100 px of page width and overlays the list below that. On a phone the list and the
-// item are separate screens.
+// detail pane, under one 44 px top bar that starts with the Workdatabase tabs. By page width
+// (the rail counts as page):
+//   1100 px and up   facets, list and the item beside each other
+//   860 to 1099 px   an open item takes the facets' place: filter chips above the list, the item
+//                    beside it (the list keeps its status column)
+//   under 860 px     an open item is a screen of its own, and so it is on a phone
+// The list never sits half under the item.
 import { BookOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, ViewTabs } from "@/components/common";
@@ -26,10 +30,14 @@ import { useElementWidth } from "./useElementWidth";
 import { useLibraryNav } from "./useLibraryNav";
 import { useSearchBox } from "./useSearchBox";
 
-/** Page width at which the detail pane docks beside the list. */
+/** Page width at which the item docks beside facets and list. */
 const DOCK_AT = 1100;
-/** The pane reads a document: it grows with the page, 520 to 640 px. */
+/** Page width under which an open item is a screen of its own: a list needs 360 px beside it. */
+const SPLIT_AT = 860;
+/** The pane reads a document: docked it grows with the page, 520 to 640 px. */
 const paneWidthFor = (page: number) => Math.round(Math.min(640, Math.max(520, page * 0.4)));
+/** Without facets the pane takes what the list can spare: the list keeps 360 px. */
+const splitPaneWidth = (page: number) => Math.min(560, page - 360);
 
 export interface LibraryViewProps {
   /** The item open in the detail pane (`/lib/$id`). */
@@ -40,9 +48,13 @@ export function LibraryView({ selectedId }: LibraryViewProps) {
   const nav = useLibraryNav();
   const snapshot = useSnapshot();
   const narrow = useMediaQuery("(max-width: 767px)");
+  // Measured on the root, which every layout renders, so a resize is seen from the item screen too.
   const [measure, width] = useElementWidth();
-  const docked = width >= DOCK_AT;
-  const paneWidth = paneWidthFor(width);
+  const docked = !narrow && width >= DOCK_AT;
+  // An open item beside the list, without the facets, when the page is between the two widths.
+  const split = !narrow && width >= SPLIT_AT && width < DOCK_AT && Boolean(selectedId);
+  const itemScreen = Boolean(selectedId) && (narrow || (width > 0 && width < SPLIT_AT));
+  const paneWidth = split ? splitPaneWidth(width) : paneWidthFor(width);
 
   // ---- search box: instant in the field, debounced into the URL and the server query
   const { input, setInput } = useSearchBox(nav.q, nav.setQuery);
@@ -111,36 +123,45 @@ export function LibraryView({ selectedId }: LibraryViewProps) {
   const loading = snapshot.isPending || (Boolean(q) && !hits && !search.isError);
   const refreshing = Boolean(q) && Boolean(hits) && (search.isPlaceholderData || search.isFetching);
 
-  // On a phone an open item is a screen of its own.
-  if (narrow && selectedId) {
+  // A small page shows an open item as a screen of its own.
+  if (itemScreen && selectedId) {
     return (
-      <div data-wf="LibraryView" data-screen="item" className="h-full min-h-0 min-w-0 bg-bg">
+      <div
+        ref={measure}
+        data-wf="LibraryView"
+        data-screen="item"
+        className="h-full min-h-0 min-w-0 bg-bg"
+      >
+        <h1 className="sr-only">Workdatabase · Library</h1>
         <LibraryItemView id={selectedId} variant="screen" onClose={nav.close} />
       </div>
     );
   }
 
   const pane = <LibraryItemView id={selectedId as LibId} onClose={nav.close} />;
+  const searchBox = (
+    <SearchInput
+      value={input}
+      onChange={setInput}
+      placeholder="Search the library"
+      shortcut={narrow ? undefined : "/"}
+    />
+  );
+  // The facets give way to the filter chips on a phone and beside an open item.
+  const chips = narrow || split;
 
   return (
-    <div data-wf="LibraryView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
-      <header
-        ref={measure}
-        className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4 sm:gap-4"
-      >
+    <div ref={measure} data-wf="LibraryView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
+      <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4 sm:gap-4">
+        <h1 className="sr-only">Workdatabase · Library</h1>
         <ViewTabs view="workdatabase" />
-        <div className="ml-auto min-w-0 flex-1 sm:w-64 sm:flex-none">
-          <SearchInput
-            value={input}
-            onChange={setInput}
-            placeholder={narrow ? "Search" : "Search the library"}
-            shortcut={narrow ? undefined : "/"}
-          />
-        </div>
+        {/* The box shrinks before it overflows; on a phone it moves to a row of its own. */}
+        {!narrow && <div className="ml-auto min-w-0 max-w-64 flex-1">{searchBox}</div>}
       </header>
+      {narrow && <div className="shrink-0 bg-bg px-4 pt-2 pb-2.5">{searchBox}</div>}
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        {!narrow && (
+        {!chips && (
           <LibraryFacets
             filters={filters}
             counts={counts}
@@ -152,7 +173,7 @@ export function LibraryView({ selectedId }: LibraryViewProps) {
         )}
         <div className="relative flex min-h-0 min-w-0 flex-1">
           <section aria-label="Library list" className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {narrow && <LibraryFilterChips filters={filters} counts={counts} {...facetHandlers} />}
+            {chips && <LibraryFilterChips filters={filters} counts={counts} {...facetHandlers} />}
             <LibraryList
               items={visible}
               selectedId={selectedId}
@@ -167,35 +188,26 @@ export function LibraryView({ selectedId }: LibraryViewProps) {
             />
           </section>
 
-          {docked && (
+          {(docked || split) && (
             <aside
               aria-label="Library item"
               style={{ width: paneWidth }}
-              className="min-h-0 shrink-0 border-border border-l bg-bg"
+              className={cn(
+                "min-h-0 shrink-0 border-border border-l bg-bg",
+                split && "fade-in-0 animate-in duration-150 ease-wf",
+              )}
             >
               {selectedId ? (
                 pane
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <EmptyState
-                    icon={<BookOpen />}
+                    icon={<BookOpen strokeWidth={1.75} />}
                     title="Select an item"
                     hint="Pick an item to read its page, its sources and the issues that use it."
                   />
                 </div>
               )}
-            </aside>
-          )}
-
-          {!docked && !narrow && selectedId && (
-            <aside
-              aria-label="Library item"
-              className={cn(
-                "absolute inset-y-0 right-0 z-10 min-h-0 w-[min(560px,100%)] border-border border-l bg-bg shadow-pop",
-                "fade-in-0 slide-in-from-right-4 animate-in duration-200 ease-wf",
-              )}
-            >
-              {pane}
             </aside>
           )}
         </div>

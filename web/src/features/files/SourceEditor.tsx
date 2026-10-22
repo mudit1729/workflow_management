@@ -1,7 +1,8 @@
 // Edit mode of a file: a mono textarea with the same metrics and line numbers as the read view.
 // Save writes the text through the workspace-file hook, against the rev the editor opened from;
 // the board then re-reads it. If the file changed underneath, the editor says so and offers
-// Reload or Overwrite instead of guessing.
+// Reload or Overwrite instead of guessing. Prose wraps (the line numbers stay one per line of the
+// file); code scrolls sideways.
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,10 +10,11 @@ import { Button, Kbd, Tooltip } from "@/components/ui";
 import { isConflictError, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useHotkey } from "@/lib/hooks";
-import { useGo } from "@/lib/nav";
 import { lineAt } from "./lines";
 import { basename } from "./paths";
-import { SourceGutter, SRC_METRICS, SRC_PAD } from "./SourceGutter";
+import { GutterCell, gutterWidth, SourceGutter, SRC_METRICS, SRC_PAD } from "./SourceGutter";
+import { WrapToggle } from "./SourceParts";
+import { useSavedToast } from "./useSavedToast";
 
 export interface SourceEditorProps {
   path: string;
@@ -31,6 +33,9 @@ export interface SourceEditorProps {
   /** Text to select on open, so a title placeholder can be overtyped. */
   select?: string;
   variant: "pane" | "inline";
+  /** Wrap long lines (prose). Off: they scroll sideways (code, toml). */
+  wrap?: boolean;
+  onWrapChange?: (wrap: boolean) => void;
   onSaved: (saved: { rev: string; before: string; after: string }) => void;
   onCancel: () => void;
   /** Take the file as it is on disk now and drop this draft. */
@@ -50,20 +55,27 @@ export function SourceEditor({
   gone = false,
   select,
   variant,
+  wrap = false,
+  onWrapChange,
   onSaved,
   onCancel,
   onReload,
   onDirtyChange,
 }: SourceEditorProps) {
   const write = useWriteWorkspaceFile();
-  const go = useGo();
+  const savedToast = useSavedToast();
   const [draft, setDraft] = useState(startText ?? initialText);
   const [saving, setSaving] = useState(false);
   const [refused, setRefused] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
-  const gutter = useRef<HTMLDivElement>(null);
+  /** What follows the textarea's vertical scroll: the gutter, or the mirror that wraps like it. */
+  const slider = useRef<HTMLDivElement>(null);
+  const mirror = useRef<HTMLDivElement>(null);
+  const reloadButton = useRef<HTMLButtonElement>(null);
+  /** The width a scrollbar takes from the textarea, so the mirror wraps at the same column. */
+  const [scrollbar, setScrollbar] = useState(0);
 
   // `touched`: the draft differs from the file on disk, so there is something to save.
   // `edited`: the person typed beyond the text the editor opened with, so leaving needs a word.
@@ -97,15 +109,43 @@ export function SourceEditor({
     el.setSelectionRange(start, end);
     if (start > 0) {
       const lh = Number.parseFloat(getComputedStyle(el).getPropertyValue("--wf-src-lh")) || 20;
-      el.scrollTop = Math.max(
-        0,
-        (lineAt(el.value, start) - 1) * lh + SRC_PAD - el.clientHeight / 2,
-      );
+      const line = lineAt(el.value, start);
+      // A wrapped line above makes a row taller than one line: ask the mirror where the line is.
+      const row = mirror.current?.children[line - 1] as HTMLElement | undefined;
+      const top = row ? row.offsetTop : (line - 1) * lh + SRC_PAD;
+      el.scrollTop = Math.max(0, top - el.clientHeight / 2);
     }
+    // Only on open: wrap and the draft change later without moving the caret.
   }, [creating, select]);
 
+  // Keep the gutter on the line the textarea shows: after a scroll, and when the mode changes.
+  const syncScroll = () => {
+    const el = area.current;
+    if (el && slider.current) slider.current.style.transform = `translateY(${-el.scrollTop}px)`;
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `wrap` swaps the element that slides
+  useLayoutEffect(syncScroll, [wrap]);
+
+  // The mirror must wrap at the textarea's column: tell it how wide the scrollbar is.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the draft decides if one shows
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el || !wrap) return;
+    const measure = () => setScrollbar(el.offsetWidth - el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [wrap, draft]);
+
   async function save(overwrite = false) {
-    if (saving || (conflict && !overwrite)) return;
+    if (saving) return;
+    if (conflict && !overwrite) {
+      // The shortcut does nothing while the bar asks a question: say so, and go to the answer.
+      toast.warning("This file changed. Reload or Overwrite first.");
+      reloadButton.current?.focus();
+      return;
+    }
     if (!creating && !touched && !overwrite) return;
     setSaving(true);
     try {
@@ -116,9 +156,7 @@ export function SourceEditor({
       });
       // The hook has already explained any other failure with a toast.
       if (!res) return;
-      toast.success(`${creating ? "Created" : "Saved"} ${basename(path)} · the board re-read it`, {
-        action: { label: "Open Workflow", onClick: () => void go.board() },
-      });
+      savedToast({ verb: creating ? "Created" : "Saved", path, text: draft });
       onSaved({ rev: res.rev, before: initialText, after: draft });
     } catch (err) {
       if (isConflictError(err)) setRefused(true);
@@ -160,6 +198,7 @@ export function SourceEditor({
   }, []);
 
   const lines = draft.split("\n");
+  const gutterW = gutterWidth(lines.length);
 
   return (
     <div
@@ -184,6 +223,7 @@ export function SourceEditor({
           </span>
         )}
         <span className="flex-1" />
+        {onWrapChange && <WrapToggle wrap={wrap} onChange={onWrapChange} />}
         <Tooltip content="Cancel" shortcut="Escape">
           <Button variant="ghost" size="sm" onClick={cancel}>
             Cancel
@@ -218,7 +258,7 @@ export function SourceEditor({
           </span>
           {gone && !refused ? (
             <>
-              <Button variant="secondary" size="sm" onClick={onReload}>
+              <Button ref={reloadButton} variant="secondary" size="sm" onClick={onReload}>
                 Close editor
               </Button>
               <Button variant="primary" size="sm" onClick={() => void save(true)} disabled={saving}>
@@ -227,7 +267,7 @@ export function SourceEditor({
             </>
           ) : (
             <>
-              <Button variant="secondary" size="sm" onClick={onReload}>
+              <Button ref={reloadButton} variant="secondary" size="sm" onClick={onReload}>
                 Reload
               </Button>
               <Button variant="danger" size="sm" onClick={() => void save(true)} disabled={saving}>
@@ -272,30 +312,80 @@ export function SourceEditor({
         )}
       >
         {/* The textarea scrolls itself, so the caret is always revealed natively. The gutter
-            is clipped here and follows the textarea's vertical scroll. */}
-        <div className="shrink-0 overflow-hidden">
-          <div ref={gutter} className="will-change-transform">
-            <SourceGutter lineCount={lines.length} />
+            (or, when lines wrap, the mirror that wraps like the textarea) is clipped here and
+            follows the textarea's vertical scroll. */}
+        {wrap ? (
+          <div
+            key="mirror"
+            aria-hidden
+            className="pointer-events-none absolute inset-0 select-none overflow-hidden"
+          >
+            <div
+              aria-hidden
+              className="absolute inset-y-0 left-0 border-border border-r bg-bg"
+              style={{ width: gutterW }}
+            />
+            <div
+              ref={(el) => {
+                slider.current = el;
+                mirror.current = el;
+              }}
+              className="relative will-change-transform"
+              style={{ paddingTop: SRC_PAD, paddingBottom: SRC_PAD, tabSize: 2 }}
+            >
+              {lines.map((text, i) => (
+                <div key={i} className="flex">
+                  <div className="shrink-0 text-fg-faint" style={{ width: gutterW }}>
+                    <GutterCell line={i + 1} />
+                  </div>
+                  <div
+                    className="min-h-(--wf-src-lh) min-w-0 flex-1 whitespace-pre-wrap pl-3 text-transparent leading-(--wf-src-lh) [overflow-wrap:anywhere]"
+                    style={{ paddingRight: `calc(16px + ${scrollbar}px)` }}
+                  >
+                    {text}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div key="gutter" className="shrink-0 overflow-hidden">
+            <div
+              ref={(el) => {
+                slider.current = el;
+                mirror.current = null;
+              }}
+              className="will-change-transform"
+            >
+              <SourceGutter lineCount={lines.length} />
+            </div>
+          </div>
+        )}
         <textarea
+          key="area"
           ref={area}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onScroll={(e) => {
-            if (gutter.current) {
-              gutter.current.style.transform = `translateY(${-e.currentTarget.scrollTop}px)`;
-            }
-          }}
+          onScroll={syncScroll}
           aria-label={`Edit ${path}`}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
           autoComplete="off"
-          wrap="off"
+          wrap={wrap ? "soft" : "off"}
           data-gramm="false"
-          className="block min-w-0 flex-1 resize-none overflow-auto overscroll-contain whitespace-pre border-0 bg-transparent pr-6 pl-3 text-fg leading-(--wf-src-lh) outline-none"
-          style={{ paddingTop: SRC_PAD, paddingBottom: SRC_PAD, tabSize: 2 }}
+          className={cn(
+            "relative block min-w-0 flex-1 resize-none overscroll-contain border-0 bg-transparent pl-3 text-fg leading-(--wf-src-lh) outline-none",
+            wrap
+              ? "overflow-y-auto overflow-x-hidden whitespace-pre-wrap pr-4 [overflow-wrap:anywhere]"
+              : "overflow-auto whitespace-pre pr-6",
+          )}
+          style={{
+            paddingTop: SRC_PAD,
+            paddingBottom: SRC_PAD,
+            tabSize: 2,
+            marginLeft: wrap ? gutterW : undefined,
+          }}
         />
       </div>
     </div>

@@ -16,8 +16,10 @@ import {
   parseLinks,
   relativePath,
   resolvePath,
+  withoutLink,
 } from "./links";
 import { type ContextItem, isDraft, termLabel } from "./types";
+import { type Candidate, hasWordStart, rank, score } from "./useWorkdatabase";
 
 const NOTES = "issues/wf/web/live-board-updates/notes/research.md";
 
@@ -254,5 +256,102 @@ describe("the goal.md the Files dialog writes", () => {
       context: "Because agents lose claims.",
     });
     expect(text).toContain("## Context\n\nBecause agents lose claims.\n\n## Success criteria");
+  });
+});
+
+describe("matching the picker's search", () => {
+  const item = (title: string, extra = ""): Candidate => {
+    const it: ContextItem = {
+      kind: "library",
+      target: "lib-aaaaa",
+      label: title,
+      title,
+      id: "lib-aaaaa",
+    };
+    return { item: it, hay: `${title} lib-aaaaa ${extra}`.toLowerCase() };
+  };
+
+  test("a word matches from its first letter, not from the middle of another word", () => {
+    expect(hasWordStart("cut the v0.1 release", "lease")).toBe(false);
+    expect(hasWordStart("a lease_until stamp", "lease")).toBe(true);
+    expect(hasWordStart("lease", "lease")).toBe(true);
+    expect(hasWordStart("a stable id that addresses one element", "sse")).toBe(false);
+    expect(hasWordStart("push over sse", "sse")).toBe(true);
+    expect(hasWordStart("live-board-updates/goal.md", "board")).toBe(true);
+  });
+
+  test("a query that only hides inside other words finds nothing", () => {
+    expect(score(item("Cut the v0.1 release"), "lease")).toBe(0);
+    expect(score(item("Anchor", "a stable id that addresses one element"), "sse")).toBe(0);
+    expect(score(item("Push updates over SSE"), "sse")).toBeGreaterThan(0);
+  });
+
+  test("a title that starts with the word ranks first", () => {
+    const list = [item("Resume a lease"), item("Lease handling"), item("Notes", "the lease")];
+    expect(rank(list, "lease").map((c) => c.item.title)).toEqual([
+      "Lease handling",
+      "Resume a lease",
+      "Notes",
+    ]);
+  });
+});
+
+describe("withoutLink", () => {
+  const goal = [
+    "---",
+    "id: wf-9eeee",
+    "---",
+    "",
+    "## Context",
+    "",
+    "Why.",
+    "",
+    "## Links",
+    "",
+    "- [[lib-4tz7c]] Rescan subtrees",
+    "- Glossary: lease — a time-boxed claim",
+    "",
+    "## Notes",
+    "",
+    "Later.",
+    "",
+  ].join("\n");
+
+  test("cuts the one bullet and nothing else", () => {
+    const out = withoutLink(goal, "- Glossary: lease — a time-boxed claim");
+    expect(out).toBe(goal.replace("- Glossary: lease — a time-boxed claim\n", ""));
+  });
+
+  test("the last bullet takes the empty heading with it", () => {
+    const one = goal.replace("- Glossary: lease — a time-boxed claim\n", "");
+    const out = withoutLink(one, "- [[lib-4tz7c]] Rescan subtrees");
+    expect(out).toBe(
+      [
+        "---",
+        "id: wf-9eeee",
+        "---",
+        "",
+        "## Context",
+        "",
+        "Why.",
+        "",
+        "## Notes",
+        "",
+        "Later.",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("a Links section at the end of the file keeps the final newline", () => {
+    const text = "## Context\n\nWhy.\n\n## Links\n\n- [[lib-4tz7c]] Rescan subtrees\n";
+    expect(withoutLink(text, "- [[lib-4tz7c]] Rescan subtrees")).toBe("## Context\n\nWhy.\n");
+  });
+
+  test("a bullet that is not in the section, or no section, is undefined", () => {
+    expect(withoutLink(goal, "- [[lib-zzzzz]] Elsewhere")).toBeUndefined();
+    expect(withoutLink("## Context\n\nWhy.\n", "- [[lib-4tz7c]] x")).toBeUndefined();
+    // A line outside the section does not count.
+    expect(withoutLink(goal, "Why.")).toBeUndefined();
   });
 });

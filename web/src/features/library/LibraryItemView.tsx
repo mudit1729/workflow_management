@@ -1,7 +1,8 @@
 // One library item, read from its markdown file. The page is the rendered file (frontmatter as
 // properties, then every section in file order, each block tied to its line); "Source" shows
-// the text itself with its lint markers. Around the document: the draft, retired and overdue
-// banners, where the item came from and which issues use it.
+// the text itself with its lint markers, edge to edge under the same toolbar, and Edit opens the
+// editor right there in either mode. Around the document: the draft, retired and overdue banners,
+// where the item came from and which issues use it.
 import {
   ArrowLeft,
   Check,
@@ -15,7 +16,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, type Ref as ReactRef, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AuthorChip,
@@ -29,8 +30,8 @@ import {
   RefLink,
 } from "@/components/common";
 import { Button, Chip, IconButton, Segmented, Skeleton, Tooltip } from "@/components/ui";
+import { requestFileEdit } from "@/features/files/intent";
 import { SourceView } from "@/features/files/SourceView";
-import { useFilesNav } from "@/features/files/useFilesNav";
 import type { Diagnostic, LibId, LibraryItemDetail, Ref } from "@/gen/types";
 import { useApproveLibrary, useIssueMap, useLibraryItem, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -68,7 +69,7 @@ export function LibraryItemView({
     return (
       <ItemMessage onClose={onClose} variant={variant}>
         <EmptyState
-          icon={<SearchX />}
+          icon={<SearchX strokeWidth={1.75} />}
           title={missing ? "Item not found" : "Could not open this item"}
           hint={
             missing
@@ -125,6 +126,8 @@ function ItemBody({
   const findings = detail.diagnostics.filter((d) => !(overdue && d.rule === "Q013"));
   const [mode, setMode] = useState<LibraryItemMode>(defaultView);
   const [line, setLine] = useState<number>();
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
   const file = useWorkspaceFile(path);
   const text = file.data?.text ?? undefined;
 
@@ -132,6 +135,24 @@ function ItemBody({
     setLine(at);
     setMode("source");
   };
+
+  // Edit opens the editor in the source view, in whichever view the person is.
+  const edit = () => {
+    requestFileEdit({ path });
+    if (mode !== "source") {
+      setLine(undefined);
+      setMode("source");
+    }
+  };
+  const changeMode = (next: LibraryItemMode) => {
+    if (editing) {
+      toast("Save or cancel your edit first", { description: "Switching view would drop it." });
+      return;
+    }
+    setLine(undefined);
+    setMode(next);
+  };
+  const hasBanner = s.status === "draft" || s.status === "retired" || overdue;
 
   return (
     <div
@@ -142,49 +163,65 @@ function ItemBody({
     >
       <Toolbar
         detail={detail}
-        path={path}
         mode={mode}
-        onMode={(next) => {
-          setLine(undefined);
-          setMode(next);
-        }}
+        onMode={changeMode}
+        onEdit={edit}
+        editing={editing}
+        editRef={editButton}
         onClose={onClose}
         variant={variant}
       />
       <PathRow id={s.id} path={path} retire={s.status === "reviewed"} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-5 px-6 py-4">
-          <Banners detail={detail} overdue={overdue} />
-
-          {mode === "source" ? (
-            <SourceView
-              path={path}
-              variant="inline"
-              line={line}
-              showViewToggle={false}
-              onDeleted={onClose}
-            />
-          ) : text !== undefined ? (
-            <MarkdownDocument
-              path={path}
-              text={text}
-              variant="pane"
-              margin={24}
-              frontmatter={<ItemFrontmatter detail={detail} text={text} overdue={overdue} />}
-              onJump={showSource}
-            />
-          ) : file.isPending ? (
-            <DocumentSkeleton />
-          ) : (
-            <ParsedSections detail={detail} overdue={overdue} onRetry={() => void file.refetch()} />
+      {mode === "source" ? (
+        // The text fills the pane under the toolbar and the one path row: no second header, no card.
+        <div className="flex min-h-0 flex-1 flex-col">
+          {hasBanner && (
+            <div className="shrink-0 px-6 pt-4 pb-1">
+              <Banners detail={detail} overdue={overdue} />
+            </div>
           )}
-
-          <Sources sources={detail.source} />
-          <UsedBy backlinks={detail.backlinks} />
-          {findings.length > 0 && <Findings findings={findings} />}
+          <SourceView
+            path={path}
+            variant="inline"
+            embedded
+            line={line}
+            showViewToggle={false}
+            returnFocusTo={editButton}
+            onEditingChange={setEditing}
+            onDeleted={onClose}
+          />
         </div>
-      </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-5 px-6 py-4">
+            <Banners detail={detail} overdue={overdue} />
+
+            {text !== undefined ? (
+              <MarkdownDocument
+                path={path}
+                text={text}
+                variant="pane"
+                margin={24}
+                frontmatter={<ItemFrontmatter detail={detail} text={text} overdue={overdue} />}
+                onJump={showSource}
+              />
+            ) : file.isPending ? (
+              <DocumentSkeleton />
+            ) : (
+              <ParsedSections
+                detail={detail}
+                overdue={overdue}
+                onRetry={() => void file.refetch()}
+              />
+            )}
+
+            <Sources sources={detail.source} />
+            <UsedBy backlinks={detail.backlinks} />
+            {findings.length > 0 && <Findings findings={findings} />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -254,21 +291,25 @@ function DocumentSkeleton() {
 
 function Toolbar({
   detail,
-  path,
   mode,
   onMode,
+  onEdit,
+  editing,
+  editRef,
   onClose,
   variant,
 }: {
   detail: LibraryItemDetail;
-  path: string;
   mode: LibraryItemMode;
   onMode: (mode: LibraryItemMode) => void;
+  onEdit: () => void;
+  /** The editor is open: Edit stays where it is, taken. */
+  editing: boolean;
+  editRef: ReactRef<HTMLButtonElement>;
   onClose?: () => void;
   variant: "pane" | "screen";
 }) {
   const s = detail.summary;
-  const files = useFilesNav();
   return (
     <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-border border-b py-1 pr-3 pl-5">
       {variant === "screen" && onClose && (
@@ -293,14 +334,19 @@ function Toolbar({
             { value: "source", label: "Source" },
           ]}
         />
-        {mode === "rendered" && (
-          <Tooltip content="Edit this file in Workspace files">
-            <Button variant="secondary" size="sm" onClick={() => void files.edit(path)}>
-              <Pencil aria-hidden size={14} strokeWidth={1.75} />
-              Edit
-            </Button>
-          </Tooltip>
-        )}
+        {/* One Edit in both views, so the switch beside it never moves. */}
+        <Tooltip content={editing ? "Editing this file" : "Edit this file"}>
+          <Button
+            ref={editRef}
+            variant="secondary"
+            size="sm"
+            onClick={editing ? undefined : onEdit}
+            aria-disabled={editing || undefined}
+          >
+            <Pencil aria-hidden size={14} strokeWidth={1.75} />
+            Edit
+          </Button>
+        </Tooltip>
         {variant === "pane" && onClose && (
           <IconButton
             size="sm"
@@ -384,7 +430,7 @@ function Banners({ detail, overdue }: { detail: LibraryItemDetail; overdue: bool
         actions={
           <>
             <Button variant="primary" size="sm" disabled={busy} onClick={onApprove}>
-              <Check aria-hidden size={14} strokeWidth={2} />
+              <Check aria-hidden size={14} strokeWidth={1.75} />
               {busy ? "Approving…" : "Approve"}
             </Button>
             <RetireButton />
@@ -485,7 +531,8 @@ function ItemFrontmatter({
   );
   return (
     <header data-wf="LibraryItemHeader" className="flex min-w-0 flex-col gap-2">
-      <h1
+      {/* The page's h1 is the Library's; the item is the next level. */}
+      <h2
         title={lines.has("title") ? `line ${lines.get("title")}` : undefined}
         className={cn(
           "font-semibold text-fg text-lg leading-snug",
@@ -493,7 +540,7 @@ function ItemFrontmatter({
         )}
       >
         {s.title}
-      </h1>
+      </h2>
       <p
         title={lines.has("description") ? `line ${lines.get("description")}` : undefined}
         className="text-base text-fg-muted leading-relaxed"
@@ -616,9 +663,9 @@ function Sources({ sources }: { sources: Ref[] }) {
             <li key={ref.target} className="flex min-w-0 items-baseline gap-2 px-3 py-2 text-base">
               <Link2
                 aria-hidden
-                size={12}
+                size={14}
                 strokeWidth={1.75}
-                className="shrink-0 translate-y-[1px] text-fg-faint"
+                className="shrink-0 translate-y-[2px] text-fg-faint"
               />
               <span className="min-w-0 text-fg-muted">
                 Promoted from <RefLink target={ref.target} />
@@ -701,10 +748,10 @@ function Findings({ findings }: { findings: Diagnostic[] }) {
           <li key={`${d.rule}-${d.line}-${i}`} className="flex items-start gap-2 px-3 py-2 text-sm">
             <TriangleAlert
               aria-hidden
-              size={12}
+              size={14}
               strokeWidth={1.75}
               className={cn(
-                "mt-[3px] shrink-0",
+                "mt-px shrink-0",
                 d.severity === "error"
                   ? "text-danger"
                   : d.severity === "warn"

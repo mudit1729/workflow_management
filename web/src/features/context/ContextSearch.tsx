@@ -3,7 +3,6 @@
 // The list stays open after a pick so several items can go in one visit.
 import { type ReactNode, useMemo, useState } from "react";
 import {
-  Chip,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -12,6 +11,7 @@ import {
   CommandList,
   Kbd,
 } from "@/components/ui";
+import { InlineCode, LibraryStatusChip } from "@/features/library/meta";
 import { cn } from "@/lib/cn";
 import { ContextIcon } from "./ContextIcon";
 import { type ContextItem, DRAFT_NOTE, isDraft, itemKey } from "./types";
@@ -45,6 +45,8 @@ export interface ContextSearchProps {
   active?: boolean;
   autoFocus?: boolean;
   className?: string;
+  /** Classes for the scrolling list (its height cap). */
+  listClassName?: string;
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -56,6 +58,7 @@ export function ContextSearch({
   active = true,
   autoFocus = true,
   className,
+  listClassName,
 }: ContextSearchProps) {
   const db = useWorkdatabase({ enabled: active, issueId });
   const [query, setQuery] = useState("");
@@ -97,7 +100,7 @@ export function ContextSearch({
         placeholder="Search library, glossary, files, decisions"
         aria-label="Search the Workdatabase"
       />
-      <CommandList className="max-h-[min(340px,46dvh)]">
+      <CommandList className={cn("max-h-[min(340px,46dvh)]", listClassName)}>
         {db.loading && groups.length === 0 ? (
           <p className="px-3 py-8 text-center text-fg-faint text-sm">Loading…</p>
         ) : (
@@ -116,6 +119,11 @@ export function ContextSearch({
               <span className="flex items-baseline gap-1.5">
                 {GROUP_LABEL[group]}
                 <span className="tabular font-normal">{total}</span>
+                {group === "library" && db.retiredHidden > 0 && (
+                  <span className="font-normal text-fg-faint">
+                    · <span className="tabular">{db.retiredHidden}</span> retired hidden
+                  </span>
+                )}
               </span>
             }
           >
@@ -163,17 +171,12 @@ function Keys({ keys, label }: { keys: string[]; label: string }) {
 function Row({ c, onPick }: { c: Candidate; onPick: (item: ContextItem) => void }) {
   const { item } = c;
   const mono = item.kind === "file";
+  // The same status chip as the Library: a draft is outlined, amber stays for the stale signal.
   const chip: ReactNode =
     item.kind === "library" ? (
-      item.status === "draft" ? (
-        <Chip tone="stale" size="xs" title={DRAFT_NOTE}>
-          Draft
-        </Chip>
-      ) : (
-        <Chip tone="success" size="xs">
-          Reviewed
-        </Chip>
-      )
+      <span title={isDraft(item) ? DRAFT_NOTE : undefined} className="inline-flex">
+        <LibraryStatusChip status={item.status ?? "reviewed"} size="xs" />
+      </span>
     ) : undefined;
   return (
     <CommandItem
@@ -185,10 +188,16 @@ function Row({ c, onPick }: { c: Candidate; onPick: (item: ContextItem) => void 
     >
       <span className="flex min-w-0 flex-col gap-px">
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className={cn("truncate", mono && "font-mono text-sm")}>{item.title}</span>
+          <span className={cn("truncate", mono && "font-mono text-sm")}>
+            {mono ? item.title : <InlineCode text={item.title} className="text-xs" />}
+          </span>
           {item.id && <span className="shrink-0 font-mono text-fg-faint text-xs">{item.id}</span>}
         </span>
-        {item.detail && <span className="truncate text-fg-faint text-sm">{item.detail}</span>}
+        {item.detail && (
+          <span className="truncate text-fg-faint text-sm">
+            <InlineCode text={item.detail} className="text-xs text-fg-muted" />
+          </span>
+        )}
       </span>
     </CommandItem>
   );

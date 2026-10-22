@@ -4,7 +4,15 @@
 
 import { useBlocker, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Copy, Ellipsis, File, FileX, Pencil, Trash2 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { CopyButton, copyText, EmptyState } from "@/components/common";
 import {
@@ -24,6 +32,7 @@ import {
   useDeleteWorkspaceFile,
   useIssue,
   useMe,
+  useSnapshot,
   useWorkspaceFile,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -44,12 +53,12 @@ import {
   ImageBody,
   KindGlyph,
   linkFor,
-  Meta,
   NotFound,
+  SourceMeta,
   SourceSkeleton,
   TomlNote,
 } from "./SourceParts";
-import { appendEntry, templateForPath } from "./templates";
+import { appendEntry, placeholderFor, templateForPath } from "./templates";
 import { FilesLink, useFilesNav } from "./useFilesNav";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -70,8 +79,18 @@ export interface SourceViewProps {
   line?: number;
   /** A markdown file opens as its source (the default) or as the rendered page. */
   defaultView?: SourceViewMode;
-  /** Show the Source | Rendered switch on a markdown file (default). A host with its own switch turns it off. */
+  /** Show the Rendered | Source switch on a markdown file (default). A host with its own switch turns it off. */
   showViewToggle?: boolean;
+  /**
+   * Edge to edge in a host that has its own header (the library item pane): no path row, no card
+   * border, the text fills the height. The meta line stays, with a link to the file in Files.
+   * The host starts an edit with `requestFileEdit({ path })` and says where focus returns to.
+   */
+  embedded?: boolean;
+  /** Where focus goes after a save or a cancel (the host's own Edit button). */
+  returnFocusTo?: RefObject<HTMLElement | null>;
+  /** Told when the editor opens and closes, so the host can show its Edit button as taken. */
+  onEditingChange?: (editing: boolean) => void;
   className?: string;
 }
 
@@ -100,6 +119,9 @@ export function SourceView({
   line: lineProp,
   defaultView = "source",
   showViewToggle = true,
+  embedded = false,
+  returnFocusTo,
+  onEditingChange,
   className,
 }: SourceViewProps) {
   const query = useWorkspaceFile(path);
@@ -107,6 +129,8 @@ export function SourceView({
   const nav = useFilesNav();
   const me = useMe();
   const inline = variant === "inline";
+  /** The pane look: the text fills its host, a hairline above it. Inline is a card in a page. */
+  const flush = !inline || embedded;
 
   const gone = query.isError && isNotFound(query.error);
   const file = gone ? undefined : query.data;
@@ -118,6 +142,9 @@ export function SourceView({
   const urlLine = (useSearch({ strict: false }) as { line?: unknown }).line;
   const wanted = lineProp ?? (inline || typeof urlLine !== "number" ? undefined : urlLine);
   const reading = kind === "md" && view === "rendered";
+  // Prose wraps; code and settings scroll sideways. The switch in the meta line and the editor's
+  // bar change it for this view.
+  const [wrap, setWrap] = useState(kind === "md");
 
   // ---- editing
   const [session, setSession] = useState<Session | null>(null);
@@ -135,11 +162,13 @@ export function SourceView({
     startSession({ mode: "edit", initialText: file.text, baseRev: file.rev });
   };
 
+  const libraryDir = useSnapshot().data?.config.library_dir;
   const startCreate = () =>
     startSession({
       mode: "create",
       initialText: "",
-      startText: templateForPath(path, { author: me ?? "shruti" }),
+      startText: templateForPath(path, { author: me ?? "shruti", libraryDir }),
+      select: placeholderFor(path, libraryDir),
     });
 
   // An edit requested elsewhere (palette, New file, an issue's Files tab) for this path.
@@ -188,8 +217,25 @@ export function SourceView({
     return () => clearTimeout(t);
   }, [flash]);
 
-  const onSaved = ({ rev, before, after }: { rev: string; before: string; after: string }) => {
+  // The editor unmounts on save and cancel: focus goes back to the button that opened it.
+  const editButton = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  const closeEditor = () => {
+    refocus.current = true;
     setSession(null);
+  };
+  const editing = session !== null;
+  useEffect(() => {
+    onEditingChange?.(editing);
+  }, [editing, onEditingChange]);
+  useEffect(() => {
+    if (editing || !refocus.current) return;
+    refocus.current = false;
+    (returnFocusTo ?? editButton).current?.focus();
+  }, [editing, returnFocusTo]);
+
+  const onSaved = ({ rev, before, after }: { rev: string; before: string; after: string }) => {
+    closeEditor();
     setOverride({ text: after, rev });
     setFlash(new Set(changedLines(before, after)));
   };
@@ -324,10 +370,9 @@ export function SourceView({
   const go = useGo();
   const link = linkFor(context, { openIssue, go });
 
-  const root = cn("flex min-w-0 flex-col bg-bg", inline ? "gap-0" : "h-full min-h-0", className);
+  const root = cn("flex min-w-0 flex-col bg-bg", flush ? "h-full min-h-0" : "gap-0", className);
 
   // ---- states
-  const editing = session !== null;
   const rendered = reading && !editing;
   const issueId = context.issue?.id;
   const diagrams = useIssue(rendered ? issueId : undefined).data?.diagrams;
@@ -344,15 +389,17 @@ export function SourceView({
         liveRev={file?.rev}
         gone={gone}
         select={session.select}
-        variant={variant}
+        variant={flush ? "pane" : variant}
+        wrap={wrap}
+        onWrapChange={setWrap}
         onSaved={onSaved}
-        onCancel={() => setSession(null)}
+        onCancel={closeEditor}
         onReload={reload}
         onDirtyChange={setDirty}
       />
     );
   } else if (query.isPending) {
-    body = <SourceSkeleton inline={inline} />;
+    body = <SourceSkeleton inline={!flush} />;
   } else if (gone) {
     body = (
       <NotFound
@@ -366,7 +413,7 @@ export function SourceView({
     body = (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <EmptyState
-          icon={<FileX />}
+          icon={<FileX strokeWidth={1.75} />}
           title="Could not load this file"
           hint="The server did not answer. Your files are safe."
           action={
@@ -378,12 +425,12 @@ export function SourceView({
       </div>
     );
   } else if (file && kind === "image") {
-    body = <ImageBody path={path} url={file.url} bytes={file.bytes} inline={inline} />;
+    body = <ImageBody path={path} url={file.url} bytes={file.bytes} inline={!flush} />;
   } else if (file && text == null) {
     body = (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <EmptyState
-          icon={<File />}
+          icon={<File strokeWidth={1.75} />}
           title="No preview for this file"
           hint={`${extension(path).slice(1).toUpperCase() || "Binary"} · ${formatBytes(file.bytes)}. It is not text, so there is nothing to edit here.`}
           action={
@@ -405,17 +452,17 @@ export function SourceView({
         data-wf="SourceRendered"
         className={cn(
           "min-h-0 overflow-y-auto overscroll-contain bg-bg",
-          inline
-            ? "max-h-[min(62vh,560px)] rounded-md border border-border"
-            : "flex-1 border-border border-t",
+          flush
+            ? "flex-1 border-border border-t"
+            : "max-h-[min(62vh,560px)] rounded-md border border-border",
         )}
       >
-        <div className={inline ? "px-4 py-4" : "px-4 py-5 sm:px-6 sm:py-6"}>
+        <div className={flush ? "px-4 py-5 sm:px-6 sm:py-6" : "px-4 py-4"}>
           <MarkdownDocument
             path={path}
             text={text}
-            variant={inline ? "pane" : "page"}
-            margin={inline ? 16 : 24}
+            variant={flush ? "page" : "pane"}
+            margin={flush ? 24 : 16}
             diagrams={diagrams}
             issueId={issueId}
             onJump={showSourceLine}
@@ -437,15 +484,16 @@ export function SourceView({
           flash={flash}
           activeLine={active}
           scrollerRef={scroller}
+          wrap={wrap}
           className={
-            inline
-              ? "max-h-[min(62vh,560px)] rounded-md border border-border"
-              : "min-h-0 flex-1 border-border border-t"
+            flush
+              ? "min-h-0 flex-1 border-border border-t"
+              : "max-h-[min(62vh,560px)] rounded-md border border-border"
           }
         />
       );
   } else {
-    body = <SourceSkeleton inline={inline} />;
+    body = <SourceSkeleton inline={!flush} />;
   }
 
   const lineCount = text ? text.split("\n").length - (text.endsWith("\n") ? 1 : 0) : 0;
@@ -459,109 +507,141 @@ export function SourceView({
       aria-label={path}
       className={root}
     >
-      <header className={cn("flex shrink-0 flex-col gap-1", inline ? "pb-2" : "px-4 pt-2.5 pb-2")}>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <div className="flex min-w-0 flex-1 basis-56 items-center gap-1.5">
-            {onBack && (
-              <IconButton
-                size="sm"
-                label={inline ? "Back to files" : "Back to the file list"}
-                shortcut={inline && !editing ? "Escape" : undefined}
-                icon={<ArrowLeft {...ICON} />}
-                onClick={() => requestLeave(onBack)}
-                className={cn(!inline && "-ml-1.5")}
-              />
-            )}
-            <span className="shrink-0 text-fg-faint">
-              <KindGlyph kind={kind} ext={ext} />
-            </span>
-            <h2 className="min-w-0 truncate font-medium font-mono text-fg text-sm" title={path}>
-              {pathLabel ?? path}
-            </h2>
-            <CopyButton text={path} label="Copy path" size="sm" />
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {!editing && showViewToggle && kind === "md" && file && text != null && (
-              <Segmented
-                size="sm"
-                aria-label="Show the source or the rendered page"
-                value={view}
-                onChange={setView}
-                options={[
-                  { value: "source", label: "Source" },
-                  { value: "rendered", label: "Rendered" },
-                ]}
-              />
-            )}
-            {!editing && link && !inline && (
-              <Button variant="ghost" size="sm" onClick={link.run}>
-                {link.label}
-                <ArrowUpRight {...ICON} aria-hidden />
-              </Button>
-            )}
-            {inline && (
-              <FilesLink
-                path={path}
-                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
-              >
-                <span className="hidden min-[480px]:inline">Open in Files</span>
-                <span className="min-[480px]:hidden">Open</span>
-                <ArrowUpRight {...ICON} aria-hidden />
-              </FilesLink>
-            )}
-            {!editing && file && text != null && (
-              <Button variant="secondary" size="sm" onClick={startEdit}>
-                <Pencil {...ICON} aria-hidden />
-                Edit
-              </Button>
-            )}
-            {!editing && file && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+      {(!embedded || (file && !editing)) && (
+        <header
+          className={cn(
+            "@container flex shrink-0 flex-col gap-1",
+            embedded ? "px-5 py-2" : inline ? "pb-2" : "px-4 pt-2.5 pb-2",
+          )}
+        >
+          {!embedded && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+              <div className="flex min-w-0 flex-1 basis-56 items-center gap-1.5">
+                {onBack && (
                   <IconButton
                     size="sm"
-                    label="File actions"
-                    icon={<Ellipsis {...ICON} />}
-                    variant="ghost"
+                    label={inline ? "Back to files" : "Back to the file list"}
+                    shortcut={inline && !editing ? "Escape" : undefined}
+                    icon={<ArrowLeft {...ICON} />}
+                    onClick={() => requestLeave(onBack)}
+                    className={cn(!inline && "-ml-1.5")}
                   />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem icon={<Copy />} onSelect={() => void copy(path, "Path copied")}>
-                    Copy path
-                  </DropdownMenuItem>
-                  {text != null && (
-                    <DropdownMenuItem
-                      icon={<Copy />}
-                      onSelect={() => void copy(text, "File text copied")}
-                    >
-                      Copy text
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    tone="danger"
-                    icon={<Trash2 />}
-                    onSelect={() => setConfirmDelete(true)}
+                )}
+                <span className="shrink-0 text-fg-faint">
+                  <KindGlyph kind={kind} ext={ext} />
+                </span>
+                <h2 className="min-w-0 truncate font-medium font-mono text-fg text-sm" title={path}>
+                  {pathLabel ?? path}
+                </h2>
+                <CopyButton text={path} label="Copy path" size="sm" />
+              </div>
+              {/* The actions wrap under the path when the pane is narrow, never off its edge. */}
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                {!editing && showViewToggle && kind === "md" && file && text != null && (
+                  <Segmented
+                    size="sm"
+                    aria-label="Show the rendered page or the source"
+                    value={view}
+                    onChange={setView}
+                    options={[
+                      { value: "rendered", label: "Rendered" },
+                      { value: "source", label: "Source" },
+                    ]}
+                  />
+                )}
+                {!editing && link && !inline && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={link.run}
+                    aria-label={link.label}
+                    title={link.label}
                   >
-                    Delete file…
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </div>
-        {file && !editing && (
-          <Meta
-            rev={file.rev}
-            bytes={file.bytes}
-            lines={lineCount}
-            hint={roleHint(path)}
-            diagnostics={diagnostics}
-            onJump={jumpToFinding}
-            kind={kind}
-          />
-        )}
-      </header>
+                    <span className="hidden @[420px]:inline">{link.label}</span>
+                    <ArrowUpRight {...ICON} aria-hidden />
+                  </Button>
+                )}
+                {inline && (
+                  <FilesLink
+                    path={path}
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
+                  >
+                    <span className="hidden min-[480px]:inline">Open in Files</span>
+                    <span className="min-[480px]:hidden">Open</span>
+                    <ArrowUpRight {...ICON} aria-hidden />
+                  </FilesLink>
+                )}
+                {!editing && file && text != null && (
+                  <Button ref={editButton} variant="secondary" size="sm" onClick={startEdit}>
+                    <Pencil {...ICON} aria-hidden />
+                    Edit
+                  </Button>
+                )}
+                {!editing && file && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <IconButton
+                        size="sm"
+                        label="File actions"
+                        icon={<Ellipsis {...ICON} />}
+                        variant="ghost"
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        icon={<Copy {...ICON} />}
+                        onSelect={() => void copy(path, "Path copied")}
+                      >
+                        Copy path
+                      </DropdownMenuItem>
+                      {text != null && (
+                        <DropdownMenuItem
+                          icon={<Copy {...ICON} />}
+                          onSelect={() => void copy(text, "File text copied")}
+                        >
+                          Copy text
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        tone="danger"
+                        icon={<Trash2 {...ICON} />}
+                        onSelect={() => setConfirmDelete(true)}
+                      >
+                        Delete file…
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+            </div>
+          )}
+          {file && !editing && (
+            <SourceMeta
+              rev={file.rev}
+              bytes={file.bytes}
+              lines={lineCount}
+              hint={embedded ? undefined : roleHint(path)}
+              diagnostics={diagnostics}
+              onJump={jumpToFinding}
+              kind={kind}
+              wrap={wrap}
+              onWrapChange={rendered ? undefined : setWrap}
+              end={
+                embedded ? (
+                  <FilesLink
+                    path={path}
+                    className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 font-medium text-fg-muted text-xs transition-colors duration-100 hover:bg-muted hover:text-fg"
+                  >
+                    Open in Files
+                    <ArrowUpRight {...ICON} aria-hidden />
+                  </FilesLink>
+                ) : undefined
+              }
+            />
+          )}
+        </header>
+      )}
 
       {file && !editing && ext === ".toml" && <TomlNote name={basename(path)} />}
 

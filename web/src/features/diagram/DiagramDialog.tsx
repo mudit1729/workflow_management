@@ -18,7 +18,7 @@ import {
   useDiagramTheme,
   usePostTheme,
 } from "./meta";
-import { errorLines } from "./sourceLines";
+import { orderedErrors } from "./sourceLines";
 
 export interface DiagramDialogProps {
   diagram: Diagram;
@@ -106,7 +106,7 @@ function Preview({ diagram }: { diagram: Diagram }) {
 }
 
 function SourceView({ diagram, invalid }: { diagram: Diagram; invalid: boolean }) {
-  const lines = useMemo(() => errorLines(diagram.source, diagram.errors), [diagram]);
+  const { errors, lines } = useMemo(() => orderedErrors(diagram.source, diagram.errors), [diagram]);
   const marked = useMemo(() => lines.filter((n): n is number => n !== undefined), [lines]);
   return (
     <div className="@container flex h-full min-h-0 flex-col gap-3 border-border border-t p-4">
@@ -119,7 +119,7 @@ function SourceView({ diagram, invalid }: { diagram: Diagram; invalid: boolean }
               <InlineCode>wf lint --render</InlineCode>.
             </p>
           </div>
-          <DiagramErrors errors={diagram.errors} lines={lines} className="shrink-0" />
+          <DiagramErrors errors={errors} lines={lines} className="shrink-0" />
         </>
       ) : (
         <UnavailableNote facts={`${plural(diagram.nodes, "node")} · ${sourceLocation(diagram)}`} />

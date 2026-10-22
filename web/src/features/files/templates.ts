@@ -43,6 +43,8 @@ export interface TemplateOpts {
   /** The acting author, without "@". */
   author: string;
   now?: number;
+  /** The workspace's `library_dir`, default "library". */
+  libraryDir?: string;
 }
 
 // ---------------------------------------------------------------- goal.md
@@ -209,6 +211,68 @@ export function issueFileTemplate(name: IssueFileName, o: TemplateOpts, title = 
   }
 }
 
+// ---------------------------------------------------------------- library items
+
+/** The description a new library item starts with, selected so the first words replace it. */
+export const LIBRARY_DESCRIPTION_PLACEHOLDER = "Use when …";
+
+const LIBRARY_FOLDER_KIND: Record<string, string> = {
+  patterns: "pattern",
+  playbooks: "playbook",
+  gotchas: "gotcha",
+  decisions: "decision",
+};
+
+/** The first two sections of each kind (contract 1.4), each with a line saying what goes in it. */
+const LIBRARY_SECTIONS: Record<string, [string, string][]> = {
+  pattern: [
+    ["Rule", "Say the rule in one or two sentences."],
+    ["When to use", "Say when it applies, and when it does not."],
+  ],
+  playbook: [
+    ["Overview", "Say what the playbook gets done."],
+    ["Procedure", "1. Write the first step."],
+  ],
+  gotcha: [
+    ["Symptom", "Say what goes wrong and how it shows."],
+    ["Cause", "Say why it happens."],
+  ],
+  decision: [
+    ["Decision", "Say what was decided."],
+    ["Because", "Give the reason."],
+  ],
+};
+
+/**
+ * A new library item (contract 1.4): a draft with the keys the grammar requires. `source` points
+ * at a placeholder entry, which shows as a dangling reference until the author names the real one.
+ */
+export function libraryTemplate(o: {
+  kind: string;
+  title: string;
+  author: string;
+  now?: number;
+}): string {
+  const sections = LIBRARY_SECTIONS[o.kind] ?? LIBRARY_SECTIONS.pattern;
+  return `${[
+    "---",
+    `id: ${newId("lib")}`,
+    `title: ${yamlScalar(o.title)}`,
+    `kind: ${o.kind}`,
+    `description: ${LIBRARY_DESCRIPTION_PLACEHOLDER}`,
+    "status: draft",
+    "tags: []",
+    "applies_to: []",
+    "source:",
+    '  - "[[wf-xxxxx]]"',
+    `authors: [${handleScalar(o.author)}]`,
+    `created: ${nowTs(o.now).slice(0, 10)}`,
+    "---",
+    "",
+    ...sections.flatMap(([heading, hint]) => [`## ${heading}`, "", hint, ""]),
+  ].join("\n")}`.replace(/\n+$/, "\n");
+}
+
 /** Title-case a folder slug: "live-board-updates" → "Live board updates". */
 export function titleFromSlug(slug: string): string {
   const words = slug.replace(/[-_]+/g, " ").trim();
@@ -224,12 +288,24 @@ export function templateForPath(path: string, o: TemplateOpts): string {
   if (name === "_group.md") {
     return `${["---", `id: ${newId("g")}`, `title: ${yamlScalar(titleFromSlug(folder))}`, "---"].join("\n")}\n`;
   }
+  const libraryDir = (o.libraryDir ?? "library").replace(/\/+$/, "");
+  if (path.startsWith(`${libraryDir}/`) && name.endsWith(".md")) {
+    return libraryTemplate({
+      kind: LIBRARY_FOLDER_KIND[folder] ?? "pattern",
+      title: titleFromSlug(name.replace(/\.md$/, "")),
+      author: o.author,
+      now: o.now,
+    });
+  }
   return "";
 }
 
 /** Text a title placeholder in a template can be found by, to select it in the editor. */
-export function placeholderFor(path: string): string | undefined {
+export function placeholderFor(path: string, libraryDir = "library"): string | undefined {
   const name = basename(path);
+  if (path.startsWith(`${libraryDir.replace(/\/+$/, "")}/`) && name.endsWith(".md")) {
+    return LIBRARY_DESCRIPTION_PLACEHOLDER;
+  }
   if (name === "changes.md") return CHANGE_TITLE_PLACEHOLDER;
   if (name === "decisions.md") return DECISION_TITLE_PLACEHOLDER;
   if (name === "learnings.md") return LEARNING_TITLE_PLACEHOLDER;

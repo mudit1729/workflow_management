@@ -167,6 +167,7 @@ export function FolderRow({
       aria-selected={selected}
       aria-expanded={open}
       aria-label={`${label}, ${node.fileCount} ${node.fileCount === 1 ? "file" : "files"}${lint}`}
+      title={node.role === "issue" ? node.path : undefined}
       onFocus={onFocus}
       onClick={onToggle}
       className={cn(rowBase, "text-fg-muted hover:bg-muted/70 hover:text-fg")}
@@ -174,8 +175,7 @@ export function FolderRow({
     >
       <span aria-hidden className="flex size-4 shrink-0 items-center justify-center text-fg-faint">
         <ChevronRight
-          size={12}
-          strokeWidth={2}
+          {...ICON}
           className={cn("transition-transform duration-150 ease-wf", open && "rotate-90")}
         />
       </span>
@@ -186,15 +186,11 @@ export function FolderRow({
       )}
       {node.role === "issue" ? (
         <>
+          {/* The folder name is in the tooltip: next to a cut title it showed as a few letters. */}
           <span className={cn("min-w-0 truncate", node.title ? "text-fg" : "font-mono text-sm")}>
             {label}
           </span>
-          {node.title && (
-            <span className="min-w-0 flex-1 truncate font-mono text-fg-faint text-xs">
-              {node.name}
-            </span>
-          )}
-          {!node.title && <span className="flex-1" />}
+          <span className="flex-1" />
         </>
       ) : (
         <span

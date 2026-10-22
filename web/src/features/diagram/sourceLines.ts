@@ -77,6 +77,21 @@ export function jsonPathLines(source: string): Map<string, number> {
   return lines;
 }
 
+/** The errors in the order of the source, those without a line last, each with its line. */
+export function orderedErrors(
+  source: string,
+  errors: DiagramError[],
+): { errors: DiagramError[]; lines: (number | undefined)[] } {
+  const lines = errorLines(source, errors);
+  const order = errors
+    .map((_, i) => i)
+    .sort(
+      (a, b) =>
+        (lines[a] ?? Number.POSITIVE_INFINITY) - (lines[b] ?? Number.POSITIVE_INFINITY) || a - b,
+    );
+  return { errors: order.map((i) => errors[i]), lines: order.map((i) => lines[i]) };
+}
+
 /**
  * The line of each error. A missing property has no line of its own, so the error points at
  * the object that lacks it ("nodes[8].label" → the line of "nodes[8]").
@@ -84,12 +99,15 @@ export function jsonPathLines(source: string): Map<string, number> {
 export function errorLines(source: string, errors: DiagramError[]): (number | undefined)[] {
   const lines = jsonPathLines(source);
   return errors.map((error) => {
-    let path = error.path;
-    while (path) {
+    // "$" is the whole document: its first line.
+    let path = error.path === "$" ? "" : error.path;
+    for (;;) {
       const line = lines.get(path);
       if (line) return line;
-      path = path.replace(/(\.[^.[\]]+|\[\d+\])$/, "");
+      const parent = path.replace(/(\.[^.[\]]+|\[\d+\])$/, "");
+      // A path that does not shorten has no parent left (a malformed one): stop, do not spin.
+      if (parent === path) return undefined;
+      path = parent;
     }
-    return undefined;
   });
 }

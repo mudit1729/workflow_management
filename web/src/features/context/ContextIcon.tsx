@@ -14,7 +14,11 @@ export function ContextIcon({
   size?: number;
   className?: string;
 }) {
-  return <KindGlyph kind={item.kind} libKind={item.libKind} size={size} className={className} />;
+  return (
+    <span data-wf="ContextIcon" className="inline-flex shrink-0">
+      <KindGlyph kind={item.kind} libKind={item.libKind} size={size} className={className} />
+    </span>
+  );
 }
 
 export function KindGlyph({

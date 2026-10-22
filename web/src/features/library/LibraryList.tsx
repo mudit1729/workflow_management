@@ -88,7 +88,7 @@ export function LibraryList({
           <ListSkeleton />
         ) : error ? (
           <EmptyState
-            icon={<TriangleAlert />}
+            icon={<TriangleAlert strokeWidth={1.75} />}
             title={error.title}
             hint={error.hint}
             action={
@@ -100,7 +100,7 @@ export function LibraryList({
         ) : items.length === 0 ? (
           total === 0 ? (
             <EmptyState
-              icon={<BookOpen />}
+              icon={<BookOpen strokeWidth={1.75} />}
               title="The library is empty"
               hint="Promote a learning or decision from an issue. It starts as a draft and waits for a reviewer."
               skill="promote-to-library"
@@ -108,7 +108,7 @@ export function LibraryList({
             />
           ) : (
             <EmptyState
-              icon={<SearchX />}
+              icon={<SearchX strokeWidth={1.75} />}
               title={query ? `Nothing matches “${query}”` : "No items match these filters"}
               hint={
                 query

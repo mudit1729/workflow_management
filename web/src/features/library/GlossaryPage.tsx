@@ -28,20 +28,26 @@ export function GlossaryPage() {
   const [q, setQ] = useGlossaryQuery();
   const { input, setInput, clear } = useSearchBox(q, setQ);
   const narrow = useMediaQuery("(max-width: 767px)");
+  const searchBox = (
+    <SearchInput
+      value={input}
+      onChange={setInput}
+      placeholder="Search the glossary"
+      shortcut={narrow ? undefined : "/"}
+    />
+  );
 
   return (
     <div data-wf="GlossaryPage" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4 sm:gap-4">
+        <h1 className="sr-only">Workdatabase · Glossary</h1>
         <ViewTabs view="workdatabase" />
-        <div className="ml-auto min-w-0 flex-1 sm:w-64 sm:flex-none">
-          <SearchInput
-            value={input}
-            onChange={setInput}
-            placeholder={narrow ? "Search" : "Search the glossary"}
-            shortcut={narrow ? undefined : "/"}
-          />
-        </div>
+        {/* The box shrinks before it overflows; on a phone it moves to a row of its own. */}
+        {!narrow && <div className="ml-auto min-w-0 max-w-64 flex-1">{searchBox}</div>}
       </header>
+      {narrow && (
+        <div className="shrink-0 border-border border-b bg-bg px-4 pt-2 pb-2.5">{searchBox}</div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <GlossaryView query={input} onClearQuery={clear} />
       </div>

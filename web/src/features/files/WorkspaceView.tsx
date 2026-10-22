@@ -1,12 +1,13 @@
 // /files: the workspace as the files it is, a Workdatabase view. A top bar (the Workdatabase tabs,
-// a one-line explanation, the Prototype chip, New file), a tree of every file at the left and the
-// open file at the right. Below 768 px the tree and the file are separate screens.
-import { FilePlus, FlaskConical, FolderTree } from "lucide-react";
+// a one-line explanation, New file), a tree of every file at the left and the open file at the
+// right. When the page is too narrow for both (under 720 px of page, rail included) the tree and
+// the file are separate screens.
+import { FilePlus, FolderTree } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, ViewTabs } from "@/components/common";
-import { Button, Chip, Tooltip } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { useElementWidth } from "@/features/library/useElementWidth";
 import { useSnapshot } from "@/lib/api";
-import { useMediaQuery } from "@/lib/hooks";
 import { flattenGroups, useFileContext } from "./context";
 import { NewFileDialog } from "./NewFileDialog";
 import { dirname } from "./paths";
@@ -19,13 +20,18 @@ const EXPLAIN =
 const PROTOTYPE_NOTE =
   "In this prototype, edits stay in this browser tab until you reset the data. On the dev server, saving a file on disk also updates the board.";
 
+/** Page width under which the tree and the file take turns: a 280 px tree leaves 440 px for a file. */
+const SPLIT_AT = 720;
+
 export interface WorkspaceViewProps {
   /** The open file (`?path=`), exactly as typed in the URL. */
   path?: string;
 }
 
 export function WorkspaceView({ path }: WorkspaceViewProps) {
-  const narrow = useMediaQuery("(max-width: 767px)");
+  const [measure, width] = useElementWidth();
+  // Before the first measurement (0) assume there is room: the layout settles before paint.
+  const narrow = width > 0 && width < SPLIT_AT;
   const nav = useFilesNav();
   const [newOpen, setNewOpen] = useState(false);
   const defaults = useDialogDefaults(path);
@@ -34,33 +40,28 @@ export function WorkspaceView({ path }: WorkspaceViewProps) {
   const newFile = () => setNewOpen(true);
 
   return (
-    <div data-wf="WorkspaceView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
+    <div
+      ref={measure}
+      data-wf="WorkspaceView"
+      className="flex h-full min-h-0 min-w-0 flex-col bg-bg"
+    >
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4">
         <h1 className="sr-only">Workdatabase · Files</h1>
         <ViewTabs view="workdatabase" />
-        <p className="hidden min-w-0 flex-1 truncate text-fg-faint text-sm min-[1360px]:block">
+        <p
+          title={PROTOTYPE_NOTE}
+          className="hidden min-w-0 flex-1 truncate text-fg-faint text-sm min-[1360px]:block"
+        >
           {EXPLAIN}
         </p>
         <span className="flex-1 min-[1360px]:hidden" />
-        <Tooltip content={PROTOTYPE_NOTE} side="bottom">
-          {/* A button is the trigger (focusable): Chip turns into a button itself when it gets an onClick. */}
-          <button
-            type="button"
-            data-wf="PrototypeChip"
-            className="inline-flex shrink-0 cursor-default rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus max-[520px]:hidden"
-          >
-            <Chip tone="outline" icon={<FlaskConical aria-hidden />}>
-              Prototype
-            </Chip>
-          </button>
-        </Tooltip>
         <Button
           variant="secondary"
           onClick={newFile}
           aria-label="New file"
           className="max-sm:w-7 max-sm:px-0"
         >
-          <FilePlus aria-hidden />
+          <FilePlus aria-hidden size={14} strokeWidth={1.75} />
           <span className="max-sm:sr-only">New file</span>
         </Button>
       </header>
@@ -85,13 +86,14 @@ export function WorkspaceView({ path }: WorkspaceViewProps) {
             ) : (
               <div className="flex h-full items-center justify-center">
                 <EmptyState
-                  icon={<FolderTree />}
+                  icon={<FolderTree strokeWidth={1.75} />}
                   title="Pick a file"
                   hint={
                     <>
                       <Code>goal.md</Code>, <Code>plan.md</Code> and <Code>current_state.md</Code>{" "}
                       drive the issue drawer. Open one to read its source, edit it, and watch the
-                      board change.
+                      board change. In this prototype, edits stay in this browser tab until you
+                      reset the data.
                     </>
                   }
                 />
@@ -115,9 +117,7 @@ export function WorkspaceView({ path }: WorkspaceViewProps) {
 
 function Code({ children }: { children: string }) {
   return (
-    <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11.5px] text-fg">
-      {children}
-    </code>
+    <code className="rounded-sm bg-muted px-1 py-px font-mono text-fg text-xs">{children}</code>
   );
 }
 

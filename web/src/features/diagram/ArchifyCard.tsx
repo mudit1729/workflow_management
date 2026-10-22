@@ -7,6 +7,7 @@
 //   unavailable  archify or node is missing: a calm note and the source, folded away
 import { ChevronRight, Maximize2, MousePointerClick, TriangleAlert } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { getMockControls, withMockControls } from "@/app/mock-controls";
 import { CopyButton } from "@/components/common";
 import {
   Button,
@@ -20,7 +21,7 @@ import type { Diagram } from "@/gen/types";
 import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { DiagramDialog } from "./DiagramDialog";
-import { DiagramErrors, UnavailableNote } from "./DiagramNotes";
+import { DiagramErrors, InlineCode, UnavailableNote } from "./DiagramNotes";
 import { JsonSource } from "./JsonSource";
 import {
   agentReport,
@@ -35,7 +36,7 @@ import {
   useDiagramTheme,
   usePostTheme,
 } from "./meta";
-import { errorLines } from "./sourceLines";
+import { orderedErrors } from "./sourceLines";
 
 export interface ArchifyCardProps {
   diagram: Diagram;
@@ -135,7 +136,7 @@ function CardHeader({
           onClick={onOpen}
           aria-label={`Open ${diagram.title} full size`}
         >
-          <Maximize2 size={13} strokeWidth={1.75} />
+          <Maximize2 size={14} strokeWidth={1.75} />
           <span className="hidden @sm:inline">Open</span>
         </Button>
         <CopyButton text={diagram.source} label="Copy JSON" />
@@ -264,7 +265,7 @@ function PreviewBody({
           className="group/open absolute inset-0 z-10 cursor-zoom-in outline-none transition-colors duration-100 hover:bg-fg/[0.015] focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
         >
           <span className="pointer-events-none absolute right-2 bottom-2 inline-flex items-center gap-1 rounded-md border border-border bg-bg/95 px-2 py-1 text-fg-muted text-xs opacity-0 transition-opacity duration-150 group-hover/open:opacity-100 group-focus-visible/open:opacity-100">
-            <MousePointerClick size={12} strokeWidth={1.75} />
+            <MousePointerClick size={14} strokeWidth={1.75} />
             Click to explore
           </span>
         </button>
@@ -276,7 +277,8 @@ function PreviewBody({
 // ---------------------------------------------------------------- invalid
 
 function InvalidBody({ diagram }: { diagram: Diagram }) {
-  const lines = useMemo(() => errorLines(diagram.source, diagram.errors), [diagram]);
+  // The errors in the order of the source, so reading the block below goes top to bottom.
+  const { errors, lines } = useMemo(() => orderedErrors(diagram.source, diagram.errors), [diagram]);
   const marked = useMemo(() => lines.filter((n): n is number => n !== undefined), [lines]);
   return (
     <div data-wf="ArchifyCardInvalid" className="flex flex-col gap-3 p-3">
@@ -284,13 +286,10 @@ function InvalidBody({ diagram }: { diagram: Diagram }) {
         <p className="font-medium text-base text-fg">Archify could not draw this diagram</p>
         <p className="text-fg-muted text-sm">
           Fix the {plural(diagram.errors.length, "error")} below in the block, then run{" "}
-          <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11.5px] text-fg">
-            wf lint --render
-          </code>
-          .
+          <InlineCode>wf lint --render</InlineCode>.
         </p>
       </div>
-      <DiagramErrors errors={diagram.errors} lines={lines} />
+      <DiagramErrors errors={errors} lines={lines} />
       <JsonSource source={diagram.source} maxHeight={200} highlight={marked} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <CopyButton variant="button" size="sm" text={agentReport(diagram)} label="Copy for agent" />
@@ -304,10 +303,32 @@ function InvalidBody({ diagram }: { diagram: Diagram }) {
 
 // ---------------------------------------------------------------- unavailable
 
+/**
+ * Prototype only: the mock ships with archify off, so diagrams show as unavailable. When the mock
+ * has a stand-in page for this diagram, one quiet button turns the archify switch on.
+ */
+function PrototypeHint({ diagram }: { diagram: Diagram }) {
+  if (!getMockControls() || !diagram.url) return null;
+  return (
+    <Button
+      data-wf="PrototypeHint"
+      variant="ghost"
+      size="sm"
+      onClick={() => withMockControls((c) => c.setArchifyAvailable(true))}
+      className="-ml-2 mt-1.5 text-fg-faint hover:text-fg"
+    >
+      Prototype: show the stand-in preview
+    </Button>
+  );
+}
+
 function UnavailableBody({ diagram }: { diagram: Diagram }) {
   return (
     <div data-wf="ArchifyCardUnavailable" className="flex flex-col gap-3 p-3">
-      <UnavailableNote facts={`${plural(diagram.nodes, "node")} · ${sourceLocation(diagram)}`} />
+      <UnavailableNote
+        facts={`${plural(diagram.nodes, "node")} · ${sourceLocation(diagram)}`}
+        hint={<PrototypeHint diagram={diagram} />}
+      />
       <Collapsible>
         <CollapsibleTrigger className="group/src -ml-1 flex h-6 cursor-default items-center gap-1 rounded-sm px-1 text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg">
           <ChevronRight

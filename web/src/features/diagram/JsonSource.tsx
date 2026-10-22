@@ -45,7 +45,7 @@ export function JsonSource({
       <pre
         ref={preRef}
         className={cn(
-          "relative overflow-auto py-3 font-mono text-[11.5px] text-fg leading-[1.6]",
+          "relative overflow-auto py-3 font-mono text-fg text-xs leading-[1.6]",
           fill && "h-full",
         )}
         style={maxHeight ? { maxHeight } : undefined}
@@ -56,8 +56,8 @@ export function JsonSource({
               key={i}
               data-marked={marked.has(i + 1) ? "" : undefined}
               className={cn(
-                "block px-3",
-                marked.has(i + 1) && "bg-danger/10 shadow-[inset_2px_0_0_var(--wf-signal-danger)]",
+                "block border-transparent border-l-2 pr-3 pl-2.5",
+                marked.has(i + 1) && "border-danger bg-danger/10",
               )}
             >
               {text || " "}

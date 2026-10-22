@@ -2,17 +2,19 @@
 // of what it links. Library items, entries and issues are RefLinks. A glossary term opens the
 // glossary, a file opens its source in the Workspace files view (a plain relative link would
 // point nowhere in the app or in the static build). A bullet this grammar does not know keeps
-// its markdown.
-import { BookA, ExternalLink, FileText } from "lucide-react";
-import type { ReactNode } from "react";
+// its markdown. Each row has a remove button on hover and focus: it takes that one bullet out
+// of goal.md, and the toast offers to put it back.
+import { BookA, ExternalLink, FileText, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
 import { KindIcon, MarkdownProse, RefLink } from "@/components/common";
-import { Chip } from "@/components/ui";
 import { filesHref, useFilesNav } from "@/features/files/useFilesNav";
+import { InlineCode, LibraryStatusChip } from "@/features/library/meta";
 import type { Diagram } from "@/gen/types";
-import { useSnapshot } from "@/lib/api";
+import { api, useSnapshot, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useGo } from "@/lib/nav";
-import { type ParsedLink, parseLinkLine } from "./links";
+import { type ParsedLink, parseLinkLine, withoutLink } from "./links";
 import { DRAFT_NOTE } from "./types";
 
 export interface LinkedContextProps {
@@ -78,13 +80,70 @@ const norm = (s: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
+interface Removal {
+  label: string;
+  run: () => void;
+  busy: boolean;
+}
+
+/**
+ * Take one bullet out of `## Links` in goal.md. The file is read fresh, the bullet cut by its
+ * text and the file written against the rev just read, so a change that landed meanwhile is a
+ * conflict, not an overwrite. Undo writes the old text back.
+ */
+function useRemoval(link: ParsedLink, dir: string): Removal {
+  const write = useWriteWorkspaceFile();
+  const [busy, setBusy] = useState(false);
+  const title = link.label || link.target;
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    const path = `${dir}/goal.md`;
+    try {
+      const file = await api.file(path);
+      const before = file.text ?? undefined;
+      const after = before === undefined ? undefined : withoutLink(before, link.line);
+      if (before === undefined || after === undefined) {
+        toast.error("Could not remove the link", {
+          description: "goal.md changed under this list. Try again in a moment.",
+        });
+        return;
+      }
+      const res = await write({ path, text: after, base_rev: file.rev });
+      if (!res) return; // the hook explained the failure
+      toast.success(`Removed ${title}`, {
+        description: "Taken out of Links in goal.md.",
+        action: {
+          label: "Undo",
+          onClick: () => void write({ path, text: before, base_rev: res.rev }),
+        },
+      });
+    } catch (err) {
+      toast.error("Could not remove the link", {
+        description: err instanceof Error ? err.message : "Try again in a moment.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { label: `Remove ${title}`, run: () => void run(), busy };
+}
+
 /** One bullet. RefLinks bring their own glyph; the other kinds put theirs in front, the same size. */
-function Row({ icon, children }: { icon?: ReactNode; children: ReactNode }) {
+function Row({
+  icon,
+  removal,
+  children,
+}: {
+  icon?: ReactNode;
+  removal?: Removal;
+  children: ReactNode;
+}) {
   return (
-    <li className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+    <li className="group/row flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
       {icon ? (
         <span className="inline-flex min-w-0 items-baseline gap-1">
-          <span aria-hidden className="flex shrink-0 translate-y-[2px] text-fg-muted">
+          <span aria-hidden className="flex shrink-0 translate-y-[3px] text-fg-muted">
             {icon}
           </span>
           {children}
@@ -92,13 +151,34 @@ function Row({ icon, children }: { icon?: ReactNode; children: ReactNode }) {
       ) : (
         children
       )}
+      {removal && (
+        <button
+          type="button"
+          aria-label={removal.label}
+          title={removal.label}
+          disabled={removal.busy}
+          onClick={removal.run}
+          className={cn(
+            "ml-auto flex size-5 shrink-0 cursor-default items-center justify-center self-center rounded-sm text-fg-faint",
+            "transition-[opacity,background-color,color] duration-100 ease-wf hover:bg-muted hover:text-fg disabled:opacity-40",
+            "opacity-0 focus-visible:opacity-100 group-focus-within/row:opacity-100 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100",
+          )}
+        >
+          <X aria-hidden size={14} strokeWidth={1.75} />
+        </button>
+      )}
     </li>
   );
 }
 
+/** The quiet words after a link. A label is markdown-light: `code` spans render as code. */
 const Faint = ({ children, mono }: { children: ReactNode; mono?: boolean }) => (
   <span className={cn("min-w-0 break-words text-fg-faint", mono && "font-mono text-xs")}>
-    {children}
+    {typeof children === "string" && !mono ? (
+      <InlineCode text={children} className="text-xs text-fg-muted" />
+    ) : (
+      children
+    )}
   </span>
 );
 
@@ -109,12 +189,13 @@ function entryKind(target: string): "decision" | "tip" | "progress" {
 }
 
 function LinkRow({ link, issueId, dir }: { link: ParsedLink; issueId: string; dir: string }) {
+  const removal = useRemoval(link, dir);
   switch (link.kind) {
     case "library":
-      return <LibraryRow link={link} issueId={issueId} />;
+      return <LibraryRow link={link} issueId={issueId} removal={removal} />;
     case "entry":
       return (
-        <Row icon={<KindIcon kind={entryKind(link.target)} size={12} />}>
+        <Row icon={<KindIcon kind={entryKind(link.target)} size={14} />} removal={removal}>
           <RefLink target={link.target} issueId={issueId} />
           {link.label && <Faint>{link.label}</Faint>}
         </Row>
@@ -122,18 +203,18 @@ function LinkRow({ link, issueId, dir }: { link: ParsedLink; issueId: string; di
     case "issue":
       // RefLink carries the status glyph of the issue itself.
       return (
-        <Row>
+        <Row removal={removal}>
           <RefLink target={link.target} issueId={issueId} />
           {link.label && <Faint>{link.label}</Faint>}
         </Row>
       );
     case "term":
-      return <TermRow link={link} />;
+      return <TermRow link={link} removal={removal} />;
     case "file":
-      return <FileRow link={link} dir={dir} />;
+      return <FileRow link={link} dir={dir} removal={removal} />;
     case "url":
       return (
-        <Row icon={<ExternalLink size={12} strokeWidth={1.75} />}>
+        <Row icon={<ExternalLink size={14} strokeWidth={1.75} />} removal={removal}>
           <a
             href={link.target}
             target="_blank"
@@ -146,7 +227,7 @@ function LinkRow({ link, issueId, dir }: { link: ParsedLink; issueId: string; di
       );
     default:
       return (
-        <Row>
+        <Row removal={removal}>
           <MarkdownProse
             md={link.line.replace(BULLET, "")}
             issueId={issueId}
@@ -158,26 +239,34 @@ function LinkRow({ link, issueId, dir }: { link: ParsedLink; issueId: string; di
   }
 }
 
-function LibraryRow({ link, issueId }: { link: ParsedLink; issueId: string }) {
+function LibraryRow({
+  link,
+  issueId,
+  removal,
+}: {
+  link: ParsedLink;
+  issueId: string;
+  removal: Removal;
+}) {
   const item = useSnapshot().data?.library.find((l) => l.id === link.target);
   const same = item && norm(item.title) === norm(link.label);
   return (
-    <Row>
+    <Row removal={removal}>
       <RefLink target={link.target} issueId={issueId} />
       {item?.status === "draft" && (
-        <Chip tone="stale" size="xs" title={DRAFT_NOTE}>
-          Draft
-        </Chip>
+        <span title={DRAFT_NOTE} className="inline-flex shrink-0 translate-y-px">
+          <LibraryStatusChip status="draft" size="xs" />
+        </span>
       )}
       {link.label && !same && <Faint>{link.label}</Faint>}
     </Row>
   );
 }
 
-function TermRow({ link }: { link: ParsedLink }) {
+function TermRow({ link, removal }: { link: ParsedLink; removal: Removal }) {
   const go = useGo();
   return (
-    <Row icon={<BookA size={12} strokeWidth={1.75} />}>
+    <Row icon={<BookA size={14} strokeWidth={1.75} />} removal={removal}>
       <button
         type="button"
         title="Open the glossary"
@@ -191,12 +280,12 @@ function TermRow({ link }: { link: ParsedLink }) {
   );
 }
 
-function FileRow({ link, dir }: { link: ParsedLink; dir: string }) {
+function FileRow({ link, dir, removal }: { link: ParsedLink; dir: string; removal: Removal }) {
   const files = useFilesNav();
   const inside = link.target.startsWith(`${dir}/`);
   const shown = inside ? link.target.slice(dir.length + 1) : link.target;
   return (
-    <Row icon={<FileText size={12} strokeWidth={1.75} />}>
+    <Row icon={<FileText size={14} strokeWidth={1.75} />} removal={removal}>
       <a
         href={filesHref(link.target)}
         onClick={(e) => {

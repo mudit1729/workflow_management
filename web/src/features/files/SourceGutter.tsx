@@ -35,8 +35,8 @@ export function diagnosticsByLine(
 
 const SEVERITY_NOUN: Record<Severity, string> = { error: "Error", warn: "Warning", info: "Info" };
 
-export function SeverityGlyph({ severity, size = 12 }: { severity: Severity; size?: number }) {
-  const p = { size, strokeWidth: 2, "aria-hidden": true } as const;
+export function SeverityGlyph({ severity, size = 14 }: { severity: Severity; size?: number }) {
+  const p = { size, strokeWidth: 1.75, "aria-hidden": true, "data-wf": "SeverityGlyph" } as const;
   if (severity === "error") return <CircleX {...p} className="text-danger" />;
   if (severity === "warn") return <TriangleAlert {...p} className="text-stale" />;
   return <Info {...p} className="text-fg-faint" />;
@@ -45,6 +45,48 @@ export function SeverityGlyph({ severity, size = 12 }: { severity: Severity; siz
 /** "S06 · Hedge word 'probably'. Fix: …" for one finding, as text. */
 export function diagnosticText(d: Diagnostic): string {
   return `${d.rule} · ${d.message}${d.fix ? ` Fix: ${d.fix}` : ""}`;
+}
+
+/** Width of the gutter for a file of `lineCount` lines: the digits, the marker and the padding. */
+export function gutterWidth(lineCount: number): string {
+  const digits = Math.max(2, String(lineCount).length);
+  return `calc(${digits}ch + 36px)`;
+}
+
+export interface GutterCellProps {
+  line: number;
+  diagnostics?: ReadonlyMap<number, Diagnostic[]>;
+  /** The line just jumped to; its number reads stronger. */
+  activeLine?: number;
+}
+
+/**
+ * One gutter row: the marker of a finding on the line, then its number, aligned with the first
+ * visual line of a wrapped line. The view and the editor draw the same cell.
+ */
+export function GutterCell({ line, diagnostics, activeLine }: GutterCellProps) {
+  const ds = diagnostics?.get(line);
+  const severity = ds ? worstSeverity(ds) : undefined;
+  return (
+    <div
+      data-gutter-line={line}
+      className="flex items-start gap-1 pr-2 pl-1.5 leading-(--wf-src-lh)"
+    >
+      <span className="flex h-(--wf-src-lh) w-4 shrink-0 items-center justify-center">
+        {ds && severity && <Marker line={line} diagnostics={ds} severity={severity} />}
+      </span>
+      <span
+        className={cn(
+          "tabular h-(--wf-src-lh) min-w-0 flex-1 text-right",
+          severity === "error" && "text-danger",
+          severity === "warn" && "text-stale",
+          line === activeLine && "font-medium text-fg",
+        )}
+      >
+        {line}
+      </span>
+    </div>
+  );
 }
 
 export interface SourceGutterProps {
@@ -59,43 +101,19 @@ export const SourceGutter = memo(function SourceGutter({
   diagnostics,
   activeLine,
 }: SourceGutterProps) {
-  const digits = Math.max(2, String(lineCount).length);
   return (
     <div
       data-wf="SourceGutter"
       className="sticky left-0 z-10 shrink-0 select-none border-border border-r bg-bg text-fg-faint"
       style={{
-        width: `calc(${digits}ch + 36px)`,
+        width: gutterWidth(lineCount),
         paddingTop: SRC_PAD,
         paddingBottom: SRC_PAD,
       }}
     >
-      {Array.from({ length: lineCount }, (_, i) => {
-        const line = i + 1;
-        const ds = diagnostics?.get(line);
-        const severity = ds ? worstSeverity(ds) : undefined;
-        return (
-          <div
-            key={line}
-            data-gutter-line={line}
-            className="flex h-(--wf-src-lh) items-center gap-1 pr-2 pl-1.5 leading-(--wf-src-lh)"
-          >
-            <span className="flex size-4 shrink-0 items-center justify-center">
-              {ds && severity && <Marker line={line} diagnostics={ds} severity={severity} />}
-            </span>
-            <span
-              className={cn(
-                "tabular min-w-0 flex-1 text-right",
-                severity === "error" && "text-danger",
-                severity === "warn" && "text-stale",
-                line === activeLine && "font-medium text-fg",
-              )}
-            >
-              {line}
-            </span>
-          </div>
-        );
-      })}
+      {Array.from({ length: lineCount }, (_, i) => (
+        <GutterCell key={i + 1} line={i + 1} diagnostics={diagnostics} activeLine={activeLine} />
+      ))}
     </div>
   );
 });

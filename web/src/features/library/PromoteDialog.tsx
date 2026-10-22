@@ -310,7 +310,7 @@ function Preview({
           <span className="min-w-0">{title}</span>
         </p>
         <p className="text-fg-muted text-sm leading-normal">
-          <InlineCode text={description} className="text-[11px]" />
+          <InlineCode text={description} className="text-xs" />
         </p>
         <p className="text-fg-faint text-sm">
           Promoted from <RefLink target={source} />

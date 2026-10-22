@@ -1,7 +1,8 @@
 // "New file": three ways to start. A new issue writes a valid goal.md (so a card appears in
 // Backlog), a change entry opens an issue's changes.md in the editor with a fresh entry at the
-// bottom, and an empty file is any .md or .toml path. The path field is always visible and
-// always validated; the helper fields above it just fill it in.
+// bottom, and an empty file is any .md or .toml path (one with a starting text, like a library
+// item, opens in the editor first so it is never saved empty). The path field is always visible
+// and always validated; the helper fields above it just fill it in.
 import { LoaderCircle } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
@@ -12,18 +13,19 @@ import { type ContextItem, toLink } from "@/features/context/types";
 import type { GroupNode } from "@/gen/types";
 import { useMe, useSnapshot, useWorkspaceFiles, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { useGo } from "@/lib/nav";
 import type { EditIntent } from "./intent";
 import { NativeSelect } from "./NativeSelect";
-import { basename, joinPath, pathHint, slugify, validateNewPath, validateSlug } from "./paths";
+import { joinPath, pathHint, slugify, validateNewPath, validateSlug } from "./paths";
 import {
   CHANGE_TITLE_PLACEHOLDER,
   changeEntry,
   goalTemplate,
   newId,
   nowTs,
+  placeholderFor,
   templateForPath,
 } from "./templates";
+import { useSavedToast } from "./useSavedToast";
 
 type Template = "issue" | "change" | "empty";
 
@@ -99,7 +101,7 @@ function NewFileForm({
   const files = useWorkspaceFiles();
   const write = useWriteWorkspaceFile();
   const me = useMe() ?? "shruti";
-  const go = useGo();
+  const savedToast = useSavedToast();
 
   const [template, setTemplate] = useState<Template>("issue");
   const [title, setTitle] = useState("");
@@ -144,7 +146,13 @@ function NewFileForm({
     : null;
   const slugError = template === "issue" && slug ? validateSlug(slug) : null;
   const hint = !pathError && path ? pathHint(path, issuesDir) : null;
+  // A path with a starting text (a library item, a plan.md) opens the editor on it: a file with
+  // lint errors is never written before the person has filled it in.
+  const libraryDir = snapshot?.config.library_dir;
+  const starter =
+    template === "empty" && path !== "" ? templateForPath(path, { author: me, libraryDir }) : "";
   const current = TEMPLATES.find((t) => t.value === template) ?? TEMPLATES[0];
+  const createLabel = starter ? "Open editor" : current.create;
 
   const ready =
     path !== "" &&
@@ -193,6 +201,12 @@ function NewFileForm({
       return;
     }
 
+    if (template === "empty" && starter) {
+      onEdit(path, { draft: starter, select: placeholderFor(path, libraryDir) });
+      close();
+      return;
+    }
+
     setBusy(true);
     try {
       let text: string;
@@ -208,13 +222,15 @@ function NewFileForm({
           dir: path.slice(0, Math.max(0, path.lastIndexOf("/"))),
         });
       } else {
-        text = templateForPath(path, { author: me });
+        text = templateForPath(path, { author: me, libraryDir });
       }
       const res = await write({ path, text });
       if (!res) return; // the hook explained the failure
-      toast.success(`Created ${basename(path)} · the board re-read it`, {
+      savedToast({
+        verb: "Created",
+        path,
+        text,
         description: id ? `${id} is in Backlog.` : undefined,
-        action: { label: "Open Workflow", onClick: () => void go.board() },
       });
       onCreated(path);
       close();
@@ -338,7 +354,7 @@ function NewFileForm({
           {busy && (
             <LoaderCircle size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />
           )}
-          {current.create}
+          {createLabel}
         </Button>
       </DialogFooter>
     </form>

@@ -94,7 +94,7 @@ export function MarkdownDocument({
 /** The grid that holds the properties of a document: two columns where there is room. */
 export function Properties({ children }: { children: ReactNode }) {
   return (
-    <div className="@container min-w-0">
+    <div data-wf="Properties" className="@container min-w-0">
       <dl
         data-wf="DocumentProperties"
         className="m-0 grid grid-cols-1 gap-x-6 gap-y-1.5 border-border border-y py-2.5 text-sm @sm:grid-cols-2"
@@ -120,6 +120,7 @@ export function Property({
 }) {
   return (
     <div
+      data-wf="Property"
       title={line ? `line ${line}` : undefined}
       className={cn("flex min-w-0 items-baseline gap-2.5", wide && "@sm:col-span-2")}
     >
@@ -152,9 +153,9 @@ function RawHeader({ entries }: { entries: FrontmatterEntry[] }) {
   return (
     <header data-wf="DocumentHeader" className="flex min-w-0 flex-col gap-2">
       {title && (
-        <h1 title={`line ${title.line}`} className="font-semibold text-fg text-lg leading-snug">
+        <h2 title={`line ${title.line}`} className="font-semibold text-fg text-lg leading-snug">
           {title.value}
-        </h1>
+        </h2>
       )}
       {description && (
         <p title={`line ${description.line}`} className="text-fg-muted text-md leading-normal">
@@ -173,7 +174,7 @@ function RawHeader({ entries }: { entries: FrontmatterEntry[] }) {
               {e.value === "" ? (
                 <span className="text-fg-faint">empty</span>
               ) : (
-                <span className="whitespace-pre-line break-words font-mono text-[12px]">
+                <span className="whitespace-pre-line break-words font-mono text-sm">
                   <Value text={e.value} />
                 </span>
               )}

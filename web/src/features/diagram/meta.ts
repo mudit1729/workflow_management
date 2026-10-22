@@ -12,6 +12,7 @@ import { type RefObject, useEffect } from "react";
 import type { Diagram, DiagramType } from "@/gen/types";
 import { useMediaQuery } from "@/lib/hooks";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
+import { orderedErrors } from "./sourceLines";
 
 export const TYPE_ICON: Record<DiagramType, LucideIcon> = {
   architecture: Network,
@@ -59,7 +60,9 @@ export function lineCount(text: string): number {
 
 /** The text of "Copy for agent": what failed, where, why, and the block itself. */
 export function agentReport(diagram: Diagram): string {
-  const errors = diagram.errors.map((e) => `${e.path}: ${e.msg}`).join("\n");
+  const errors = orderedErrors(diagram.source, diagram.errors)
+    .errors.map((e) => `${e.path}: ${e.msg}`)
+    .join("\n");
   return `archify finalize failed for ${diagram.id} (${sourceLocation(diagram)})\n${errors}\n\n${diagram.source}`;
 }
 

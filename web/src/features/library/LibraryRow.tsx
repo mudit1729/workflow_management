@@ -56,7 +56,7 @@ export function LibraryRow({ item, selected, onSelect }: LibraryRowProps) {
             {item.title}
           </span>
           <span className={cn("line-clamp-2 text-sm", retired ? "text-fg-faint" : "text-fg-muted")}>
-            <InlineCode text={item.description} className="text-[11px] text-fg-muted" />
+            <InlineCode text={item.description} className="text-xs text-fg-muted" />
           </span>
         </span>
 
@@ -69,9 +69,10 @@ export function LibraryRow({ item, selected, onSelect }: LibraryRowProps) {
             <Chip
               tone="stale"
               icon={<Hourglass aria-hidden strokeWidth={1.75} />}
-              title="Past its review date (Q013)"
+              title="Review overdue: past its review date (Q013)"
+              className="max-w-full"
             >
-              Review overdue
+              <span className="sr-only">Review </span>Overdue
             </Chip>
           )}
         </span>

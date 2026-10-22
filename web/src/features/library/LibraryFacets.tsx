@@ -61,6 +61,20 @@ export function LibraryFacets({
             onClick={() => onStatus(filters.status === s ? undefined : s)}
           />
         ))}
+        {/* Review overdue filters the same list: it sits with the statuses it narrows. */}
+        <label
+          htmlFor={overdueId}
+          className="flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-base text-fg-muted transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg"
+        >
+          <span className="min-w-0 flex-1 truncate">Review overdue</span>
+          <span className="font-normal text-fg-faint text-sm tabular">{counts.overdue}</span>
+          <Switch
+            id={overdueId}
+            checked={filters.overdue}
+            onCheckedChange={onOverdue}
+            disabled={counts.overdue === 0 && !filters.overdue}
+          />
+        </label>
       </Group>
 
       {tags.length > 0 && (
@@ -87,26 +101,13 @@ export function LibraryFacets({
         </Group>
       )}
 
-      <div className="mt-auto flex flex-col gap-2 pt-2">
-        <label
-          htmlFor={overdueId}
-          className="flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-base text-fg-muted transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg"
-        >
-          <span className="min-w-0 flex-1 truncate">Review overdue</span>
-          <span className="text-fg-faint text-sm tabular">{counts.overdue}</span>
-          <Switch
-            id={overdueId}
-            checked={filters.overdue}
-            onCheckedChange={onOverdue}
-            disabled={counts.overdue === 0 && !filters.overdue}
-          />
-        </label>
-        {active && (
+      {active && (
+        <div className="mt-auto flex flex-col pt-2">
           <Button variant="ghost" size="sm" onClick={onClear} className="justify-start">
             Clear filters
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   );
 }
@@ -192,7 +193,7 @@ export function LibraryFilterChips({
         size="sm"
         tone={filters.overdue ? "accent" : "neutral"}
         pressed={filters.overdue}
-        icon={<Hourglass aria-hidden />}
+        icon={<Hourglass aria-hidden strokeWidth={1.75} />}
         onClick={() => onOverdue(!filters.overdue)}
       >
         Review overdue <span className="font-normal opacity-60">{counts.overdue}</span>

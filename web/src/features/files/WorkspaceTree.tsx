@@ -165,7 +165,7 @@ export function WorkspaceTree({
         ) : total === 0 ? (
           <EmptyState
             compact
-            icon={<FilePlus />}
+            icon={<FilePlus strokeWidth={1.75} />}
             title="No files yet"
             hint="A folder with a goal.md becomes an issue on the board."
             action={

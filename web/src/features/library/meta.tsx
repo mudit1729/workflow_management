@@ -59,21 +59,24 @@ export function libraryPath(kind: LibraryKind, slug: string): string {
 /** draft = outline, reviewed = success, retired = faint and struck. */
 export function LibraryStatusChip({
   status,
+  size,
   className,
 }: {
   status: LibraryStatus;
+  /** `xs` for dense rows (pickers); the default is the list's size. */
+  size?: "xs" | "sm";
   className?: string;
 }) {
   if (status === "draft") {
     return (
-      <Chip tone="outline" className={className}>
+      <Chip tone="outline" size={size} className={className}>
         Draft
       </Chip>
     );
   }
   if (status === "reviewed") {
     return (
-      <Chip tone="success" className={className}>
+      <Chip tone="success" size={size} className={className}>
         Reviewed
       </Chip>
     );
@@ -81,6 +84,7 @@ export function LibraryStatusChip({
   return (
     <Chip
       tone="neutral"
+      size={size}
       className={cn("bg-transparent text-fg-faint line-through decoration-fg-faint/70", className)}
     >
       Retired
@@ -118,15 +122,12 @@ export function kebab(text: string, max = 56): string {
 /** Text with `inline code` spans. Descriptions and glossary meanings carry no other markup. */
 export function InlineCode({ text, className }: { text: string; className?: string }) {
   return (
-    <>
+    <span data-wf="InlineCode">
       {text.split("`").map((part, i) =>
         i % 2 === 1 ? (
           <code
             key={i}
-            className={cn(
-              "rounded-sm bg-muted px-1 py-px font-mono text-[12px] text-fg",
-              className,
-            )}
+            className={cn("rounded-sm bg-muted px-1 py-px font-mono text-sm text-fg", className)}
           >
             {part}
           </code>
@@ -134,6 +135,6 @@ export function InlineCode({ text, className }: { text: string; className?: stri
           <Fragment key={i}>{part}</Fragment>
         ),
       )}
-    </>
+    </span>
   );
 }

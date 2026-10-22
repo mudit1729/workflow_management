@@ -108,6 +108,31 @@ export function linkLine(link: ContextLink, fromDir = ""): string {
   }
 }
 
+/**
+ * The text of a goal.md without one bullet of its `## Links` section: the first line there that
+ * reads like `line`. Nothing else changes; when it was the last bullet the empty heading goes too.
+ * `undefined` when the bullet is not in the section (the file moved on).
+ */
+export function withoutLink(goal: string, line: string): string | undefined {
+  const lines = goal.split("\n");
+  const heading = lines.findIndex((l) => /^##\s+Links\s*$/.test(l));
+  if (heading === -1) return undefined;
+  let end = lines.findIndex((l, i) => i > heading && /^#{1,2}\s/.test(l));
+  if (end === -1) end = lines.length;
+  const at = lines.findIndex((l, i) => i > heading && i < end && l.trim() === line.trim());
+  if (at === -1) return undefined;
+  lines.splice(at, 1);
+  end -= 1;
+  if (lines.slice(heading + 1, end).every((l) => l.trim() === "")) {
+    // The last bullet: the heading goes with it, and the blank lines around, but one is kept
+    // between what came before and what follows (or the file's final newline).
+    let from = heading;
+    while (from > 0 && lines[from - 1].trim() === "") from--;
+    lines.splice(from, end - from, ...(from > 0 ? [""] : []));
+  }
+  return lines.join("\n");
+}
+
 // ---------------------------------------------------------------- read
 
 const BULLET = String.raw`^\s*[-*+]\s+`;

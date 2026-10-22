@@ -1,5 +1,6 @@
-// The smaller pieces of SourceView: the file kind, the meta line with its findings button, the
-// toml note, the loading skeleton, the not-found and image bodies, and the header link.
+// The smaller pieces of SourceView: the file kind, the meta line with its findings button and
+// the wrap switch, the toml note, the loading skeleton, the not-found and image bodies, and the
+// header link.
 import {
   ChevronsUpDown,
   File,
@@ -9,8 +10,9 @@ import {
   FileX,
   Info,
   Plus,
+  WrapText,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { EmptyState } from "@/components/common";
 import { Button, Skeleton } from "@/components/ui";
 import type { Diagnostic, Severity } from "@/gen/types";
@@ -35,13 +37,36 @@ export function fileKind(path: string): FileKind {
 }
 
 export function KindGlyph({ kind, ext }: { kind: FileKind; ext: string }) {
-  if (kind === "image") return <FileImage {...ICON} />;
-  if (kind === "toml" || ext === ".toml") return <FileCog {...ICON} />;
-  if (kind === "md") return <FileText {...ICON} />;
-  return <File {...ICON} />;
+  if (kind === "image") return <FileImage data-wf="KindGlyph" {...ICON} />;
+  if (kind === "toml" || ext === ".toml") return <FileCog data-wf="KindGlyph" {...ICON} />;
+  if (kind === "md") return <FileText data-wf="KindGlyph" {...ICON} />;
+  return <File data-wf="KindGlyph" {...ICON} />;
 }
 
-export function Meta({
+/** The switch that wraps long lines of the text (prose) or lets them scroll sideways (code). */
+export function WrapToggle({
+  wrap,
+  onChange,
+}: {
+  wrap: boolean;
+  onChange: (wrap: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-wf="WrapToggle"
+      aria-pressed={wrap}
+      title={wrap ? "Lines wrap. Turn off to scroll sideways." : "Wrap long lines"}
+      onClick={() => onChange(!wrap)}
+      className="inline-flex h-5 shrink-0 cursor-default items-center gap-1 rounded-sm px-1 font-medium text-fg-muted text-xs transition-colors duration-100 hover:bg-muted hover:text-fg aria-pressed:bg-muted aria-pressed:text-fg"
+    >
+      <WrapText {...ICON} aria-hidden />
+      Wrap
+    </button>
+  );
+}
+
+export function SourceMeta({
   rev,
   bytes,
   lines,
@@ -49,6 +74,9 @@ export function Meta({
   diagnostics,
   onJump,
   kind,
+  wrap,
+  onWrapChange,
+  end,
 }: {
   rev: string;
   bytes: number;
@@ -57,9 +85,17 @@ export function Meta({
   diagnostics: Diagnostic[];
   onJump: () => void;
   kind: FileKind;
+  /** With `onWrapChange`: a Wrap switch ends the line. */
+  wrap?: boolean;
+  onWrapChange?: (wrap: boolean) => void;
+  /** Something after the facts, at the right: a link to the file in Files. */
+  end?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-fg-faint text-xs">
+    <div
+      data-wf="SourceMeta"
+      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-fg-faint text-xs"
+    >
       <span className="font-mono" title={`Revision ${rev}`}>
         rev {rev.slice(0, 7)}
       </span>
@@ -67,6 +103,14 @@ export function Meta({
       {kind !== "image" && lines > 0 && <span className="tabular">{lines} lines</span>}
       {diagnostics.length > 0 && <FindingsButton diagnostics={diagnostics} onJump={onJump} />}
       {hint && <span className="min-w-0 basis-full truncate sm:basis-auto">{hint}</span>}
+      {(onWrapChange || end) && (
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {onWrapChange && kind !== "image" && lines > 0 && (
+            <WrapToggle wrap={Boolean(wrap)} onChange={onWrapChange} />
+          )}
+          {end}
+        </span>
+      )}
     </div>
   );
 }
@@ -102,7 +146,7 @@ function FindingsButton({
       <span className="tabular">
         {total} {total === 1 ? "finding" : "findings"}
       </span>
-      <ChevronsUpDown size={10} strokeWidth={2} aria-hidden className="text-fg-faint" />
+      <ChevronsUpDown {...ICON} aria-hidden className="text-fg-faint" />
     </button>
   );
 }
@@ -161,7 +205,7 @@ export function NotFound({
   return (
     <div data-wf="FileNotFound" className="flex min-h-0 flex-1 items-center justify-center">
       <EmptyState
-        icon={<FileX />}
+        icon={<FileX strokeWidth={1.75} />}
         title={
           <>
             No file at <code className="break-all font-mono text-fg">{path}</code>
@@ -212,7 +256,7 @@ export function ImageBody({
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <EmptyState
-          icon={<FileImage />}
+          icon={<FileImage strokeWidth={1.75} />}
           title="Could not load this image"
           hint={`${formatBytes(bytes)}. The file may have moved.`}
         />

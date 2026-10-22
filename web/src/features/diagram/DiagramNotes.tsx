@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 
 export function InlineCode({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11.5px] text-fg">
+    <code data-wf="InlineCode" className="rounded-sm bg-muted px-1 py-px font-mono text-fg text-xs">
       {children}
     </code>
   );
@@ -49,12 +49,23 @@ export function DiagramErrors({
   );
 }
 
-/** The calm "no preview here" message. `facts` is the quiet line under it (nodes, location). */
-export function UnavailableNote({ facts, action }: { facts: ReactNode; action?: ReactNode }) {
+/**
+ * The calm "no preview here" message. `facts` is the quiet line under it (nodes, location);
+ * `hint` is one more quiet line below that (a prototype-only way out).
+ */
+export function UnavailableNote({
+  facts,
+  action,
+  hint,
+}: {
+  facts: ReactNode;
+  action?: ReactNode;
+  hint?: ReactNode;
+}) {
   return (
     <div data-wf="DiagramUnavailable" className="flex items-start gap-3">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-fg-muted">
-        <Unplug size={16} strokeWidth={1.75} />
+        <Unplug size={14} strokeWidth={1.75} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-base text-fg">Diagram preview unavailable</p>
@@ -62,6 +73,7 @@ export function UnavailableNote({ facts, action }: { facts: ReactNode; action?: 
           archify or node not found. Run <InlineCode>wf doctor</InlineCode>.
         </p>
         <p className="mt-0.5 text-fg-faint text-xs tabular">{facts}</p>
+        {hint}
       </div>
       {action}
     </div>

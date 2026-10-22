@@ -126,7 +126,7 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
         <GlossarySkeleton />
       ) : glossary.isError && !terms ? (
         <EmptyState
-          icon={<TriangleAlert />}
+          icon={<TriangleAlert strokeWidth={1.75} />}
           title="Could not load the glossary"
           hint="The server did not answer. Your files are safe."
           action={
@@ -137,13 +137,13 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
         />
       ) : sorted.length === 0 ? (
         <EmptyState
-          icon={<BookText />}
+          icon={<BookText strokeWidth={1.75} />}
           title="No glossary yet"
           hint="Define each term once, in glossary.md. Agents and the linter use it to keep wording consistent."
         />
       ) : shown.length === 0 ? (
         <EmptyState
-          icon={<SearchX />}
+          icon={<SearchX strokeWidth={1.75} />}
           title={`No term matches “${text.trim()}”`}
           hint="Search by term, meaning or an avoided word."
         />
@@ -209,7 +209,7 @@ function TermRow({
           )}
         >
           {GLOSSARY_PATH}:{line}
-          <ArrowUpRight aria-hidden size={10} strokeWidth={2} />
+          <ArrowUpRight aria-hidden size={14} strokeWidth={1.75} />
         </FilesLink>
       )}
       <dt className="flex min-w-0 items-baseline gap-2">
@@ -233,7 +233,7 @@ function TermRow({
                 {word}
               </span>
             ))}
-            <ArrowRight aria-label="use" size={12} strokeWidth={1.75} className="text-fg-faint" />
+            <ArrowRight aria-label="use" size={14} strokeWidth={1.75} className="text-fg-faint" />
             <span className="font-medium text-fg-muted">{t.term}</span>
           </p>
         )}

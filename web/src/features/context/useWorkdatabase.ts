@@ -31,7 +31,11 @@ export interface Candidate {
   hay: string;
 }
 
-export type Workdatabase = Record<ContextGroup, Candidate[]> & { loading: boolean };
+export type Workdatabase = Record<ContextGroup, Candidate[]> & {
+  loading: boolean;
+  /** Retired library items the Library group leaves out: agents no longer read them. */
+  retiredHidden: number;
+};
 
 const candidate = (item: ContextItem, ...extra: (string | undefined)[]): Candidate => ({
   item,
@@ -137,6 +141,7 @@ export function useWorkdatabase({
       glossary: terms,
       files: fileRows.map((r) => r.c),
       decisions,
+      retiredHidden: (snapshot?.library ?? []).filter((l) => l.status === "retired").length,
       loading: !snapshot || !glossary || !files || (enabled && details.pending),
     };
   }, [snapshot, glossary, files, issues, details, issueId, enabled]);
@@ -144,7 +149,22 @@ export function useWorkdatabase({
 
 // ---------------------------------------------------------------- matching
 
-/** Every word of the query is somewhere in the item; titles and ids weigh more. */
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/** `word` occurs in `text` at the start of a word: "lease" is in "the lease_until", not in "release". */
+export function hasWordStart(text: string, word: string): boolean {
+  let at = text.indexOf(word);
+  while (at !== -1) {
+    if (at === 0 || !LETTER_OR_DIGIT.test(text.charAt(at - 1))) return true;
+    at = text.indexOf(word, at + 1);
+  }
+  return false;
+}
+
+/**
+ * Every word of the query starts a word somewhere in the item; titles and ids weigh more. A word
+ * matches from its first letter, so "sse" does not find "addresses" nor "lease" find "release".
+ */
 export function score(c: Candidate, query: string): number {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 1;
@@ -152,8 +172,8 @@ export function score(c: Candidate, query: string): number {
   const id = (c.item.id ?? "").toLowerCase();
   let total = 0;
   for (const w of words) {
-    if (!c.hay.includes(w)) return 0;
-    total += title.startsWith(w) ? 4 : title.includes(w) ? 3 : id.includes(w) ? 3 : 1;
+    if (!hasWordStart(c.hay, w)) return 0;
+    total += title.startsWith(w) ? 4 : hasWordStart(title, w) ? 3 : id.includes(w) ? 3 : 1;
   }
   return total;
 }

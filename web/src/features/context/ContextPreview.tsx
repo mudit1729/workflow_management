@@ -145,7 +145,7 @@ export function ContextPreview({
             over ? AMBER_TEXT : "text-fg-faint",
           )}
         >
-          {over && <TriangleAlert aria-hidden size={12} strokeWidth={1.75} />}
+          {over && <TriangleAlert aria-hidden size={14} strokeWidth={1.75} />}
           <span>
             ≈ {total.toLocaleString("en-US")} of {budget.toLocaleString("en-US")} tokens
           </span>
@@ -179,9 +179,9 @@ export function ContextPreview({
                 <p className={cn("flex items-start gap-1.5 text-sm", AMBER_TEXT)}>
                   <TriangleAlert
                     aria-hidden
-                    size={12}
+                    size={14}
                     strokeWidth={1.75}
-                    className="mt-[3px] shrink-0"
+                    className="mt-px shrink-0"
                   />
                   <span>
                     Over by{" "}
@@ -217,7 +217,7 @@ function PreviewLine({ row, index }: { row: PreviewRow; index: number }) {
       className={cn("flex h-7 min-w-0 items-center gap-2 text-sm", row.leftOut && "text-fg-faint")}
     >
       <span className="tabular w-3 shrink-0 text-right text-fg-faint text-xs">{index}</span>
-      <ContextIcon item={item} size={12} className="shrink-0 text-fg-muted" />
+      <ContextIcon item={item} className="shrink-0 text-fg-muted" />
       <span
         className={cn(
           "min-w-0 truncate",

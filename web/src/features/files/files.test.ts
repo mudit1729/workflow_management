@@ -16,14 +16,17 @@ import {
   validateNewPath,
   validateSlug,
 } from "./paths";
+import { savedCopy, savedTarget } from "./saved";
 import {
   appendEntry,
   CHANGE_TITLE_PLACEHOLDER,
   changeEntry,
   goalTemplate,
   issueFileTemplate,
+  libraryTemplate,
   newId,
   nowTs,
+  placeholderFor,
   randomId5,
   templateForPath,
   titleFromSlug,
@@ -220,6 +223,97 @@ describe("templates", () => {
     expect(templateForPath("issues/wf/web/_group.md", o)).toMatch(/^id: g-[0-9a-hjkmnp-tv-z]{5}$/m);
     expect(templateForPath("notes/idea.md", o)).toBe("");
     expect(titleFromSlug("live-board-updates")).toBe("Live board updates");
+  });
+});
+
+describe("library item template", () => {
+  const o = { author: "shruti", now: Date.UTC(2026, 9, 22, 8, 35) };
+
+  it("starts a draft with every key the grammar requires", () => {
+    const text = templateForPath("library/gotchas/quote-the-handle.md", o);
+    expect(text).toMatch(/^---\nid: lib-[0-9a-hjkmnp-tv-z]{5}\n/);
+    expect(text).toContain("\ntitle: Quote the handle\n");
+    expect(text).toContain("\nkind: gotcha\n");
+    expect(text).toContain("\ndescription: Use when …\n");
+    expect(text).toContain("\nstatus: draft\n");
+    expect(text).toContain('\nauthors: ["@shruti"]\n');
+    expect(text).toContain("\ncreated: 2026-10-22\n");
+    expect(text).toContain("\n## Symptom\n");
+    expect(text.endsWith("\n")).toBe(true);
+    expect(text.endsWith("\n\n")).toBe(false);
+  });
+
+  it("takes the kind from the folder and the sections from the kind", () => {
+    expect(templateForPath("library/decisions/x.md", o)).toContain("kind: decision\n");
+    expect(templateForPath("library/decisions/x.md", o)).toContain("## Because");
+    expect(templateForPath("library/playbooks/x.md", o)).toContain("## Procedure");
+    expect(templateForPath("library/patterns/my-new-pattern.md", o)).toContain("## Rule");
+    // A folder the grammar does not know is a pattern.
+    expect(libraryTemplate({ kind: "other", title: "T", author: "shruti" })).toContain("## Rule");
+  });
+
+  it("follows the workspace's library folder", () => {
+    expect(templateForPath("lib/patterns/x.md", { ...o, libraryDir: "lib/" })).toContain(
+      "id: lib-",
+    );
+    expect(templateForPath("library/patterns/x.md", { ...o, libraryDir: "lib" })).toBe("");
+    expect(placeholderFor("library/patterns/x.md")).toBe("Use when …");
+    expect(placeholderFor("lib/patterns/x.md", "lib")).toBe("Use when …");
+    expect(placeholderFor("issues/wf/a/changes.md")).toBe(CHANGE_TITLE_PLACEHOLDER);
+  });
+
+  it("does not start other markdown files", () => {
+    expect(templateForPath("notes/idea.md", o)).toBe("");
+    expect(templateForPath("library/README.txt", o)).toBe("");
+  });
+});
+
+describe("what a save changes", () => {
+  const lib = "---\nid: lib-9vk2w\ntitle: T\n---\n\n## Rule\n";
+
+  it("names the screen that read the file again", () => {
+    expect(savedTarget("library/gotchas/quote-handles.md", lib)).toEqual({
+      kind: "library",
+      id: "lib-9vk2w",
+    });
+    expect(savedTarget("glossary.md", "")).toEqual({ kind: "glossary" });
+    expect(savedTarget("issues/wf/web/x/goal.md", "---\nid: wf-3k9x2\n---\n")).toEqual({
+      kind: "board",
+    });
+    expect(savedTarget("workflow.toml", "")).toEqual({ kind: "board" });
+    expect(savedTarget("authors.md", "")).toEqual({ kind: "board" });
+  });
+
+  it("a library file without an id yet opens the Library", () => {
+    expect(savedTarget("library/patterns/new.md", "")).toEqual({ kind: "library", id: undefined });
+    // An `id:` outside the frontmatter is not the item's id.
+    expect(savedTarget("library/patterns/new.md", "---\ntitle: T\n---\n\nid: lib-aaaaa\n")).toEqual(
+      {
+        kind: "library",
+        id: undefined,
+      },
+    );
+  });
+
+  it("follows the workspace's library folder", () => {
+    expect(savedTarget("lib/patterns/x.md", lib, "lib/").kind).toBe("library");
+    expect(savedTarget("library/patterns/x.md", lib, "lib").kind).toBe("board");
+  });
+
+  it("words the toast for each target", () => {
+    expect(savedCopy({ kind: "board" })).toEqual({
+      reread: "the board re-read it",
+      action: "Open Workflow",
+    });
+    expect(savedCopy({ kind: "library", id: "lib-9vk2w" })).toEqual({
+      reread: "the library re-read it",
+      action: "Open library item",
+    });
+    expect(savedCopy({ kind: "library" }).action).toBe("Open Library");
+    expect(savedCopy({ kind: "glossary" })).toEqual({
+      reread: "the glossary re-read it",
+      action: "Open Glossary",
+    });
   });
 });
 
