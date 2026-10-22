@@ -7,3 +7,4 @@ web/test-results/
 web/playwright-report/
 .DS_Store
 *.log
+web/.vitest/
