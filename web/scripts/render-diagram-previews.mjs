@@ -5,19 +5,22 @@
 // diagrams. The blocks live in the markdown of the workspace (```archify <type> id=<id> in the
 // goal.md and plan.md files under mock/workspace/issues, contract 1.5); this script reads them
 // from there and draws each valid one as a small self-contained page instead (layered layout,
-// SVG curves, wf tokens, no external requests). The cards show the page when the DevPanel's
-// "Archify available" switch is on. A block with defects gets no page; the loader marks it
-// invalid with the same checks.
+// SVG curves, wf tokens, no external requests). The cards show the page while the DevPanel's
+// "Archify available" switch is on (it starts on; off is the unavailable demo). A block with
+// defects gets no page; the loader marks it invalid with the same checks.
 //
 // usage: node scripts/render-diagram-previews.mjs [--quiet]
 //   The dev server runs it again when a workspace file with an archify block changes. It writes
 //   only the files whose content differs.
 //
 // Page protocol (the bridge the daemon also injects into real archify pages):
-//   ?embed=1            hide the page header (used inside ArchifyCard)
+//   ?embed=1            hide the page header, fit the width at full type size and scroll vertically
+//                       (used inside ArchifyCard)
 //   ?theme=light|dark   initial theme
 //   -> parent           { type: "wf:size", h }      content height, once per frame
 //   <- parent           { type: "wf:theme", theme } switch theme without a reload
+//   <- parent           { type: "wf:scroll", dy }    scroll the embedded page by dy px (the card's
+//                       overlay sits above the frame and forwards its wheel events with this)
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -50,7 +53,8 @@ const CSS = `
 html{background:var(--wf-bg);scrollbar-width:thin;scrollbar-color:var(--wf-border-strong) transparent}
 body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--wf-bg);color:var(--wf-text);
 font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
-html[data-embed]{overflow:hidden}
+html[data-embed]{overflow-x:hidden;overflow-y:auto;scrollbar-width:none}
+html[data-embed]::-webkit-scrollbar{display:none}
 header.top{display:flex;align-items:center;gap:10px;height:40px;padding:0 16px;border-bottom:1px solid var(--wf-border);background:var(--wf-bg-subtle);flex:none}
 html[data-embed] header.top{display:none}
 .ttl{font-size:13px;font-weight:600}
@@ -116,6 +120,7 @@ function bridge() {
     if (d && d.type === "wf:theme" && (d.theme === "light" || d.theme === "dark")) {
       document.documentElement.setAttribute("data-theme", d.theme);
     }
+    if (d && d.type === "wf:scroll" && typeof d.dy === "number" && isFinite(d.dy)) window.scrollBy(0, d.dy);
   });
 }
 
@@ -147,7 +152,6 @@ function drawDiagram(spec) {
   var NS = "http://www.w3.org/2000/svg";
   var HUE_ORDER = [7, 3, 2, 1, 4, 5, 6, 8];
   var FONT = getComputedStyle(doc.body).fontFamily;
-  var CAP_H = 420; // the card's height cap; the page fits itself to it when embedded
   var S = EMBED
     ? { label: "500 11px " + FONT, edge: "400 10px " + FONT, labelLH: 14, noteLH: 0, padY: 5, minW: 80, maxW: 168, layerGap: 18, crossGap: 12, boundary: 22, bandLabel: 15, bandPad: 8, margin: 12 }
     : { label: "500 12.5px " + FONT, note: "400 10.5px " + FONT, edge: "400 10.5px " + FONT, labelLH: 16, noteLH: 13, padY: 8, minW: 104, maxW: 204, layerGap: 40, crossGap: 22, boundary: 22, bandLabel: 20, bandPad: 12, margin: 28 };
@@ -485,8 +489,9 @@ function drawDiagram(spec) {
   }
   var scale;
   if (EMBED) {
-    var availW = Math.max(160, innerWidth);
-    scale = Math.min(1, availW / W, Math.max(0.65, (CAP_H - 40) / H));
+    // Fit the width and keep the type at its size: a tall diagram scrolls inside the frame (a fade
+    // at the bottom edge says so) instead of shrinking until its labels cannot be read.
+    scale = Math.min(1, Math.max(160, innerWidth) / W);
   } else {
     var aw = Math.max(240, innerWidth);
     var ah = Math.max(240, innerHeight - 40 - 40 - (tint ? 28 : 0));
@@ -579,7 +584,6 @@ function drawDiagram(spec) {
     });
   }
   doc.getElementById("meta").textContent = nodes.length + " nodes · " + edges.length + " edges";
-  doc.documentElement.classList.toggle("clipped", EMBED && doc.documentElement.scrollHeight > innerHeight + 2 && innerHeight >= CAP_H - 4);
 }
 
 // ---------------------------------------------------------------- page
@@ -588,9 +592,12 @@ function run(spec) {
   var root = document.documentElement;
   var queued = false;
   var lastW = -1;
-  // A soft fade at the bottom edge when an embedded page is taller than its frame.
+  // A soft fade at the bottom edge while an embedded page has more below the frame.
   function clip() {
-    root.classList.toggle("clipped", root.hasAttribute("data-embed") && document.body.getBoundingClientRect().height > innerHeight + 2);
+    root.classList.toggle(
+      "clipped",
+      root.hasAttribute("data-embed") && root.scrollHeight > innerHeight + 2 && root.scrollTop + innerHeight < root.scrollHeight - 2
+    );
   }
   function draw() {
     queued = false;
@@ -599,6 +606,7 @@ function run(spec) {
     clip();
   }
   draw();
+  addEventListener("scroll", clip, { passive: true });
   addEventListener("resize", function () {
     clip();
     if (queued || innerWidth === lastW) return;

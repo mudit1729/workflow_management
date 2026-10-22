@@ -356,7 +356,7 @@ function EmptyStateBody() {
       <V label="skill + command" width={420}>
         <div className="rounded-md border border-border">
           <EmptyState
-            icon={<BookOpen />}
+            icon={<BookOpen strokeWidth={1.75} />}
             title="No plan yet"
             hint="A plan breaks the goal into tasks that agents can claim."
             skill="write-plan"
@@ -367,7 +367,7 @@ function EmptyStateBody() {
       <V label="with an action" width={420}>
         <div className="rounded-md border border-border">
           <EmptyState
-            icon={<FileSearch />}
+            icon={<FileSearch strokeWidth={1.75} />}
             title="No issues match"
             hint="Nothing in this view matches the filters."
             action={
@@ -387,7 +387,7 @@ function EmptyStateBody() {
         <div className="rounded-md border border-border px-3">
           <EmptyState
             compact
-            icon={<Archive />}
+            icon={<Archive strokeWidth={1.75} />}
             title="No current state yet"
             hint="An agent writes a short snapshot here at the end of each session."
             skill="write-current-state"
@@ -441,7 +441,7 @@ function KindIconBody() {
       <V label="library kinds" width={300}>
         <KindGrid kinds={["pattern", "playbook", "gotcha", "decision"]} />
       </V>
-      <V label="16 and 20 px">
+      <V label="size variants · 14 px is the default">
         <Row>
           <KindIcon kind="verify" size={16} />
           <KindIcon kind="failure" size={20} />

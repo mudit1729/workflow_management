@@ -79,6 +79,24 @@ describe("the move flow", () => {
     expect((await api.issue("wf-3k9x2")).summary.status).toBe("review");
   });
 
+  test("a move that worked toasts, and Undo writes the old status back", async () => {
+    requestMove(cachedIssue("wf-3k9x2"), "review");
+    await settle();
+    expect(toasts).toHaveBeenCalledTimes(1);
+    const [message, options] = toasts.mock.calls[0];
+    expect(message).toBe("Moved wf-3k9x2 to Review");
+    expect(options.description).toBe(cachedIssue("wf-3k9x2").title);
+    expect(options.action.label).toBe("Undo");
+    expect(cachedIssue("wf-3k9x2").status).toBe("review");
+
+    options.action.onClick();
+    await settle();
+    await settle();
+    expect(cachedIssue("wf-3k9x2").status).toBe("in_progress");
+    expect((await api.issue("wf-3k9x2")).summary.status).toBe("in_progress");
+    expect(toasts.mock.calls[1][0]).toBe("Moved wf-3k9x2 back to In progress");
+  });
+
   test("an illegal move opens the gate; confirming forces it", async () => {
     const issue = cachedIssue("wf-ss0lo");
     requestMove(issue, "done");

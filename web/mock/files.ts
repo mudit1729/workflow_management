@@ -1,7 +1,7 @@
 // The file API of the mock server (a prototype endpoint set beyond contract 1.10, see
 // `src/lib/api/client.ts`): list the files of the workspace, read one, write one, delete one.
 // The text is the working copy of the store; the findings per file are the ones the issue
-// views show, so the Workspace files view and the drawer always agree.
+// views show, so the Workdatabase · Files view and the drawer always agree.
 import type { Diagnostic } from "@/gen/types";
 import { NotFoundError } from "@/lib/api/error";
 import type { WorkspaceFile, WorkspaceFileInfo } from "@/lib/api/types";

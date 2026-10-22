@@ -190,13 +190,13 @@ function ChipBody() {
       </V>
       <V label="with an icon">
         <Row>
-          <Chip tone="accent" icon={<Check />}>
+          <Chip tone="accent" icon={<Check size={12} strokeWidth={1.75} />}>
             verified
           </Chip>
-          <Chip tone="danger" icon={<X />}>
+          <Chip tone="danger" icon={<X size={12} strokeWidth={1.75} />}>
             fail
           </Chip>
-          <Chip icon={<FileText />}>goal.md</Chip>
+          <Chip icon={<FileText size={12} strokeWidth={1.75} />}>goal.md</Chip>
         </Row>
       </V>
       <V label="as a toggle (onClick, pressed)">
@@ -353,7 +353,7 @@ function TabsBody() {
       <V label="with a disabled tab" width={320}>
         <Tabs defaultValue="a">
           <TabsList>
-            <TabsTrigger value="a">Items</TabsTrigger>
+            <TabsTrigger value="a">Library</TabsTrigger>
             <TabsTrigger value="b">Glossary</TabsTrigger>
             <TabsTrigger value="c" disabled>
               Archive
@@ -787,16 +787,16 @@ function InlineCommand({ start = "" }: { start?: string }) {
         <CommandList>
           <CommandEmpty>Nothing found.</CommandEmpty>
           <CommandGroup heading="Issues">
-            <CommandItem hint="wf-3k9x2" icon={<FileText />}>
+            <CommandItem hint="wf-3k9x2" icon={<FileText {...ICON} />}>
               Live board updates
             </CommandItem>
-            <CommandItem hint="wf-c2pn6" icon={<FileText />}>
+            <CommandItem hint="wf-c2pn6" icon={<FileText {...ICON} />}>
               Command palette
             </CommandItem>
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Actions">
-            <CommandItem shortcut="n" icon={<Plus />}>
+            <CommandItem shortcut="n" icon={<Plus {...ICON} />}>
               New issue
             </CommandItem>
             <CommandItem shortcut="mod+b">Toggle the sidebar</CommandItem>

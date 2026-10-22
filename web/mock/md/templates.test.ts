@@ -1,4 +1,4 @@
-// Path kinds and new-file templates: what the Workspace files view needs to label a file and to
+// Path kinds and new-file templates: what the Workdatabase · Files view needs to label a file and to
 // start a new one. Every template must load without an error finding.
 import { describe, expect, test } from "vitest";
 import { toDate, toTs } from "../time";

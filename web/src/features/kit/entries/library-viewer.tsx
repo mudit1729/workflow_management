@@ -1,5 +1,5 @@
 // Kit entries for the markdown-grounded library: the document viewer, the source-line tag and the
-// Glossary page. The documents are real files of the mock workspace; edit one in Workspace files
+// Glossary page. The documents are real files of the mock workspace; edit one in Workdatabase · Files
 // and the page here changes.
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -186,7 +186,7 @@ function GlossaryPageBody() {
   return (
     <V
       label="top bar with the Workdatabase tabs and search, then the terms"
-      note="Point at a term: glossary.md:line appears. Click it to open that line in Workspace files."
+      note="Point at a term: glossary.md:line appears. Click it to open that line in Workdatabase · Files."
       fill
       height={620}
     >

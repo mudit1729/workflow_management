@@ -93,6 +93,11 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     return ms > 0 ? sleep(ms) : Promise.resolve();
   };
 
+  /** A write cannot reach a server that is offline: the same toast as any failed request. */
+  const assertOnline = () => {
+    if (store.connection() === "offline") throw new Error("No connection to wf serve");
+  };
+
   /** Read after the delay, so a response always carries the state at the moment it is sent. */
   async function read<T>(fn: () => T): Promise<T> {
     await delay();
@@ -153,6 +158,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     },
     ops: async (op) => {
       await delay();
+      assertOnline();
       if (conflictNext) {
         conflictNext = false;
         throw simulatedConflict(store, op);
@@ -170,6 +176,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     file: (path) => read(() => readFile(store, path)),
     writeFile: async ({ path, text, base_rev }) => {
       await delay();
+      assertOnline();
       const checked = checkPath(path);
       if ("error" in checked) throw invalid(checked.error);
       if (store.assets()[checked.path])
@@ -181,6 +188,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     },
     deleteFile: async ({ path, base_rev }) => {
       await delay();
+      assertOnline();
       const checked = checkPath(path);
       if ("error" in checked) throw invalid(checked.error);
       if (store.text(checked.path) === undefined) throw new NotFoundError(`File ${checked.path}`);

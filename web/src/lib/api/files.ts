@@ -1,4 +1,4 @@
-// Hooks of the Workspace files view: list the files, read one, save one, delete one. The
+// Hooks of the Workdatabase · Files view: list the files, read one, save one, delete one. The
 // markdown files are the source of truth, so a save here changes the board: the store
 // re-reads the workspace and every view updates through the live stream.
 //
@@ -51,7 +51,7 @@ export async function writeWorkspaceFile(args: {
     refreshAfterWrite();
     if (isConflictError(err)) {
       toast.warning(`${err.body.reason}. Your save was refused.`, {
-        description: "Reload the file to see the new text, or save again to overwrite it.",
+        description: "Use Reload to see the new text, or Overwrite to keep yours.",
         duration: 10_000,
       });
     } else if (isUnprocessableError(err)) {

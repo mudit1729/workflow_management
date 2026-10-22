@@ -4,11 +4,13 @@ This folder is a real `wf` workspace (`wf_format = 1`): markdown files and one `
 **It is the only source of truth of the mock world.** The prototype has no other data. Boards, cards,
 signals, lint, the inbox and the library are all read from these files.
 
-An issue is a folder of markdown files, as in the product. A text editor is enough:
+In the browser the workspace has two views. **Workflow** (Board, Inbox) is work in motion.
+**Workdatabase** (Library, Glossary, Files) is everything stored. An issue is a folder of markdown
+files, as in the product. A text editor is enough:
 
 - Edit any file while `pnpm dev` runs and the board updates within a second. The mock watcher
   re-reads the files, finds what changed and fades the cards that moved.
-- In the browser, open **Workspace files** to edit, create or delete a file. The board, signals,
+- In the browser, open **Workdatabase · Files** to edit, create or delete a file. The board, signals,
   lint, inbox and library follow the text. This works in the static build too.
 - Every action in the UI is a minimal text edit of these files. Ticking `SC-3` flips `[ ]` to `[x]`
   on that line of `goal.md` and changes nothing else.
@@ -57,7 +59,7 @@ ahead, and "12m ago" stays "12m ago", on any day. The files on disk never change
 Times in the files are therefore in the recording's frame. An entry stamped 5 minutes before
 `RECORDED_AT` reads "5m ago" on any day, and a lease stamped 40 minutes after it reads "40m left".
 Times you write by hand into a file on disk follow the same rule: write them relative to
-`RECORDED_AT`. The Workspace files editor in the browser shows the working copy, whose times are
+`RECORDED_AT`. The Workdatabase · Files editor in the browser shows the working copy, whose times are
 already shifted, so write times there as they read on the board.
 
 ## How the prototype reads and writes these files
@@ -69,7 +71,7 @@ already shifted, so write times there as they read on the board.
   it already holds (an echo).
 - The store (`mock/store.ts`) keeps the working copy of the files in memory. Every Op and every
   scripted live event is a minimal text edit of it (`mock/md/edit.ts`); then `loadWorkspace` and
-  `derive` run again. Edits made in the browser (Workspace files, the board) stay in memory and
+  `derive` run again. Edits made in the browser (Workdatabase · Files, the board) stay in memory and
   are never written back here. `reset()` goes back to the files as they are on disk.
 - `mock/diagram-previews.json` lists the diagrams that have a stand-in preview page. The pages in
   `public/diagrams/` are drawn from the archify blocks of `goal.md` and `plan.md` by

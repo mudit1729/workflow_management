@@ -17,7 +17,7 @@ export type OpArgs<N extends Op["op"]> = Omit<Extract<WfOp, { op: N }>, "op" | "
 
 // ---------------------------------------------------------------- workspace files
 // Prototype endpoints beyond contract 1.10: `GET /api/files`, `GET|PUT|DELETE /api/files/{path}`.
-// The Workspace files view reads and edits the markdown the board is built from.
+// The Workdatabase · Files view reads and edits the markdown the board is built from.
 
 /** One file of the workspace, as the file tree lists it. */
 export interface WorkspaceFileInfo {

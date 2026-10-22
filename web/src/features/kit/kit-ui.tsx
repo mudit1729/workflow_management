@@ -128,6 +128,7 @@ export function WhenVisible({
   return (
     <div
       ref={ref}
+      data-wf="WhenVisible"
       className="flex min-h-0 min-w-0 flex-1 flex-col"
       style={near ? undefined : { minHeight }}
     >
@@ -303,11 +304,11 @@ function VariantLabel({ element, label }: { element: string; label: string }) {
     >
       <span className="min-w-0 truncate">{label}</span>
       {copied ? (
-        <Check aria-hidden size={10} strokeWidth={2} className="shrink-0 text-status-done" />
+        <Check aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-status-done" />
       ) : (
         <Copy
           aria-hidden
-          size={10}
+          size={14}
           strokeWidth={1.75}
           className="shrink-0 opacity-0 transition-opacity duration-100 group-hover/label:opacity-100"
         />
@@ -326,7 +327,11 @@ function VariantLabel({ element, label }: { element: string; label: string }) {
 const SandboxChildren = createContext<ReactNode>(null);
 
 function SandboxHost() {
-  return <>{useContext(SandboxChildren)}</>;
+  return (
+    <div data-wf="Sandbox" className="contents">
+      {useContext(SandboxChildren)}
+    </div>
+  );
 }
 
 function makeSandboxRouter(path: string) {
@@ -377,14 +382,17 @@ export function Sandbox({
 
 // ---------------------------------------------------------------- data loaders
 
-function Loading({ height = 56 }: { height?: number }) {
+export function Loading({ height = 56 }: { height?: number }) {
   return <Skeleton className="w-full rounded-md" style={{ height, minWidth: 200 }} />;
 }
 
 /** The mock world has no such item (it was reset, or the id changed): say so, once loading is over. */
-function Missing({ what }: { what: string }) {
+export function Missing({ what }: { what: string }) {
   return (
-    <p className="rounded-md border border-border border-dashed px-3 py-2 text-fg-faint text-sm">
+    <p
+      data-wf="KitMissing"
+      className="rounded-md border border-border border-dashed px-3 py-2 text-fg-faint text-sm"
+    >
       {what} is not in the mock data.
     </p>
   );
@@ -454,10 +462,18 @@ export function WithLibraryItem({
 
 /** A row of inline items with a gap. */
 export function Row({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex flex-wrap items-center gap-3", className)}>{children}</div>;
+  return (
+    <div data-wf="Row" className={cn("flex flex-wrap items-center gap-3", className)}>
+      {children}
+    </div>
+  );
 }
 
 /** A faint caption used inside variants (axis labels in tables). */
 export function Caption({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("text-fg-faint text-xs", className)}>{children}</span>;
+  return (
+    <span data-wf="Caption" className={cn("text-fg-faint text-xs", className)}>
+      {children}
+    </span>
+  );
 }

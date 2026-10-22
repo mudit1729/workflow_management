@@ -4,7 +4,19 @@
 - kind: noun
 - means: The git repo that holds `workflow.toml`, `issues/` and `library/`. One `wf serve` serves one workspace.
 - avoid: vault
-- see: group, library item
+- see: group, library item, workflow, workdatabase
+
+## workflow
+- kind: noun
+- means: Work in motion: the Board and the Inbox of a workspace, read from its issues and their `current_state.md` files.
+- avoid: tracker
+- see: issue, workdatabase
+
+## workdatabase
+- kind: noun
+- means: Everything a workspace stores as markdown: the Library, the Glossary and the Files.
+- avoid: workspace files
+- see: library item, workflow
 
 ## group
 - kind: noun
@@ -79,7 +91,7 @@
 
 ## author
 - kind: noun
-- means: A human or an agent that writes workspace files, named by an `@handle` and listed in `authors.md`.
+- means: A human or an agent that writes files in the workspace, named by an `@handle` and listed in `authors.md`.
 - avoid: contributor
 - see: coordinator
 

@@ -1,5 +1,5 @@
 // What kind of file a workspace path is, and what a new file of that kind starts with.
-// The "Workspace files" view uses both: the kind decides how to label and check a file, and
+// The Workdatabase · Files view uses both: the kind decides how to label and check a file, and
 // the template fills the editor when someone creates a file.
 import type { LibraryKind } from "@/gen/types";
 import { newGroupFile, newIssueGoal } from "./edit";

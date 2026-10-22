@@ -37,9 +37,19 @@ export const ISSUE = {
 
 export const LIB = {
   reviewed: "lib-4tz7c",
+  /** A reviewed decision. */
+  decision: "lib-3fz8t",
   draft: "lib-7nq3d",
   retired: "lib-0rt4e",
   overdue: "lib-2hq6n",
+} as const;
+
+/** What the context entries pick: a glossary term, a doc of the rich issue and one of its decisions. */
+export const CONTEXT = {
+  term: "lease",
+  /** Relative to the rich issue's folder. */
+  file: "notes/research.md",
+  decision: "D-7f3k2",
 } as const;
 
 export const AUTHORS = [

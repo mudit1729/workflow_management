@@ -2,7 +2,7 @@
 //  - optimistic where the result is predictable (status, ticks, answers), rolled back on error;
 //  - 409 → a toast "goal.md changed by @codex — reapply?" whose action re-reads the file and retries;
 //  - 422 → a toast with the first gap or diagnostic;
-//  - success → the issue detail and the snapshot are refreshed.
+//  - success → the issue detail and the snapshot are refreshed; a status move also toasts, with Undo.
 // The hooks return plain async functions: `(args) => Promise<OpResult | undefined>`.
 // They resolve to `undefined` after showing the toast, so callers never need a try/catch.
 import { useCallback } from "react";
@@ -29,6 +29,7 @@ import type {
   TaskStatus,
   WorkspaceSnapshot,
 } from "@/gen/types";
+import { STATUS_LABEL } from "@/lib/status";
 import { api } from "./client";
 import { firstProblem, isConflictError, isUnprocessableError } from "./error";
 import { qk } from "./keys";
@@ -162,11 +163,11 @@ async function freshRev(issue: IssueId, file: string): Promise<string> {
 
 // ---------------------------------------------------------------- status
 
-/** Write a status. `force` skips the transition table and the done gate ("Move anyway"). */
-export function performMove(
+/** Write a status without announcing it. */
+function writeStatus(
   issue: IssueSummary,
   to: IssueStatus,
-  force = false,
+  force: boolean,
 ): Promise<OpResult | undefined> {
   const op: WfOp = {
     op: "set_status",
@@ -186,6 +187,48 @@ export function performMove(
         status_ref: { ...s.status_ref, rev: res.file_rev },
       })),
   });
+}
+
+/**
+ * A move that worked says so: a card that leaves for a folded column or another view would
+ * otherwise just vanish. Undo writes the previous status back with the rev the move produced.
+ */
+function announceMove(issue: IssueSummary, to: IssueStatus, res: OpResult) {
+  const id = `move-${issue.id}`;
+  toast(`Moved ${issue.id} to ${STATUS_LABEL[to]}`, {
+    id,
+    description: issue.title,
+    duration: 6000,
+    action: {
+      label: "Undo",
+      onClick: () => {
+        const moved: IssueSummary = {
+          ...issue,
+          status: to,
+          status_ref: { ...issue.status_ref, rev: res.file_rev },
+        };
+        void writeStatus(moved, issue.status, true).then((back) => {
+          if (back)
+            toast(`Moved ${issue.id} back to ${STATUS_LABEL[issue.status]}`, {
+              id,
+              description: issue.title,
+              duration: 3000,
+            });
+        });
+      },
+    },
+  });
+}
+
+/** Write a status. `force` skips the transition table and the done gate ("Move anyway"). */
+export async function performMove(
+  issue: IssueSummary,
+  to: IssueStatus,
+  force = false,
+): Promise<OpResult | undefined> {
+  const res = await writeStatus(issue, to, force);
+  if (res) announceMove(issue, to, res);
+  return res;
 }
 
 // ---------------------------------------------------------------- criteria

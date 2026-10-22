@@ -115,6 +115,7 @@ export interface StoreOptions {
   clock?: () => number;
   /** The workspace on disk (recording-frame times). Default: the files under `mock/workspace`. */
   disk?: WorkspaceDisk;
+  /** Is archify available? Default false: archify is not installed here, so diagrams start unavailable. */
   archify?: boolean;
 }
 

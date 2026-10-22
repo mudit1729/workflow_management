@@ -557,6 +557,23 @@ describe("connection", () => {
     expect(events.map((e) => e.event)).toEqual(["delta", "activity", "delta", "activity"]);
   });
 
+  test("writes fail while offline, leave the files alone, and work again when live", async () => {
+    const before = (await server.snapshot()).rev;
+    server.controls.setConnection("offline");
+    await expect(move("wf-3k9x2", "review")).rejects.toThrow("No connection to wf serve");
+    await expect(server.writeFile({ path: "notes.md", text: "# Notes\n" })).rejects.toThrow(
+      "No connection to wf serve",
+    );
+    await expect(server.deleteFile({ path: "README.md" })).rejects.toThrow(
+      "No connection to wf serve",
+    );
+    // Reads still answer: the page shows what it last knew.
+    expect((await server.snapshot()).rev).toBe(before);
+
+    server.controls.setConnection("live");
+    expect((await move("wf-3k9x2", "review")).issue?.status).toBe("review");
+  });
+
   test("a gap beyond the ring buffer asks for a resync", async () => {
     server = createMockServer({ latency: 0, ringSize: 4 });
     const { events, stop } = record();

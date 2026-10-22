@@ -21,7 +21,7 @@ Store the blake3 hash of every file you write. When the watcher reports that fil
 
 ## When to use
 
-A daemon that writes workspace files and also rebuilds its index from watcher events.
+A daemon that writes files in the workspace and also rebuilds its index from watcher events.
 
 ## Example
 
