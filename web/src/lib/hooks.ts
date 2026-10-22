@@ -86,7 +86,9 @@ function dialogOpen(): boolean {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  if (e.defaultPrevented && e.key !== "Escape") return;
+  // A handled key stays handled. In particular Radix prevents default on the Escape that
+  // dismisses a menu, popover or dialog, and that same press must not also close the drawer.
+  if (e.defaultPrevented) return;
   const token = keyToken(e);
   const typing = isTyping(e.target);
   const inDialog = dialogOpen();
