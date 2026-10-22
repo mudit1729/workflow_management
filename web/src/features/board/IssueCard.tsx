@@ -1,5 +1,7 @@
 // IssueCard: one issue on the board. Calm by default (title, path, progress);
 // signals appear only when present; the hover footer adds tasks and last activity.
+// The footer is an overlay that grows from the card's bottom edge: the card never changes
+// height, so nothing below it moves while the pointer sweeps down a column.
 import {
   Ban,
   CircleAlert,
@@ -51,6 +53,12 @@ export interface IssueCardProps {
 
 const ICON = { size: 12, strokeWidth: 1.75 } as const;
 
+/** Touch screens and phones have no hover: the footer is the card's last row, always open. */
+const FOOTER_IN_FLOW = [
+  "max-md:static max-md:mt-2 max-md:grid-rows-[1fr]",
+  "[@media(hover:none)]:static [@media(hover:none)]:mt-2 [@media(hover:none)]:grid-rows-[1fr]",
+].join(" ");
+
 export function IssueCard({
   issue,
   selected,
@@ -91,6 +99,12 @@ export function IssueCard({
   const path = relativeGroupPath(issue.group_path, board?.basePath ?? []);
   const holders = issue.lease_holders;
   const chips = signalChips(issue);
+  const lintDot = issue.lint.error + issue.lint.warn > 0;
+  // In the Blocked column the header already says it; what helps is who blocks it.
+  const blockedBy =
+    issue.status === "blocked" && issue.blocked_by.length > 0
+      ? { first: issue.blocked_by[0], more: issue.blocked_by.length - 1 }
+      : null;
   const last = issue.last_activity;
 
   const open = () => (onOpen ? onOpen(issue) : openIssue(issue.id));
@@ -157,7 +171,6 @@ export function IssueCard({
       )}
 
       <div className="flex items-start gap-2">
-        <PriorityGlyph priority={issue.priority} />
         <a
           data-card-link
           href={href}
@@ -189,41 +202,64 @@ export function IssueCard({
 
       <div className="mt-1 flex min-w-0 items-center gap-2 text-fg-faint text-xs">
         {path.length > 0 && <GroupPath path={path} className="min-w-0 truncate" />}
-        <span className="ml-auto shrink-0 font-mono tabular">{issue.id}</span>
+        {blockedBy && (
+          <span
+            data-wf="BlockedBy"
+            title={`Blocked by ${issue.blocked_by.join(", ")}`}
+            className="shrink-0"
+          >
+            by <span className="font-mono tabular">{blockedBy.first}</span>
+            {blockedBy.more > 0 && <span className="tabular"> +{blockedBy.more}</span>}
+          </span>
+        )}
+        {/* Quiet marks sit left of the id: a lint dot, who holds the lease, the priority. */}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {lintDot && (
+            <LintBadge
+              counts={issue.lint}
+              variant="dot"
+              className="size-3 bg-clip-content p-[3px]"
+            />
+          )}
+          {holders.length > 0 && <AuthorStack handles={holders} max={3} size="xs" />}
+          <PriorityGlyph priority={issue.priority} />
+          <span className="font-mono tabular">{issue.id}</span>
+        </span>
       </div>
 
-      {(chips.length > 0 || holders.length > 0) && (
-        <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          {/* Wrap rather than clip: a hidden signal is worse than a second row. */}
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
-            {chips}
-          </div>
-          {holders.length > 0 && (
-            <span className="shrink-0">
-              <AuthorStack handles={holders} max={3} size="xs" />
-            </span>
-          )}
-        </div>
+      {chips.length > 0 && (
+        // Wrap rather than clip: a hidden signal is worse than a second row.
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">{chips}</div>
       )}
 
-      {/* Hover / focus footer: animates 0 → auto height with the grid-rows trick. */}
+      {/* Hover / focus footer. An overlay on the card's bottom edge, so the card keeps its
+          height. It grows from 0 with the grid-rows trick. One card shows it at a time: the
+          hovered one while the pointer is the last input, the focused one while the keyboard
+          is (data-input on the board). Below 768 px, and without hover, it is a plain last row. */}
       <div
         data-wf="IssueCardFooter"
         data-expanded={menu.open || undefined}
         className={cn(
-          "grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-wf",
-          "group-focus-within/card:grid-rows-[1fr] group-hover/card:grid-rows-[1fr] data-[expanded]:grid-rows-[1fr]",
+          "absolute inset-x-0 bottom-0 z-10 grid grid-rows-[0fr] rounded-b-[calc(var(--wf-radius-md)-1px)] bg-inherit",
+          "transition-[grid-template-rows] duration-100 ease-wf",
+          "data-[expanded]:grid-rows-[1fr]",
+          "not-in-data-[input=keyboard]:group-hover/card:grid-rows-[1fr]",
+          "not-in-data-[input=pointer]:group-has-[:focus-visible]/card:grid-rows-[1fr]",
+          FOOTER_IN_FLOW,
         )}
       >
-        <div className="min-h-0 overflow-hidden">
-          <div className="mt-2 flex items-center gap-2 border-border border-t pt-1.5 text-fg-muted text-xs">
+        <div className="min-h-0 overflow-hidden rounded-b-[inherit]">
+          <div className="flex h-7.5 items-center gap-2 border-border border-t px-3 text-fg-muted text-xs max-md:h-7 max-md:px-0 [@media(hover:none)]:h-7 [@media(hover:none)]:px-0">
             <span className="min-w-0 truncate tabular">{taskLine(issue)}</span>
             {last && (
               <span
                 className="ml-auto flex shrink-0 items-center gap-1.5 text-fg-faint"
                 title={last.title}
               >
-                <AuthorChip handle={last.author} variant="avatar" size="xs" />
+                {/* The lease avatars above already say who is working on it. */}
+                {!holders.includes(last.author) && (
+                  <AuthorChip handle={last.author} variant="avatar" size="xs" />
+                )}
                 <RelativeTime ts={last.ts} />
               </span>
             )}
@@ -243,7 +279,7 @@ export function IssueCard({
                 tabIndex={tabIndex}
                 aria-label={`Actions for ${issue.id}`}
                 className={cn(
-                  "-mr-1.5 grid size-6 shrink-0 place-items-center rounded-sm text-fg-muted",
+                  "-mr-1.5 grid size-6 shrink-0 place-items-center rounded-sm text-fg-muted max-md:mr-0 [@media(hover:none)]:mr-0",
                   "transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg",
                   "data-[state=open]:bg-muted data-[state=open]:text-fg",
                   !last && "ml-auto",
@@ -261,7 +297,7 @@ export function IssueCard({
 
 // ---------------------------------------------------------------- parts
 
-/** Urgent: a filled danger tile with "!". High: three ascending bars. Others: nothing. */
+/** Urgent: a filled danger tile with "!". High: three ascending bars. Others: nothing. Sits in the id row, so titles share one left edge. */
 function PriorityGlyph({ priority }: { priority: Priority }) {
   if (priority === "urgent") {
     return (
@@ -270,7 +306,7 @@ function PriorityGlyph({ priority }: { priority: Priority }) {
         role="img"
         aria-label="Urgent priority"
         title="Urgent"
-        className="mt-0.5 grid size-[14px] shrink-0 place-items-center rounded-[3px] bg-danger font-semibold text-[10px] text-accent-fg leading-none"
+        className="grid size-[14px] shrink-0 place-items-center rounded-[3px] bg-danger font-semibold text-[10px] text-accent-fg leading-none"
       >
         !
       </span>
@@ -283,7 +319,7 @@ function PriorityGlyph({ priority }: { priority: Priority }) {
         role="img"
         aria-label="High priority"
         viewBox="0 0 14 14"
-        className="mt-0.5 size-[14px] shrink-0 text-fg-muted"
+        className="size-[14px] shrink-0 text-fg-muted"
       >
         <title>High priority</title>
         <rect x="1.5" y="8" width="3" height="4.5" rx="0.75" fill="currentColor" />
@@ -304,7 +340,7 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-/** Signal chips in a fixed order; each only when the signal is present. */
+/** Signal chips in a fixed order; each only when the signal is present. The lint dot is not one: it sits in the id row. */
 function signalChips(issue: IssueSummary): ReactNode[] {
   const s = issue.signals;
   const out: ReactNode[] = [];
@@ -314,31 +350,37 @@ function signalChips(issue: IssueSummary): ReactNode[] {
       s.needs_you_blocking > 0
         ? `${plural(s.needs_you, "open request")} · ${s.needs_you_blocking} blocking`
         : plural(s.needs_you, "open request");
+    const blocking = s.needs_you_blocking > 0;
     out.push(
       <Chip
         key="needs-you"
         data-wf="NeedsYouChip"
         tone="accent"
-        size="xs"
+        size="sm"
         icon={<MessageCircleQuestionMark {...ICON} />}
         title={title}
+        // A request that blocks work reads as a bolder count inside a faintly ringed chip.
+        className={cn(blocking && "ring-1 ring-accent/35 ring-inset")}
       >
-        <span className="tabular">{s.needs_you}</span>
-        {s.needs_you_blocking > 0 && (
-          <span aria-hidden className="ml-0.5 inline-block size-1.5 rounded-full bg-accent" />
-        )}
+        <span className={cn("tabular", blocking && "font-semibold")}>{s.needs_you}</span>
         <span className="sr-only">{title}</span>
       </Chip>,
     );
   }
 
-  if (issue.blocked_by.length > 0 && issue.status !== "done" && issue.status !== "cancelled") {
+  // In the Blocked column the header says it already; the card shows who blocks it instead.
+  if (
+    issue.blocked_by.length > 0 &&
+    issue.status !== "blocked" &&
+    issue.status !== "done" &&
+    issue.status !== "cancelled"
+  ) {
     out.push(
       <Chip
         key="blocked"
         data-wf="BlockedChip"
         tone="danger"
-        size="xs"
+        size="sm"
         icon={<Ban {...ICON} />}
         title={`Blocked by ${issue.blocked_by.join(", ")}`}
       >
@@ -354,7 +396,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
         key="stale"
         data-wf="StaleChip"
         tone="stale"
-        size="xs"
+        size="sm"
         icon={<Hourglass {...ICON} />}
         title="No change entry or state update within the staleness window (Q003)"
       >
@@ -369,7 +411,7 @@ function signalChips(issue: IssueSummary): ReactNode[] {
         key="lease"
         data-wf="LeaseExpiredChip"
         tone="stale"
-        size="xs"
+        size="sm"
         icon={<TimerOff {...ICON} />}
         title="A lease ran out without a heartbeat (Q004). Another agent can steal it."
       >
@@ -386,17 +428,13 @@ function signalChips(issue: IssueSummary): ReactNode[] {
         key="unmet"
         data-wf="CriteriaUnmetChip"
         tone="danger"
-        size="xs"
+        size="sm"
         icon={<CircleAlert {...ICON} />}
         title={`Marked done, but ${unmet} of ${c.total} criteria are not verified (Q001)`}
       >
         {unmet === 1 ? "1 criterion unmet" : `${unmet} criteria unmet`}
       </Chip>,
     );
-  }
-
-  if (issue.lint.error + issue.lint.warn > 0) {
-    out.push(<LintBadge key="lint" counts={issue.lint} variant="dot" />);
   }
 
   return out;

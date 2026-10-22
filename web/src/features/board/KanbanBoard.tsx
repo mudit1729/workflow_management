@@ -2,7 +2,15 @@
 // - columns: horizontal scroller of status columns, each body scrolls on its own
 // - swimlanes: sticky column titles, one band per child group; the board scrolls both ways
 // - mobile (<768 px): one column at a time with a status switcher
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { StatusIcon } from "@/components/common";
 import { Segmented, Skeleton } from "@/components/ui";
 import type { IssueStatus } from "@/gen/types";
@@ -14,7 +22,13 @@ import { useBoardDnd, useCardAutoScroll } from "./dnd";
 import { type BoardLane, bucketByStatus } from "./filter";
 import { ColumnHeader, FoldedColumn, KanbanColumn } from "./KanbanColumn";
 import { FoldedHeader, Swimlane } from "./Swimlane";
-import { type BoardCardApi, BoardCardContext, type NavColumn, useBoardKeys } from "./useBoardKeys";
+import {
+  type BoardCardApi,
+  BoardCardContext,
+  type BoardInput,
+  type NavColumn,
+  useBoardKeys,
+} from "./useBoardKeys";
 
 export interface KanbanBoardProps {
   columns: IssueStatus[];
@@ -56,7 +70,9 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
     const issue = byId.get(id);
     if (!issue) return;
     move(issue, to);
-    keys.setFocusedId(id);
+    // A card dropped on a folded rail vanishes: let the rail answer (focus, one pulse).
+    if (isFolded(to)) keys.focusCard(id, to);
+    else keys.setFocusedId(id);
   });
 
   const api = useMemo<BoardCardApi>(
@@ -105,6 +121,7 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
         collapsed={collapsed}
         onToggleLane={toggleLane}
         active={active}
+        input={keys.input}
       />
     );
   } else {
@@ -114,6 +131,7 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
         lane={lanes[0]}
         isFolded={isFolded}
         onToggleFold={toggleColumnFold}
+        input={keys.input}
       />
     );
   }
@@ -123,24 +141,48 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
 
 // ---------------------------------------------------------------- columns
 
+/**
+ * "Cancelled" adds a column past the right edge. When it appears, scroll it into view (and on
+ * a link that opens with it), so the toggle visibly does something.
+ */
+function useRevealCancelled(scrollRef: RefObject<HTMLDivElement | null>, shown: boolean) {
+  const before = useRef<boolean | null>(null);
+  useEffect(() => {
+    const was = before.current;
+    before.current = shown;
+    if (!shown || was === true) return;
+    // A link that opens with the column jumps; the toggle glides.
+    const quiet = was === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el?.isConnected)
+        el.scrollTo({ left: el.scrollWidth, behavior: quiet ? "auto" : "smooth" });
+    });
+  }, [scrollRef, shown]);
+}
+
 function ColumnsBoard({
   columns,
   lane,
   isFolded,
   onToggleFold,
+  input,
 }: {
   columns: IssueStatus[];
   lane: BoardLane;
   isFolded: (s: IssueStatus) => boolean;
   onToggleFold: (s: IssueStatus) => void;
+  input?: BoardInput;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useCardAutoScroll(scrollRef);
+  useRevealCancelled(scrollRef, columns.includes("cancelled"));
   return (
     <div
       ref={scrollRef}
       data-wf="KanbanBoard"
       data-layout="columns"
+      data-input={input}
       className="h-full min-h-0 min-w-0 overflow-x-auto overflow-y-hidden"
     >
       <div className="flex h-full w-max gap-2 p-3">
@@ -178,6 +220,7 @@ function SwimlaneBoard({
   collapsed,
   onToggleLane,
   active,
+  input,
 }: {
   columns: IssueStatus[];
   lanes: BoardLane[];
@@ -187,14 +230,17 @@ function SwimlaneBoard({
   collapsed: ReadonlySet<string>;
   onToggleLane: (id: string) => void;
   active: ReturnType<typeof useBoardDnd>;
+  input?: BoardInput;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useCardAutoScroll(scrollRef);
+  useRevealCancelled(scrollRef, columns.includes("cancelled"));
   return (
     <div
       ref={scrollRef}
       data-wf="KanbanBoard"
       data-layout="swimlanes"
+      data-input={input}
       className="h-full min-h-0 min-w-0 overflow-auto"
     >
       <div className="flex w-max min-w-full flex-col pb-6">

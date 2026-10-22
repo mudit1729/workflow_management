@@ -24,7 +24,7 @@ import {
 } from "./filter";
 import { BoardSkeleton, KanbanBoard } from "./KanbanBoard";
 
-const ICON = { size: 16, strokeWidth: 1.75 } as const;
+const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
   const root = data.groups;

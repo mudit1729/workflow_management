@@ -40,6 +40,38 @@ export interface BoardCardApi {
 export const BoardCardContext = createContext<BoardCardApi | null>(null);
 
 const CARD_SELECTOR = '[data-wf="IssueCard"]';
+/** The rail a folded column leaves behind: the column's own, or its header cell in swimlanes. */
+const RAIL_SELECTOR = (status: IssueStatus) =>
+  `[data-wf="FoldedColumn"][data-status="${status}"], [data-wf="FoldedHeader"][data-status="${status}"]`;
+
+/** The last kind of input: the card footer and the focus ring follow it, so one card is open. */
+export type BoardInput = "keyboard" | "pointer";
+
+/** Tracks whether the keyboard or the pointer was used last. Real pointer moves only: browsers
+ * also fire a still "move" after a scroll, which must not undo a key press. */
+function useLastInput(enabled: boolean): BoardInput | undefined {
+  const [input, setInput] = useState<BoardInput>();
+  useEffect(() => {
+    if (!enabled) return;
+    const key = (e: globalThis.KeyboardEvent) => {
+      if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
+      setInput("keyboard");
+    };
+    const move = (e: PointerEvent) => {
+      if (e.type === "pointermove" && e.movementX === 0 && e.movementY === 0) return;
+      setInput("pointer");
+    };
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("pointermove", move, { capture: true, passive: true });
+    window.addEventListener("pointerdown", move, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerdown", move, true);
+    };
+  }, [enabled]);
+  return enabled ? input : undefined;
+}
 
 function findCard(id: IssueId): HTMLElement | null {
   return document.querySelector<HTMLElement>(`${CARD_SELECTOR}[data-issue-id="${CSS.escape(id)}"]`);
@@ -52,6 +84,14 @@ function isInteractive(el: Element | null): boolean {
   );
 }
 
+/** One quiet flash on a rail that just received a card (the same fade as a live update). */
+function pulse(el: HTMLElement) {
+  el.classList.remove("wf-flash");
+  void el.offsetWidth; // restart the animation when it is pulsed twice in a row
+  el.classList.add("wf-flash");
+  window.setTimeout(() => el.classList.remove("wf-flash"), 1300);
+}
+
 export function useBoardKeys(columns: NavColumn[], enabled = true) {
   const openIssue = useOpenIssue();
   const closeIssue = useCloseIssue();
@@ -59,6 +99,7 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
   const [focusedId, setFocusedId] = useState<IssueId | null>(null);
   const [menuRequest, setMenuRequest] = useState<MenuRequest | null>(null);
   const pending = useRef<IssueId | null>(null);
+  const input = useLastInput(enabled);
 
   const locate = useCallback(
     (id: IssueId | null) => {
@@ -97,6 +138,18 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
         card.scrollIntoView({ block: "nearest", inline: "nearest" });
         pending.current = null;
         return;
+      }
+      // A card moved into a folded column (Backlog, Done) is not rendered anywhere. Keep
+      // the person's place: focus the column's rail, whose label says where the card went.
+      if (status && !card) {
+        const rail = document.querySelector<HTMLElement>(RAIL_SELECTOR(status));
+        if (rail) {
+          rail.focus({ preventScroll: true });
+          rail.scrollIntoView({ block: "nearest", inline: "nearest" });
+          pulse(rail);
+          pending.current = null;
+          return;
+        }
       }
       // Virtualized columns and optimistic moves render a frame or two later.
       if (++tries < 30) requestAnimationFrame(tick);
@@ -186,5 +239,6 @@ export function useBoardKeys(columns: NavColumn[], enabled = true) {
     menuRequest,
     clearMenuRequest,
     selectedId: openId,
+    input,
   };
 }

@@ -86,7 +86,14 @@ export function BoardToolbar({
     >
       <h1 className="sr-only">Workflow · Board</h1>
       <ViewTabs view="workflow" />
-      <span aria-hidden className="hidden h-4 w-px shrink-0 bg-border @md/board:block" />
+      <span
+        aria-hidden
+        className={cn(
+          "hidden h-4 w-px shrink-0 bg-border",
+          // Without a selected group there is no crumb below 1024 px, so no divider either.
+          chain.length > 1 ? "@md/board:block" : "@5xl/board:block",
+        )}
+      />
       <GroupCrumbs chain={chain} onGroup={(group) => setSearch({ group })} />
       <SummaryLine summary={summary} scopedTotal={scopedTotal} filtered={filtered} />
 
@@ -98,7 +105,7 @@ export function BoardToolbar({
           placeholder="Filter issues"
           aria-label="Filter issues by id, title or label"
           shortcut="/"
-          className="w-24 @xl/board:w-40 @6xl/board:w-52"
+          className="w-24 @3xl/board:w-40 @6xl/board:w-52"
         />
 
         <AuthorFilter
@@ -122,7 +129,7 @@ export function BoardToolbar({
             aria-pressed={showCancelled}
             aria-label="Show cancelled issues"
             onClick={() => setSearch({ show: showCancelled ? undefined : "cancelled" })}
-            className="hidden @xl/board:inline-flex"
+            className="hidden @3xl/board:inline-flex"
           >
             <CircleX {...ICON} />
             <span className="hidden @4xl/board:inline">Cancelled</span>
@@ -155,8 +162,9 @@ function GroupDot({ color }: { color: number }) {
 
 /**
  * The scope breadcrumb. Where the board has the room (1152 px and up) it shows the whole chain;
- * narrower, it shows only the current scope so it never fights the filters for space. The full
- * path stays in the tooltip.
+ * narrower, it shows only the current scope (a quiet label, so it does not pass for a tab) so it
+ * never fights the filters for space. With no group selected it says only "All issues", which the
+ * tabs already imply: it appears from 1024 px. The full path stays in the tooltip.
  */
 function GroupCrumbs({
   chain,
@@ -168,7 +176,9 @@ function GroupCrumbs({
   const groups = chain.slice(1);
   const crumb =
     "flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-fg-muted transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg";
-  const current = "flex h-6 min-w-0 items-center gap-1.5 px-1.5 font-medium text-fg";
+  // Narrow, the scope is a quiet label with its dot, so it cannot be read as a third tab.
+  const current =
+    "flex h-6 min-w-0 items-center gap-1.5 px-1.5 font-normal text-fg-muted @6xl/board:font-medium @6xl/board:text-fg";
   const path = groups.length > 0 ? ["All issues", ...groups.map((g) => g.title)].join(" / ") : "";
 
   return (
@@ -177,17 +187,22 @@ function GroupCrumbs({
       data-wf="GroupCrumbs"
       aria-label="Board scope"
       title={path || undefined}
-      className="-m-1 min-w-0 shrink overflow-hidden p-1"
+      className={cn(
+        "-m-1 min-w-0 shrink overflow-hidden p-1",
+        // "All issues" alone says nothing a tab does not. It shows where the bar has the room
+        // (measured: narrower, the tabs, filters and the docked drawer's width squeeze it to "Al").
+        groups.length === 0 ? "hidden @5xl/board:block" : "min-w-[7ch]",
+      )}
     >
       <ol className="flex min-w-0 items-center gap-0.5 text-base">
         <li className={cn("shrink-0", groups.length > 0 && "hidden @6xl/board:block")}>
           {groups.length === 0 ? (
             <span aria-current="page" className={current}>
-              All issues
+              <span className="truncate">All issues</span>
             </span>
           ) : (
             <button type="button" className={crumb} onClick={() => onGroup(undefined)}>
-              All issues
+              <span className="truncate">All issues</span>
             </button>
           )}
         </li>
@@ -287,7 +302,7 @@ function AuthorFilter({
           ) : (
             <>
               <UsersRound {...ICON} />
-              <span className="hidden @2xl/board:inline">Author</span>
+              <span className="hidden @3xl/board:inline">Author</span>
             </>
           )}
         </Button>
@@ -341,7 +356,7 @@ function SwimlaneToggle({
       : "There are no groups to split by";
 
   return (
-    <div data-wf="SwimlaneToggle" className="hidden items-center gap-2 @xl/board:flex">
+    <div data-wf="SwimlaneToggle" className="hidden items-center gap-2 @2xl/board:flex">
       <span className="hidden text-fg-faint text-sm @5xl/board:inline">Swimlanes</span>
       <Tooltip content={tip}>
         <span className={cn("inline-flex", !canSwim && "cursor-not-allowed")}>

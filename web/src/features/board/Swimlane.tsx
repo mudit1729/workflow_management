@@ -213,6 +213,7 @@ export function FoldedHeader({
       <button
         type="button"
         data-wf="FoldedHeader"
+        data-status={status}
         onClick={onUnfold}
         aria-label={`${label}, ${count} issue${count === 1 ? "" : "s"}. Unfold column`}
         className={cn(
@@ -232,6 +233,7 @@ function LaneDot({ lane }: { lane: BoardLane }) {
   if (lane.id === DIRECT_LANE || !lane.group) {
     return (
       <span
+        data-wf="LaneDot"
         aria-hidden
         className="size-2 shrink-0 rounded-full border border-fg-faint border-dashed"
       />
@@ -239,6 +241,7 @@ function LaneDot({ lane }: { lane: BoardLane }) {
   }
   return (
     <span
+      data-wf="LaneDot"
       aria-hidden
       className="size-2 shrink-0 rounded-full"
       style={{ background: `var(--wf-hue-${lane.group.color})` }}

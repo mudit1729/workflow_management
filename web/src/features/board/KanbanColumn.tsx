@@ -182,7 +182,7 @@ export function CardStack({
   dragDisabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-[var(--wf-card-gap)]">
+    <div data-wf="CardStack" className="flex flex-col gap-[var(--wf-card-gap)]">
       {issues.map((issue, i) => (
         <div key={issue.id} className="relative">
           {landing === i && <DropLine />}
@@ -229,7 +229,7 @@ function VirtualCards({
 
   const total = virtualizer.getTotalSize();
   return (
-    <div className="relative w-full" style={{ height: total }}>
+    <div data-wf="VirtualCards" className="relative w-full" style={{ height: total }}>
       {virtualizer.getVirtualItems().map((v) => {
         const issue = issues[v.index];
         return (
