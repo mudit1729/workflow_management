@@ -156,11 +156,7 @@ export function InboxRow({ item }: InboxRowProps) {
             <AuthorChip handle={item.to} size="xs" variant="text" />
           </span>
           <Sep />
-          <span
-            className={cn(
-              waitingLong && "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]",
-            )}
-          >
+          <span className={cn(waitingLong && "text-stale-text")}>
             <Ago ts={item.asked} now={now} />
           </span>
           <Sep />

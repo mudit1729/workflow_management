@@ -317,7 +317,7 @@ function Pill({
         "inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 text-sm",
         tone === "neutral" && "text-fg-muted",
         tone === "danger" && "text-danger",
-        tone === "stale" && STALE_TEXT,
+        tone === "stale" && "text-stale-text",
       )}
     >
       {children}
@@ -363,9 +363,6 @@ function Meta({
   );
   return tip ? <Tooltip content={tip}>{meta}</Tooltip> : meta;
 }
-
-/** Amber text darkened toward the text color, so it stays readable on white (as Chip does). */
-const STALE_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
 
 const PRIORITY_LABEL: Record<Priority, string> = {
   urgent: "Urgent",
@@ -425,7 +422,7 @@ function LeasePill({ lease }: { lease: Lease }) {
       <Timer {...ICON} className={expired ? "text-stale" : "text-fg-faint"} />
       <AuthorChip handle={lease.holder} size="xs" variant="avatar" />
       <span className="text-fg-muted">@{lease.holder}</span>
-      <span className={cn("tabular", expired ? STALE_TEXT : "text-fg-faint")}>{text}</span>
+      <span className={cn("tabular", expired ? "text-stale-text" : "text-fg-faint")}>{text}</span>
     </Pill>
   );
 }

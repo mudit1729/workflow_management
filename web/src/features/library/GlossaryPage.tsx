@@ -1,6 +1,6 @@
 // The Glossary page, the second view of the Workdatabase: a 44 px top bar with the Workdatabase
 // tabs and a search box, then the terms. The terms are read from glossary.md; each one names its
-// line and opens it in Workspace files.
+// line and opens it in Workdatabase · Files.
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { ViewTabs } from "@/components/common";

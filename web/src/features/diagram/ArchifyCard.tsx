@@ -261,8 +261,12 @@ function PreviewBody({
         <button
           type="button"
           onClick={onOpen}
+          // The button covers the frame, so hand it the wheel: a page taller than the card scrolls in place.
+          onWheel={(e) =>
+            frameRef.current?.contentWindow?.postMessage({ type: "wf:scroll", dy: e.deltaY }, "*")
+          }
           aria-label={`Open ${diagram.title} full size`}
-          className="group/open absolute inset-0 z-10 cursor-zoom-in outline-none transition-colors duration-100 hover:bg-fg/[0.015] focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+          className="group/open absolute inset-0 z-raised cursor-zoom-in outline-none transition-colors duration-100 hover:bg-fg/[0.015] focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
         >
           <span className="pointer-events-none absolute right-2 bottom-2 inline-flex items-center gap-1 rounded-md border border-border bg-bg/95 px-2 py-1 text-fg-muted text-xs opacity-0 transition-opacity duration-150 group-hover/open:opacity-100 group-focus-visible/open:opacity-100">
             <MousePointerClick size={14} strokeWidth={1.75} />

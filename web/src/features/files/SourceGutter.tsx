@@ -104,7 +104,7 @@ export const SourceGutter = memo(function SourceGutter({
   return (
     <div
       data-wf="SourceGutter"
-      className="sticky left-0 z-10 shrink-0 select-none border-border border-r bg-bg text-fg-faint"
+      className="sticky left-0 z-raised shrink-0 select-none border-border border-r bg-bg text-fg-faint"
       style={{
         width: gutterWidth(lineCount),
         paddingTop: SRC_PAD,

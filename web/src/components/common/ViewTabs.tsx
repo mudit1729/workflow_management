@@ -79,7 +79,7 @@ export interface ViewCounts {
   library?: number;
   /** Glossary terms. */
   glossary?: number;
-  /** Workspace files. */
+  /** Workdatabase · Files. */
   files?: number;
   /** Errors across all workspace files (a lint dot shows when above zero). */
   fileErrors: number;

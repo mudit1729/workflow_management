@@ -15,7 +15,7 @@ import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { hoursSince, parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
-import { InlineText, STALE_TEXT } from "./CriteriaChecklist";
+import { InlineText } from "./CriteriaChecklist";
 import { NeedsYouList, TimeAgo } from "./NeedsYouList";
 import { TaskPill } from "./TaskPill";
 
@@ -182,7 +182,7 @@ function StateMeta({ state, detail }: StateSnapshotProps) {
       data-wf="StateMeta"
       className={cn(
         "mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm",
-        tinted ? STALE_TEXT : "text-fg-faint",
+        tinted ? "text-stale-text" : "text-fg-faint",
       )}
     >
       {tinted && (
@@ -282,7 +282,7 @@ function NextSteps({ steps, issueId }: { steps: string[]; issueId: string }) {
     <div data-wf="NextSteps">
       <SectionLabel>Next steps</SectionLabel>
       {steps.length === 0 ? (
-        <p className={cn("text-sm", STALE_TEXT)}>
+        <p className="text-sm text-stale-text">
           No next step written (Q008). The next agent has no lead.
         </p>
       ) : (

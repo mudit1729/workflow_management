@@ -1,6 +1,6 @@
 // The quiet tag that names the file line a block of a rendered page came from
 // ("library/gotchas/rescan-subtrees.md:14"). It sits in the page's left gutter while the pointer
-// is over a block. Clicking it opens that line: in the Workspace files view by default, or
+// is over a block. Clicking it opens that line: in the Workdatabase · Files view by default, or
 // wherever the page's owner sends it (`onJump`).
 
 import { useRouter } from "@tanstack/react-router";
@@ -33,7 +33,7 @@ export function markerText(
   return { short: `:${line}`, full };
 }
 
-/** Open `path` at `line` in the Workspace files view. Does nothing outside a router. */
+/** Open `path` at `line` in the Workdatabase · Files view. Does nothing outside a router. */
 export function useOpenInFiles(): (path: string, line: number) => void {
   const router = useRouter({ warn: false }) as
     | { navigate: (o: { to: string; search: unknown }) => Promise<void> }

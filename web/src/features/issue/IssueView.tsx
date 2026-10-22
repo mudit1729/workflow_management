@@ -296,7 +296,7 @@ function PlanOrLogColumn({ detail, counts }: { detail: IssueDetail; counts: TabC
   const view: "plan" | "log" = tab === "log" ? "log" : "plan";
   return (
     <Column label="Plan and log">
-      <div className="sticky top-0 z-10 flex h-10 items-center bg-bg px-5">
+      <div className="sticky top-0 z-raised flex h-10 items-center bg-bg px-5">
         <Segmented<"plan" | "log">
           size="sm"
           aria-label="Show plan or log"
@@ -360,7 +360,7 @@ function ColumnSection({
 }) {
   return (
     <div data-section={section} className={className}>
-      <h2 className="sticky top-0 z-10 flex h-10 items-center gap-2 bg-bg px-5 font-medium text-fg-faint text-sm">
+      <h2 className="sticky top-0 z-raised flex h-10 items-center gap-2 bg-bg px-5 font-medium text-fg-faint text-sm">
         {title}
         {meta}
       </h2>

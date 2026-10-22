@@ -240,7 +240,7 @@ export function IssueCard({
         data-wf="IssueCardFooter"
         data-expanded={menu.open || undefined}
         className={cn(
-          "absolute inset-x-0 bottom-0 z-10 grid grid-rows-[0fr] rounded-b-[calc(var(--wf-radius-md)-1px)] bg-inherit",
+          "absolute inset-x-0 bottom-0 z-raised grid grid-rows-[0fr] rounded-b-[calc(var(--wf-radius-md)-1px)] bg-inherit",
           "transition-[grid-template-rows] duration-100 ease-wf",
           "data-[expanded]:grid-rows-[1fr]",
           "not-in-data-[input=keyboard]:group-hover/card:grid-rows-[1fr]",

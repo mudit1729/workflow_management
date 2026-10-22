@@ -10,7 +10,7 @@ import { Button, Kbd, Tooltip } from "@/components/ui";
 import { isConflictError, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useHotkey } from "@/lib/hooks";
-import { lineAt } from "./lines";
+import { lineAt, lineStart } from "./lines";
 import { basename } from "./paths";
 import { GutterCell, gutterWidth, SourceGutter, SRC_METRICS, SRC_PAD } from "./SourceGutter";
 import { WrapToggle } from "./SourceParts";
@@ -32,6 +32,8 @@ export interface SourceEditorProps {
   gone?: boolean;
   /** Text to select on open, so a title placeholder can be overtyped. */
   select?: string;
+  /** 1-based line to put the caret on when the editor opens (used when `select` finds nothing). */
+  line?: number;
   variant: "pane" | "inline";
   /** Wrap long lines (prose). Off: they scroll sideways (code, toml). */
   wrap?: boolean;
@@ -54,6 +56,7 @@ export function SourceEditor({
   liveRev,
   gone = false,
   select,
+  line: openAtLine,
   variant,
   wrap = false,
   onWrapChange,
@@ -99,12 +102,13 @@ export function SourceEditor({
     el.focus({ preventScroll: true });
     let start = creating ? el.value.length : 0;
     let end = start;
-    if (select) {
-      const at = el.value.lastIndexOf(select);
-      if (at !== -1) {
-        start = at;
-        end = at + select.length;
-      }
+    const at = select ? el.value.lastIndexOf(select) : -1;
+    if (select && at !== -1) {
+      start = at;
+      end = at + select.length;
+    } else if (openAtLine) {
+      start = lineStart(el.value, openAtLine);
+      end = start;
     }
     el.setSelectionRange(start, end);
     if (start > 0) {
@@ -116,7 +120,7 @@ export function SourceEditor({
       el.scrollTop = Math.max(0, top - el.clientHeight / 2);
     }
     // Only on open: wrap and the draft change later without moving the caret.
-  }, [creating, select]);
+  }, [creating, select, openAtLine]);
 
   // Keep the gutter on the line the textarea shows: after a scroll, and when the mode changes.
   const syncScroll = () => {
@@ -304,7 +308,9 @@ export function SourceEditor({
 
       <div
         className={cn(
-          "relative flex overflow-hidden bg-bg text-fg",
+          // 16 px on a phone: a smaller field makes iOS zoom the page when it takes focus. The
+          // gutter and the wrap mirror live in this box, so they follow the textarea's size.
+          "relative flex overflow-hidden bg-bg text-fg max-md:text-lg",
           SRC_METRICS,
           variant === "pane"
             ? "min-h-0 flex-1"

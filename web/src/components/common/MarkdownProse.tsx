@@ -140,7 +140,7 @@ export interface MarkdownSource {
   /** Lines of the file before `md` starts (a frontmatter block that was cut off). Default 0. */
   lineOffset?: number;
   /** Called with the file line of the block whose tag was clicked. Default: open the file at that
-   *  line in the Workspace files view. */
+   *  line in the Workdatabase · Files view. */
   onJump?: (line: number) => void;
   /** Width in px of the left gutter that holds the tag (default 40). 0 turns the tag off. */
   gutter?: number;

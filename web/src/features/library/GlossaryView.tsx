@@ -1,6 +1,6 @@
 // The glossary: one term, one meaning. Each term lists the words to avoid (struck through, with an
 // arrow to the term) and links to related terms. The terms are written in glossary.md; each one
-// names its line there and opens it in Workspace files.
+// names its line there and opens it in Workdatabase · Files.
 import { ArrowRight, ArrowUpRight, BookText, Info, SearchX, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
@@ -250,7 +250,7 @@ function TermRow({
                     <button
                       type="button"
                       onClick={() => onJump(target)}
-                      className="cursor-default rounded-sm font-medium text-fg-muted underline decoration-border-strong underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:text-fg hover:decoration-fg-muted"
+                      className="inline-flex min-h-6 cursor-default items-center rounded-sm font-medium text-fg-muted underline decoration-border-strong underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:text-fg hover:decoration-fg-muted max-md:min-h-7"
                     >
                       {name}
                     </button>

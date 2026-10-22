@@ -11,18 +11,10 @@ const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 type Filter = "all" | Severity;
 
-type EditOptions = NonNullable<Parameters<ReturnType<typeof useFilesNav>["edit"]>[1]>;
-
-/**
- * Opens `path` in Workdatabase · Files with its editor on, the caret on `line`. The editor
- * reads `line` from the edit intent; until it does, the file opens at the top.
- */
+/** Opens `path` in Workdatabase · Files with its editor on, the caret on `line`. */
 export function useEditAtLine() {
   const files = useFilesNav();
-  return (path: string, line: number) => {
-    const intent: EditOptions & { line?: number } = { line };
-    return files.edit(path, intent);
-  };
+  return (path: string, line: number) => files.edit(path, { line });
 }
 
 interface LintPanelProps {

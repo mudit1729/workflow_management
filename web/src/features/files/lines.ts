@@ -30,3 +30,14 @@ export function lineAt(text: string, index: number): number {
   for (let i = 0; i < end; i++) if (text.charCodeAt(i) === 10) line++;
   return line;
 }
+
+/** The character offset where the 1-based `line` of `text` starts; the end of the text past the last line. */
+export function lineStart(text: string, line: number): number {
+  let at = 0;
+  for (let n = 1; n < line; n++) {
+    const next = text.indexOf("\n", at);
+    if (next === -1) return text.length;
+    at = next + 1;
+  }
+  return at;
+}

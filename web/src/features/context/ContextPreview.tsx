@@ -10,7 +10,6 @@ import type { LibraryItemDetail } from "@/gen/types";
 import { api, qk, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { ContextIcon } from "./ContextIcon";
-import { AMBER_TEXT } from "./ContextSearch";
 import { estimateTokens, FILE_EXCERPT_CHARS } from "./links";
 import { type ContextItem, isDraft, itemKey } from "./types";
 
@@ -142,7 +141,7 @@ export function ContextPreview({
         <span
           className={cn(
             "tabular ml-auto flex shrink-0 items-center gap-1.5 text-xs",
-            over ? AMBER_TEXT : "text-fg-faint",
+            over ? "text-stale-text" : "text-fg-faint",
           )}
         >
           {over && <TriangleAlert aria-hidden size={14} strokeWidth={1.75} />}
@@ -176,7 +175,7 @@ export function ContextPreview({
                 ))}
               </ol>
               {over && (
-                <p className={cn("flex items-start gap-1.5 text-sm", AMBER_TEXT)}>
+                <p className="flex items-start gap-1.5 text-sm text-stale-text">
                   <TriangleAlert
                     aria-hidden
                     size={14}

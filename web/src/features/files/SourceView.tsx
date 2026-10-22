@@ -1,6 +1,6 @@
 // One workspace file, as text: the header (path, rev, size, links), the text with line numbers
 // and lint markers, and the editor. Images show as images, other binaries say so. It is the same
-// component in the Workspace files pane and inline in an issue's Files tab.
+// component in the Workdatabase · Files pane and inline in an issue's Files tab.
 
 import { useBlocker, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Copy, Ellipsis, File, FileX, Pencil, Trash2 } from "lucide-react";
@@ -67,7 +67,7 @@ const EMPTY_SET: ReadonlySet<number> = new Set();
 export interface SourceViewProps {
   /** Workspace-relative path of the file. */
   path: string;
-  /** `pane` fills the Workspace files screen; `inline` sits inside an issue's Files tab. */
+  /** `pane` fills the Workdatabase · Files screen; `inline` sits inside an issue's Files tab. */
   variant?: "pane" | "inline";
   /** Shown instead of the full path (inline: the path inside the issue folder). */
   pathLabel?: string;
@@ -104,6 +104,7 @@ interface Session {
   startText?: string;
   baseRev?: string;
   select?: string;
+  line?: number;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -195,6 +196,7 @@ export function SourceView({
       startText,
       baseRev: file?.rev,
       select: pending.select,
+      line: pending.line,
     });
     clearIntent();
   }, [pending, session, query.isPending, file, gone, startSession, clearIntent]);
@@ -389,6 +391,7 @@ export function SourceView({
         liveRev={file?.rev}
         gone={gone}
         select={session.select}
+        line={session.line}
         variant={flush ? "pane" : variant}
         wrap={wrap}
         onWrapChange={setWrap}

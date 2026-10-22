@@ -44,9 +44,6 @@ export function sortSections(kind: LibraryKind, sections: LibrarySection[]): Lib
     .map(({ s }) => s);
 }
 
-/** Amber text that stays readable on white: the signal color mixed toward the text color. */
-export const STALE_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
-
 /** The DOM id of a list row, so the list can scroll a deep-linked item into view. */
 export function rowDomId(id: LibId): string {
   return `lib-row-${id}`;

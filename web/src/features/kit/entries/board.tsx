@@ -105,7 +105,7 @@ function IssueCardBody() {
         id={ISSUE.rich}
         label="hover footer (forced open)"
         footer
-        note="Tasks, ready count, last activity and the … menu."
+        note="Tasks, ready count, last activity and the … menu. The footer overlays the card's last row."
       />
     </>
   );

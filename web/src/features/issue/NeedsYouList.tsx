@@ -25,7 +25,7 @@ import type { NeedsYouItem, RequestKind, Ts } from "@/gen/types";
 import { useAnswerRequest, useMe } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs, relativeShort } from "@/lib/format";
-import { InlineText, STALE_TEXT } from "./CriteriaChecklist";
+import { InlineText } from "./CriteriaChecklist";
 
 // ---------------------------------------------------------------- time
 
@@ -241,7 +241,7 @@ function NeedsYouRow({
           <span className="sr-only">to</span>
           <AuthorChip handle={item.to} size="xs" variant="text" />
           <Sep />
-          <span className={cn(overdue && STALE_TEXT)}>
+          <span className={cn(overdue && "text-stale-text")}>
             asked <TimeAgo ts={item.asked} />
           </span>
           {!compact && (

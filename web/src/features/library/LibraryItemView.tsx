@@ -38,7 +38,7 @@ import { cn } from "@/lib/cn";
 import { STATUS_LABEL } from "@/lib/status";
 import { MarkdownDocument, Properties, Property } from "./MarkdownDocument";
 import { splitFrontmatter } from "./markdown";
-import { formatDate, InlineCode, LibraryStatusChip, STALE_TEXT, sortSections } from "./meta";
+import { formatDate, InlineCode, LibraryStatusChip, sortSections } from "./meta";
 
 /** The item as the page it renders to, or as the text it is written in. */
 export type LibraryItemMode = "rendered" | "source";
@@ -474,7 +474,7 @@ type BannerTone = "accent" | "neutral" | "stale";
 const BANNER_TONE: Record<BannerTone, { box: string; icon: string }> = {
   accent: { box: "border-accent/20 bg-accent-subtle", icon: "text-accent" },
   neutral: { box: "border-border bg-subtle", icon: "text-fg-faint" },
-  stale: { box: "border-stale/30 bg-stale/10", icon: STALE_TEXT },
+  stale: { box: "border-stale/30 bg-stale/10", icon: "text-stale-text" },
 };
 
 function Banner({
@@ -578,7 +578,7 @@ function ItemFrontmatter({
           </Property>
           <Property label="review_after" line={lines.get("review_after")}>
             {s.review_after ? (
-              <span className={cn("tabular", overdue && STALE_TEXT)}>
+              <span className={cn("tabular", overdue && "text-stale-text")}>
                 {formatDate(s.review_after)}
                 {overdue && " · overdue"}
               </span>
@@ -755,7 +755,7 @@ function Findings({ findings }: { findings: Diagnostic[] }) {
                 d.severity === "error"
                   ? "text-danger"
                   : d.severity === "warn"
-                    ? STALE_TEXT
+                    ? "text-stale-text"
                     : "text-fg-faint",
               )}
             />

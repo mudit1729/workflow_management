@@ -105,7 +105,7 @@ export function BoardToolbar({
           placeholder="Filter issues"
           aria-label="Filter issues by id, title or label"
           shortcut="/"
-          className="w-24 @3xl/board:w-40 @6xl/board:w-52"
+          className="w-24 max-md:w-28 max-md:min-[380px]:w-36 @3xl/board:w-40 @6xl/board:w-52"
         />
 
         <AuthorFilter

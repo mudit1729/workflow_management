@@ -99,6 +99,48 @@ const ACCENT: TokenRowDef[] = [
   { token: "--wf-signal-needs-you", use: "needs-you (same as accent)" },
 ];
 
+const NO_SWATCH = () => <span aria-hidden className="size-5 shrink-0" />;
+
+const READABLE: TokenRowDef[] = [
+  {
+    token: "--wf-stale-text",
+    use: "amber as text: `text-stale-text`",
+    swatch: () => <span className="font-medium text-stale-text text-xs">Aa</span>,
+  },
+  {
+    token: "--wf-success-text",
+    use: "green as text: `text-success-text`",
+    swatch: () => <span className="font-medium text-success-text text-xs">Aa</span>,
+  },
+  {
+    token: "--wf-on-hue",
+    use: "text on a hue tile: `text-on-hue`",
+    swatch: () => (
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-hue-1 font-medium text-on-hue text-xs">
+        A
+      </span>
+    ),
+  },
+  { token: "--wf-scrim", use: "behind dialogs and the phone nav: `bg-scrim`" },
+  {
+    token: "--wf-z-raised",
+    use: "sticky heads, overlays inside a panel: `z-raised`",
+    swatch: NO_SWATCH,
+  },
+  {
+    token: "--wf-z-overlay",
+    use: "sheets, the icon rail opened over the page: `z-overlay`",
+    swatch: NO_SWATCH,
+  },
+  {
+    token: "--wf-z-dialog",
+    use: "dialogs, the palette and their scrim: `z-dialog`",
+    swatch: NO_SWATCH,
+  },
+  { token: "--wf-z-popover", use: "menus, popovers, hover cards: `z-popover`", swatch: NO_SWATCH },
+  { token: "--wf-z-tooltip", use: "tooltips, always on top: `z-tooltip`", swatch: NO_SWATCH },
+];
+
 function ColorTokensBody() {
   return (
     <>
@@ -107,6 +149,14 @@ function ColorTokensBody() {
       </V>
       <V both label="accent and signals" width={720}>
         <TokenTable title="Token" rows={ACCENT} />
+      </V>
+      <V
+        both
+        label="readable signal text, scrim and layers"
+        width={720}
+        note="Amber and green as text are darkened toward the text color so they stay readable; z-indexes come only from this scale."
+      >
+        <TokenTable title="Token" rows={READABLE} />
       </V>
     </>
   );

@@ -244,7 +244,7 @@ export function ChangesTimeline({
       ) : (
         days.map((day) => (
           <section key={day.label} aria-label={day.label}>
-            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-10 flex items-baseline gap-2 border-border border-b bg-bg py-1.5 font-medium text-fg-muted text-sm">
+            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-raised flex items-baseline gap-2 border-border border-b bg-bg py-1.5 font-medium text-fg-muted text-sm">
               {day.label}
               <span className="font-normal text-fg-faint text-xs tabular">
                 {day.entries.length}

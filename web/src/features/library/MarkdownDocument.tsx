@@ -25,7 +25,7 @@ export interface MarkdownDocumentProps {
   diagrams?: Diagram[];
   /** The issue holding the file; resolves [[#T-4]]. */
   issueId?: string;
-  /** Called with the file line of a clicked source tag. Default: open it in Workspace files. */
+  /** Called with the file line of a clicked source tag. Default: open it in Workdatabase · Files. */
   onJump?: (line: number) => void;
   /**
    * Empty px the host leaves to the left of the document (its padding). The source tags hang

@@ -165,7 +165,7 @@ export function DropLine() {
     <span
       data-wf="DropLine"
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-[calc(var(--wf-card-gap)*-0.5_-_1px)] z-10 h-[2px] rounded-full bg-accent"
+      className="pointer-events-none absolute inset-x-0 top-[calc(var(--wf-card-gap)*-0.5_-_1px)] z-raised h-[2px] rounded-full bg-accent"
     />
   );
 }

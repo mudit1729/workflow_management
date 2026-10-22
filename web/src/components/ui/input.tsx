@@ -109,7 +109,11 @@ export function SearchInput({
         }}
         className={cn(
           field,
-          "h-full pr-7 pl-7 [&::-webkit-search-cancel-button]:appearance-none",
+          // Room on the right for the clear button or the key cap; a phone has no key cap, so a
+          // narrow field gives that room back to the placeholder.
+          "h-full pl-7 [&::-webkit-search-cancel-button]:appearance-none",
+          value || shortcut ? "pr-7" : "pr-2",
+          !value && shortcut && "max-md:pr-2",
           size === "sm" && "text-sm",
         )}
         {...props}
@@ -128,7 +132,9 @@ export function SearchInput({
         </button>
       ) : (
         shortcut &&
-        !focused && <Kbd combo={shortcut} className="pointer-events-none absolute right-1.5" />
+        !focused && (
+          <Kbd combo={shortcut} className="pointer-events-none absolute right-1.5 max-md:hidden" />
+        )
       )}
     </div>
   );

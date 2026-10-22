@@ -1,5 +1,5 @@
 // Files tab: the issue folder (DocsList, with DocView or SourceView inline) and its lint findings.
-// Every file can show its source here, with Edit, and link out to Workspace files.
+// Every file can show its source here, with Edit, and link out to Workdatabase · Files.
 import { type ReactNode, useState } from "react";
 import { requestFileEdit, SourceView, templateForPath } from "@/features/files";
 import type { IssueDetail } from "@/gen/types";

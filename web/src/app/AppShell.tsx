@@ -44,7 +44,7 @@ export function AppShell() {
         type="button"
         data-wf="SkipLink"
         onClick={() => mainRef.current?.focus()}
-        className="absolute top-2 left-2 z-[60] -translate-y-16 rounded-md border border-border bg-bg px-3 py-1.5 font-medium text-base text-fg shadow-pop focus:translate-y-0"
+        className="absolute top-2 left-2 z-popover -translate-y-16 rounded-md border border-border bg-bg px-3 py-1.5 font-medium text-base text-fg shadow-pop focus:translate-y-0"
       >
         Skip to content
       </button>
@@ -93,8 +93,8 @@ function RailSlot() {
       className="relative h-full"
       style={{ width: "var(--wf-nav-w-collapsed)" }}
     >
-      <div aria-hidden className="fixed inset-0 z-40" onClick={rail.close} />
-      <div className="absolute inset-y-0 left-0 z-40 shadow-pop">
+      <div aria-hidden className="fixed inset-0 z-overlay" onClick={rail.close} />
+      <div className="absolute inset-y-0 left-0 z-overlay shadow-pop">
         <NavRail collapsed={false} onNavigate={rail.close} />
       </div>
     </div>
@@ -151,7 +151,7 @@ function MobileNavSheet() {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/30 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-overlay bg-scrim data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           data-wf="MobileNavSheet"
           aria-describedby={undefined}
@@ -160,7 +160,7 @@ function MobileNavSheet() {
             e.preventDefault();
             document.getElementById(OPEN_NAV_ID)?.focus();
           }}
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col bg-subtle shadow-pop outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+          className="fixed inset-y-0 left-0 z-dialog flex w-[min(280px,85vw)] flex-col bg-subtle shadow-pop outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
         >
           <VisuallyHidden.Root>
             <DialogPrimitive.Title>Navigation</DialogPrimitive.Title>

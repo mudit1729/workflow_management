@@ -199,7 +199,7 @@ function ResizeHandle({
       onPointerCancel={end}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
-      className="group/handle absolute inset-y-0 -left-[3px] z-40 w-[6px] cursor-col-resize touch-none outline-none"
+      className="group/handle absolute inset-y-0 -left-[3px] z-overlay w-[6px] cursor-col-resize touch-none outline-none"
     >
       <span
         aria-hidden

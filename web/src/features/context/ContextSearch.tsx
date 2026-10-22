@@ -33,8 +33,6 @@ const IDLE_LIMIT: Record<ContextGroup, number> = {
 };
 const QUERY_LIMIT = 8;
 
-export const AMBER_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
-
 export interface ContextSearchProps {
   onPick: (item: ContextItem) => void;
   /** Keys (`kind:target`) already picked or linked. They are not offered again. */
@@ -141,7 +139,7 @@ export function ContextSearch({
       </CommandList>
       <div className="flex min-h-8 shrink-0 items-center gap-3 border-border border-t px-3 py-1.5 text-fg-faint text-xs">
         {note ? (
-          <span className={cn("min-w-0 truncate", AMBER_TEXT)}>{note}.</span>
+          <span className="min-w-0 truncate text-stale-text">{note}.</span>
         ) : (
           <>
             <span className="truncate">Goes under Links in goal.md.</span>

@@ -13,6 +13,8 @@ export interface EditIntent {
   h1?: string;
   /** Text to select once the editor opens, so a title placeholder is ready to overtype. */
   select?: string;
+  /** 1-based line to put the caret on when the editor opens (a finding's "Edit at this line"). */
+  line?: number;
 }
 
 interface IntentState {

@@ -1,6 +1,6 @@
 // The `## Links` section of goal.md as the Goal tab shows it: one row per bullet with the glyph
 // of what it links. Library items, entries and issues are RefLinks. A glossary term opens the
-// glossary, a file opens its source in the Workspace files view (a plain relative link would
+// glossary, a file opens its source in the Workdatabase · Files view (a plain relative link would
 // point nowhere in the app or in the static build). A bullet this grammar does not know keeps
 // its markdown. Each row has a remove button on hover and focus: it takes that one bullet out
 // of goal.md, and the toast offers to put it back.
@@ -293,7 +293,7 @@ function FileRow({ link, dir, removal }: { link: ParsedLink; dir: string; remova
           e.preventDefault();
           void files.open(link.target);
         }}
-        title={`Open ${link.target} in Workspace files`}
+        title={`Open ${link.target} in Workdatabase · Files`}
         className="min-w-0 break-words font-medium text-fg underline decoration-1 decoration-border-strong underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:decoration-fg-muted"
       >
         {link.label || shown}

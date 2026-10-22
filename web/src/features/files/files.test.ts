@@ -1,10 +1,10 @@
-// Pure logic of Workspace files: path rules, starting texts, highlighting, the changed-line
+// Pure logic of Workdatabase · Files: path rules, starting texts, highlighting, the changed-line
 // diff and the tree. No React, no data layer.
 import { describe, expect, it } from "vitest";
 import type { WorkspaceFileInfo } from "@/lib/api";
 import { type HighlightedLine, highlightSource, inlineTokens, splitLines } from "./highlight";
 import { pendingIntentFor } from "./intent";
-import { changedLines, lineAt } from "./lines";
+import { changedLines, lineAt, lineStart } from "./lines";
 import {
   ancestors,
   basename,
@@ -474,6 +474,13 @@ describe("changedLines", () => {
     expect(lineAt("ab\ncd\nef", 0)).toBe(1);
     expect(lineAt("ab\ncd\nef", 3)).toBe(2);
     expect(lineAt("ab\ncd\nef", 6)).toBe(3);
+  });
+
+  it("finds where a line starts, clamped to the text", () => {
+    expect(lineStart("ab\ncd\nef", 1)).toBe(0);
+    expect(lineStart("ab\ncd\nef", 2)).toBe(3);
+    expect(lineStart("ab\ncd\nef", 3)).toBe(6);
+    expect(lineStart("ab\ncd\nef", 9)).toBe(8);
   });
 });
 

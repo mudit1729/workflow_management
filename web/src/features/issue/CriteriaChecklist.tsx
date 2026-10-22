@@ -189,9 +189,6 @@ export function InlineText({ text, keywords, issueId, codeClassName, className }
 
 // ---------------------------------------------------------------- checklist
 
-/** Amber used for text: darkened toward the text color so it stays readable (as Chip does). */
-export const STALE_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
-
 export interface CriteriaChecklistProps {
   criteria: Criterion[];
   issueId: string;
@@ -686,7 +683,7 @@ function CriterionDetail({
             })}
           </ul>
         ) : (
-          <p className={cn("text-sm", STALE_TEXT)}>No task covers this (Q006).</p>
+          <p className="text-sm text-stale-text">No task covers this (Q006).</p>
         )}
       </div>
       <p className="flex items-center gap-1.5 font-mono text-xs text-fg-faint">
