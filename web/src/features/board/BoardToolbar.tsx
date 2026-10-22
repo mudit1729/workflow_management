@@ -63,14 +63,17 @@ export function BoardToolbar({
   const showCancelled = search.show === "cancelled";
   const selectedAuthors = parseAuthorParam(search.author);
 
-  // The route trims `q`, which would eat the space in "live bo". Keep what the
-  // person types in local state and let the URL follow.
+  // The field keeps what the person types in local state and the URL follows (it is stored
+  // as typed; matching trims). A link or the back button that changes ?q= is adopted.
   const urlQuery = search.q ?? "";
   const [draft, setDraft] = useState(urlQuery);
-  useEffect(() => setDraft((d) => (d.trim() === urlQuery ? d : urlQuery)), [urlQuery]);
+  useEffect(
+    () => setDraft((d) => (d === urlQuery || (d.trim() === "" && urlQuery === "") ? d : urlQuery)),
+    [urlQuery],
+  );
   const onQuery = (value: string) => {
     setDraft(value);
-    setSearch({ q: value.trim() || undefined });
+    setSearch({ q: value.trim() ? value : undefined });
   };
 
   const newIssue = () => openNewIssue(chain.length > 1 ? selected?.id : undefined);

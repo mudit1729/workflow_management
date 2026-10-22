@@ -24,6 +24,16 @@ function str(v: unknown): string | undefined {
   return s === "" ? undefined : s;
 }
 
+/**
+ * Free text typed into a filter box. Kept exactly as typed, spaces included, so a control bound
+ * to it never loses the space in "live bo"; only text that is all whitespace counts as empty.
+ * Matchers trim when they compare.
+ */
+function text(v: unknown): string | undefined {
+  const s = typeof v === "number" && Number.isFinite(v) ? String(v) : v;
+  return typeof s === "string" && s.trim() !== "" ? s : undefined;
+}
+
 function oneOf<T extends string>(v: unknown, allowed: readonly T[]): T | undefined {
   return typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
 }
@@ -35,7 +45,7 @@ export function validateBoardSearch(raw: Raw): BoardSearch {
     swim: oneOf(raw.swim, ["child", "none"] as const),
     // Handles are stored without "@"; accept "@codex" from a pasted link.
     author: author?.replace(/^@/, ""),
-    q: str(raw.q),
+    q: text(raw.q),
     show: oneOf(raw.show, ["cancelled"] as const),
   };
 }
@@ -51,6 +61,6 @@ export function validateLibrarySearch(raw: Raw): LibrarySearch {
   return {
     tab: oneOf(raw.tab, ["items", "glossary"] as const),
     kind: oneOf<LibraryKind>(raw.kind, LIBRARY_KINDS),
-    q: str(raw.q),
+    q: text(raw.q),
   };
 }
