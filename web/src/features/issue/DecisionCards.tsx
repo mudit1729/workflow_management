@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { toast } from "sonner";
 import {
   AuthorChip,
   AuthorStack,
@@ -37,7 +36,7 @@ import { useIssue } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
-import { MetaChip, TitleText } from "./ChangesTimeline";
+import { EntryIdButton, MetaChip, TitleText } from "./ChangesTimeline";
 
 type ShownStatus = DecisionStatus | "superseded";
 
@@ -142,7 +141,7 @@ function DecisionCard({
   return (
     <article
       data-wf="DecisionCard"
-      aria-label={`${d.id}: ${d.title}`}
+      aria-label={`${d.id}: ${d.title.replace(/`/g, "")}`}
       className={cn(
         "min-w-0 rounded-lg border border-border",
         nested ? "bg-subtle p-3" : "bg-bg p-4",
@@ -195,6 +194,7 @@ function DecisionCard({
 
         {rejected.length > 0 && (
           <Fold
+            name="RejectedOptions"
             className="mt-2"
             trigger={
               <span>
@@ -207,7 +207,7 @@ function DecisionCard({
                 <li key={opt} className="flex items-baseline gap-2 text-base text-fg-muted">
                   <X
                     size={12}
-                    strokeWidth={2}
+                    strokeWidth={1.75}
                     className="relative top-[1px] shrink-0 text-fg-faint"
                     aria-hidden
                   />
@@ -275,6 +275,7 @@ function DecisionCard({
             </div>
           )}
           <Button
+            data-wf="PromoteButton"
             variant="ghost"
             size="sm"
             className="ml-auto"
@@ -312,6 +313,7 @@ function SupersedesRow({
   }
   return (
     <Fold
+      name="SupersedesRow"
       className="mt-3"
       trigger={
         <span className="flex min-w-0 items-center gap-1.5">
@@ -338,16 +340,19 @@ function SupersedesRow({
 
 /** A quiet disclosure row: chevron + label, full-width hover. */
 function Fold({
+  name,
   trigger,
   children,
   className,
 }: {
+  /** The element name the user sees in `data-wf`. */
+  name: string;
   trigger: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <Collapsible className={className}>
+    <Collapsible data-wf={name} className={className}>
       <CollapsibleTrigger className="group -mx-1.5 flex w-[calc(100%+var(--wf-space-1)*3)] min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-fg-muted text-sm transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg">
         <ChevronRight
           size={14}
@@ -381,31 +386,31 @@ const STATUS_STYLE: Record<
     label: "Proposed",
     tone: "outline",
     cls: "border-border-strong",
-    icon: <CircleDashed strokeWidth={2} aria-hidden />,
+    icon: <CircleDashed strokeWidth={1.75} aria-hidden />,
   },
   accepted: {
     label: "Accepted",
     tone: "success",
-    icon: <Check strokeWidth={2} aria-hidden />,
+    icon: <Check strokeWidth={1.75} aria-hidden />,
   },
   rejected: {
     label: "Rejected",
     tone: "outline",
     cls: "border-danger/40 text-danger",
-    icon: <X strokeWidth={2} aria-hidden />,
+    icon: <X strokeWidth={1.75} aria-hidden />,
   },
   superseded: {
     label: "Superseded",
     tone: "outline",
     cls: "text-fg-faint line-through decoration-fg-faint",
-    icon: <Replace strokeWidth={2} aria-hidden />,
+    icon: <Replace strokeWidth={1.75} aria-hidden />,
   },
 };
 
 function StatusChip({ status, was }: { status: ShownStatus; was?: DecisionStatus }) {
   const s = STATUS_STYLE[status];
   const chip = (
-    <Chip tone={s.tone} icon={s.icon} className={s.cls}>
+    <Chip data-wf="StatusChip" tone={s.tone} icon={s.icon} className={s.cls}>
       {s.label}
     </Chip>
   );
@@ -419,24 +424,13 @@ function ClashChip({ topic, others }: { topic: string; others: string[] }) {
     <Tooltip
       content={`Q009: ${list} ${others.length === 1 ? "is" : "are"} also live on the topic “${topic}”. Supersede one, or give them different topics.`}
     >
-      <Chip tone="stale" icon={<TriangleAlert strokeWidth={2} aria-hidden />}>
+      <Chip
+        data-wf="ClashChip"
+        tone="stale"
+        icon={<TriangleAlert strokeWidth={1.75} aria-hidden />}
+      >
         Q009
       </Chip>
-    </Tooltip>
-  );
-}
-
-function EntryIdButton({ issueId, id }: { issueId: string; id: string }) {
-  const ref = `[[${issueId}#${id}]]`;
-  return (
-    <Tooltip content={`Copy reference ${ref}`}>
-      <button
-        type="button"
-        onClick={() => copyText(ref, `reference ${ref}`)}
-        className="rounded-sm px-0.5 font-mono text-fg-faint text-xs transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg-muted"
-      >
-        {id}
-      </button>
     </Tooltip>
   );
 }
@@ -512,15 +506,4 @@ function splitOptions(md: string): string[] {
     .map((s) => s.replace(/\.$/, ""))
     .filter(Boolean)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-}
-
-function copyText(text: string, what: string) {
-  if (!navigator.clipboard) {
-    toast.error("Clipboard is not available in this browser.");
-    return;
-  }
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(`Copied ${what}`),
-    () => toast.error("Could not copy. The browser blocked clipboard access."),
-  );
 }

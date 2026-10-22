@@ -12,7 +12,7 @@ import {
 } from "@/components/ui";
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
-import { TaskDetail } from "./TaskDetail";
+import { InlineText, TaskDetail } from "./TaskDetail";
 
 export interface PlanListProps {
   plan: Plan;
@@ -28,19 +28,16 @@ const isFinished = (p: Phase) =>
 
 export function PlanList({ plan, issueId, highlightReady = false, criteria }: PlanListProps) {
   const tasks = useMemo(() => plan.phases.flatMap((p) => p.tasks), [plan]);
-  const [openPhases, setOpenPhases] = useState<Set<string>>(
-    () => new Set(plan.phases.filter((p) => !isFinished(p)).map(phaseKey)),
+  // Finished phases start collapsed. Phases the user has toggled, and phases that
+  // finish later while the plan is open, keep the state they had.
+  const [openPhases, setOpenPhases] = useState<Map<string, boolean>>(
+    () => new Map(plan.phases.map((p) => [phaseKey(p), !isFinished(p)])),
   );
   const [expanded, setExpanded] = useState<TaskId | null>(null);
   const rowEls = useRef(new Map<TaskId, HTMLElement>());
 
   const setPhaseOpen = useCallback((key: string, open: boolean) => {
-    setOpenPhases((prev) => {
-      const next = new Set(prev);
-      if (open) next.add(key);
-      else next.delete(key);
-      return next;
-    });
+    setOpenPhases((prev) => new Map(prev).set(key, open));
   }, []);
 
   /** Jump to a task (from a dependency pill): open its phase, expand it, bring it into view. */
@@ -85,7 +82,7 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
             key={key}
             phase={phase}
             last={i === plan.phases.length - 1}
-            open={openPhases.has(key)}
+            open={openPhases.get(key) ?? !isFinished(phase)}
             onOpenChange={(open) => setPhaseOpen(key, open)}
           >
             {phase.tasks.length === 0 ? (
@@ -281,7 +278,7 @@ function TaskRow({
       aria-expanded={expanded}
       onClick={onToggle}
       className={cn(
-        "flex h-8 w-full min-w-0 items-center gap-2 rounded-md border px-2 text-left",
+        "flex h-7 w-full min-w-0 items-center gap-2 rounded-md border px-2 text-left",
         "transition-colors duration-150 ease-wf",
         lit
           ? "border-accent/50 bg-accent-subtle hover:bg-accent-subtle"
@@ -305,7 +302,7 @@ function TaskRow({
           task.status === "cancelled" && "line-through",
         )}
       >
-        {task.title}
+        <InlineText text={task.title} />
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <Chip tone="outline" size="xs">

@@ -1,16 +1,26 @@
 // PlanLanes: the plan as a grid. Rows are lanes (who works where), columns are
 // dependency levels (what can run in parallel). Edges are drawn only for the
 // hovered or selected task, so the grid stays quiet until you ask.
-import { Fragment, useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type RefObject,
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { EmptyState } from "@/components/common";
 import { Popover, PopoverContent, PopoverTrigger, Tooltip } from "@/components/ui";
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { TaskDetail } from "./TaskDetail";
-import { TaskPill } from "./TaskPill";
+import { plainTitle, TaskPill } from "./TaskPill";
 
 const LANE_W = 96;
 const LEVEL_W = 200;
+const FADE_RIGHT = "linear-gradient(to right, black calc(100% - 40px), transparent)";
 
 export interface PlanLanesProps {
   plan: Plan;
@@ -36,6 +46,8 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
   const [hovered, setHovered] = useState<TaskId | null>(null);
 
   // ---- measuring pills for the edge overlay
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const moreRight = useMoreToTheRight(scrollRef);
   const gridRef = useRef<HTMLDivElement>(null);
   const pillEls = useRef(new Map<TaskId, HTMLElement>());
   const refFns = useRef(new Map<TaskId, (el: HTMLElement | null) => void>());
@@ -109,15 +121,21 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
     );
   }
 
-  const gridColumns = `${LANE_W}px repeat(${layout.levels}, ${LEVEL_W}px)`;
+  // A trailing 1fr track lets the row lines reach the edge when the grid is narrower than its box.
+  const gridColumns = `${LANE_W}px repeat(${layout.levels}, ${LEVEL_W}px) minmax(0, 1fr)`;
 
   return (
     <div data-wf="PlanLanes" className="flex min-w-0 flex-col gap-2">
       <PhaseProgress phases={plan.phases} />
-      <div className="min-w-0 overflow-x-auto overscroll-x-contain rounded-md border border-border">
+      <div
+        ref={scrollRef}
+        className="min-w-0 overflow-x-auto overscroll-x-contain rounded-md border border-border"
+        // Fade the right edge while more columns wait behind it, so a cut-off pill reads as "scroll".
+        style={moreRight ? { maskImage: FADE_RIGHT } : undefined}
+      >
         <div
           ref={gridRef}
-          className="relative grid w-max gap-x-6 pr-4 pb-1"
+          className="relative grid w-max min-w-full gap-x-6"
           style={{ gridTemplateColumns: gridColumns }}
         >
           {/* header row */}
@@ -200,6 +218,26 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
   );
 }
 
+/** True while the scroller has content hidden past its right edge. */
+function useMoreToTheRight(ref: RefObject<HTMLElement | null>): boolean {
+  const [more, setMore] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener("scroll", read);
+      ro.disconnect();
+    };
+  }, [ref]);
+  return more;
+}
+
 // ---------------------------------------------------------------- pill + popover
 
 function LanePill({
@@ -248,6 +286,7 @@ function LanePill({
         align="start"
         sideOffset={6}
         collisionPadding={12}
+        aria-label={`${task.id}: ${plainTitle(task.title)}`}
         className="max-h-[min(560px,var(--radix-popover-content-available-height))] w-auto p-0"
       >
         <TaskDetail

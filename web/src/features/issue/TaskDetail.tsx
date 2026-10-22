@@ -20,7 +20,7 @@ import { cn } from "@/lib/cn";
 import { absolute } from "@/lib/format";
 import { useOpenIssue } from "@/lib/nav";
 import { TASK_STATUS_LABEL } from "@/lib/status";
-import { LeaseText, TaskPill } from "./TaskPill";
+import { LeaseText, plainTitle, TaskPill } from "./TaskPill";
 
 const TASK_STATUSES: TaskStatus[] = [
   "todo",
@@ -34,7 +34,8 @@ const TASK_STATUSES: TaskStatus[] = [
 export interface TaskDetailProps {
   task: Task;
   issueId: IssueId;
-  variant: "popover" | "inline";
+  /** `popover` is a fixed 360 px card for PlanLanes; `inline` fills its container (PlanList, Kit). */
+  variant?: "popover" | "inline";
   /** All tasks of the plan, to render same-issue dependencies as pills. */
   tasks?: Task[];
   /** The issue's criteria, to explain `satisfies` chips. */
@@ -47,7 +48,7 @@ export interface TaskDetailProps {
 export function TaskDetail({
   task,
   issueId,
-  variant,
+  variant = "inline",
   tasks,
   criteria,
   onSelectTask,
@@ -92,7 +93,9 @@ export function TaskDetail({
             </>
           )}
         </div>
-        <h4 className="font-medium text-base text-fg leading-snug">{task.title}</h4>
+        <h4 className="font-medium text-base text-fg leading-snug">
+          <InlineText text={task.title} />
+        </h4>
       </header>
 
       <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-start gap-x-3 gap-y-1">
@@ -294,7 +297,7 @@ function CriterionChip({ id, criterion }: { id: string; criterion?: Criterion })
     <Tooltip
       content={
         <span className="flex max-w-[280px] flex-col gap-0.5">
-          <span>{criterion.text.replace(/`/g, "")}</span>
+          <span>{plainTitle(criterion.text)}</span>
           <span className="opacity-75">{state}</span>
         </span>
       }
@@ -348,7 +351,7 @@ function StepList({
                 <Checkbox
                   checked={step.checked}
                   onCheckedChange={(v) => onToggle(step, v === true)}
-                  aria-label={step.text.replace(/`/g, "")}
+                  aria-label={plainTitle(step.text)}
                 />
               </span>
               <span

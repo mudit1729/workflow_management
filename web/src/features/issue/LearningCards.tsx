@@ -2,7 +2,6 @@
 // library. A candidate offers Promote; a promoted learning links to its library item.
 import { ArrowUpRight, BookPlus, Lightbulb } from "lucide-react";
 import { type MouseEvent, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { AuthorChip, EmptyState, KindIcon, MarkdownProse, RelativeTime } from "@/components/common";
 import { Button, Chip, Tooltip } from "@/components/ui";
 import { PromoteDialog } from "@/features/library";
@@ -11,7 +10,7 @@ import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { parseTs } from "@/lib/format";
 import { hrefFor, useGo } from "@/lib/nav";
-import { ClampedProse, TitleText } from "./ChangesTimeline";
+import { ClampedProse, EntryIdButton, TitleText } from "./ChangesTimeline";
 
 const KIND_LABEL: Record<LearningKind, string> = {
   tip: "Tip",
@@ -109,7 +108,7 @@ function LearningCard({
   return (
     <li
       data-wf="LearningCard"
-      aria-label={`${KIND_LABEL[l.kind]}: ${l.title}`}
+      aria-label={`${KIND_LABEL[l.kind]}: ${l.title.replace(/`/g, "")}`}
       className="group grid min-w-0 grid-cols-[24px_minmax(0,1fr)] gap-x-2.5 rounded-lg border border-border bg-bg p-3"
     >
       <span
@@ -200,6 +199,7 @@ function LearningAction({
     return (
       <Tooltip content={libraryTitle ? `${libId} · ${libraryTitle}` : `Promoted to ${libId}`}>
         <a
+          data-wf="LibraryLink"
           href={hrefFor(`/lib/${libId}`)}
           onClick={open}
           className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 font-medium text-accent text-sm transition-colors duration-100 ease-wf hover:bg-accent-subtle"
@@ -214,6 +214,7 @@ function LearningAction({
     return (
       <Tooltip content="Marked as a promotion candidate. Promote it to a draft library item.">
         <Button
+          data-wf="PromoteButton"
           variant="ghost"
           size="sm"
           onClick={onPromote}
@@ -228,26 +229,12 @@ function LearningAction({
   return (
     <button
       type="button"
+      data-wf="PromoteButton"
       onClick={onPromote}
       className="h-6 rounded-md px-1.5 text-fg-faint text-sm opacity-0 transition-[opacity,background-color,color] duration-100 ease-wf hover:bg-muted hover:text-fg focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
     >
       Promote
     </button>
-  );
-}
-
-function EntryIdButton({ issueId, id }: { issueId: string; id: string }) {
-  const ref = `[[${issueId}#${id}]]`;
-  return (
-    <Tooltip content={`Copy reference ${ref}`}>
-      <button
-        type="button"
-        onClick={() => copyText(ref, `reference ${ref}`)}
-        className="rounded-sm px-0.5 font-mono text-fg-faint text-xs transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg-muted"
-      >
-        {id}
-      </button>
-    </Tooltip>
   );
 }
 
@@ -279,15 +266,4 @@ function normalize(s: string): string {
     .replace(/[.\s]+$/, "")
     .trim()
     .toLowerCase();
-}
-
-function copyText(text: string, what: string) {
-  if (!navigator.clipboard) {
-    toast.error("Clipboard is not available in this browser.");
-    return;
-  }
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(`Copied ${what}`),
-    () => toast.error("Could not copy. The browser blocked clipboard access."),
-  );
 }

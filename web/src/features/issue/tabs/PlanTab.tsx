@@ -137,16 +137,24 @@ function PlanMeta({ plan }: { plan: Plan }) {
   );
 }
 
-function PlanContext({ plan, detail }: { plan: Plan; detail: IssueDetail }) {
+function PlanContext({
+  plan,
+  detail,
+  folded = false,
+}: {
+  plan: Plan;
+  detail: IssueDetail;
+  /** Inside the fold, whose row already says "Approach". */
+  folded?: boolean;
+}) {
   const issueId = detail.summary.id;
   const approach = plan.approach_md.trim();
+  const prose = approach && (
+    <MarkdownProse md={approach} diagrams={detail.diagrams} issueId={issueId} />
+  );
   return (
     <div data-wf="PlanContext" className="flex min-w-0 flex-col gap-5">
-      {approach && (
-        <Section label="Approach">
-          <MarkdownProse md={approach} diagrams={detail.diagrams} issueId={issueId} />
-        </Section>
-      )}
+      {approach && (folded ? prose : <Section label="Approach">{prose}</Section>)}
       {plan.assumptions.length > 0 && (
         <Section label="Assumptions">
           <ul data-wf="PlanAssumptions" className="flex flex-col">
@@ -219,13 +227,13 @@ function FoldedContext({ plan, detail }: { plan: Plan; detail: IssueDetail }) {
             className="shrink-0 text-fg-faint transition-transform duration-150 ease-wf group-data-[state=open]/fold:rotate-90"
           />
           <span className="shrink-0 font-medium text-fg-muted">Approach</span>
-          {parts.length > 0 && (
+          {!open && parts.length > 0 && (
             <span className="min-w-0 truncate text-fg-faint">· {parts.join(" · ")}</span>
           )}
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent className="-mx-1 -mb-1 px-1 pt-3 pb-1">
-        <PlanContext plan={plan} detail={detail} />
+        <PlanContext plan={plan} detail={detail} folded />
       </CollapsibleContent>
     </Collapsible>
   );

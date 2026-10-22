@@ -1,6 +1,8 @@
 // Log tab: the issue's append-only logs behind one segmented control.
 // The control sticks to the top of the scrolling panel (below any bar the frame
 // pins there); the timeline's day headers stick right under it via --wf-log-sticky.
+// Sticky offsets are measured from the scroller's content box, so the offset also
+// cancels the scroller's own top padding (the drawer panel has 16 px).
 import { type CSSProperties, type RefObject, useLayoutEffect, useRef, useState } from "react";
 import { Segmented } from "@/components/ui";
 import type { IssueDetail } from "@/gen/types";
@@ -30,10 +32,11 @@ export function LogTab({ detail, variant }: LogTabProps) {
       ref={rootRef}
       data-wf="LogTab"
       data-variant={variant}
-      className="flex min-w-0 flex-col"
+      // -mt-2 offsets the header's own pt-2, so at rest the control lines up with the other tabs.
+      className="-mt-2 flex min-w-0 flex-col"
       style={{ "--wf-log-sticky": `${top + headH}px` } as CSSProperties}
     >
-      <div ref={headRef} className="sticky z-20 -mt-2 bg-bg pt-2 pb-2" style={{ top }}>
+      <div ref={headRef} className="sticky z-20 bg-bg pt-2 pb-2" style={{ top }}>
         <Segmented<LogView>
           aria-label="Log view"
           size="sm"
@@ -76,20 +79,18 @@ function useHeight(ref: RefObject<HTMLElement | null>): number {
 }
 
 /**
- * Height of the bars the frame pins at the top of the same scroll region (a column
- * title on the issue page, nothing in the drawer), so our sticky header sits below them.
+ * Where the sticky header must stop: the height of the bars the frame pins at the top of
+ * the same scroll region (a column title on the issue page, nothing in the drawer) minus
+ * the scroller's top padding, which sticky positioning already skips.
  */
 function useStickyOffset(ref: RefObject<HTMLElement | null>): number {
   const [top, setTop] = useState(0);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const bars = stickyBarsAbove(el);
-    if (bars.length === 0) {
-      setTop(0);
-      return;
-    }
-    const read = () => setTop(Math.max(...bars.map((b) => b.offsetHeight)));
+    const { bars, scroller } = stickyContext(el);
+    const pad = scroller ? Number.parseFloat(getComputedStyle(scroller).paddingTop) || 0 : 0;
+    const read = () => setTop(Math.max(0, ...bars.map((b) => b.offsetHeight)) - pad);
     read();
     const ro = new ResizeObserver(read);
     for (const b of bars) ro.observe(b);
@@ -98,8 +99,8 @@ function useStickyOffset(ref: RefObject<HTMLElement | null>): number {
   return top;
 }
 
-/** Earlier siblings pinned with `top: 0`, from `el` up to its scroll container. */
-function stickyBarsAbove(el: HTMLElement): HTMLElement[] {
+/** Earlier siblings pinned with `top: 0`, from `el` up to its scroll container (also returned). */
+function stickyContext(el: HTMLElement): { bars: HTMLElement[]; scroller: HTMLElement | null } {
   const bars: HTMLElement[] = [];
   let node = el;
   while (node.parentElement) {
@@ -110,8 +111,8 @@ function stickyBarsAbove(el: HTMLElement): HTMLElement[] {
     }
     const parent = node.parentElement;
     const overflow = getComputedStyle(parent).overflowY;
-    if (overflow === "auto" || overflow === "scroll") break;
+    if (overflow === "auto" || overflow === "scroll") return { bars, scroller: parent };
     node = parent;
   }
-  return bars;
+  return { bars, scroller: null };
 }

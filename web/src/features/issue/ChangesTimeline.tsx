@@ -21,7 +21,14 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import { AuthorChip, EmptyState, KindIcon, MarkdownProse, RelativeTime } from "@/components/common";
+import {
+  AuthorChip,
+  copyText,
+  EmptyState,
+  KindIcon,
+  MarkdownProse,
+  RelativeTime,
+} from "@/components/common";
 import { Button, Chip, chipVariants, Tooltip } from "@/components/ui";
 import type { Author, ChangeEntry, ChangeKind } from "@/gen/types";
 import { useAuthors, useIssue } from "@/lib/api";
@@ -122,6 +129,24 @@ export function ChangesTimeline({
     setAuthorSel(new Set());
     setKindSel(new Set());
   };
+  const showAuthors = authorCounts.size > 1;
+  const showKinds = kinds.length > 1;
+  // "Clear" (while filtering) and the count close the last row of chips.
+  const summary = (
+    <>
+      {filtering && (
+        <Button variant="ghost" size="sm" onClick={clear}>
+          <X size={12} strokeWidth={1.75} aria-hidden />
+          Clear
+        </Button>
+      )}
+      <span className="ml-auto pl-2 text-fg-faint text-xs tabular" aria-live="polite">
+        {filtering
+          ? `${visible.length} of ${changes.length}`
+          : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
+      </span>
+    </>
+  );
 
   return (
     <div data-wf="ChangesTimeline" className={cn("min-w-0", className)}>
@@ -129,52 +154,47 @@ export function ChangesTimeline({
         data-wf="TimelineFilters"
         role="toolbar"
         aria-label="Filter changes"
-        className="flex flex-wrap items-center gap-1 pt-1 pb-3"
+        className="flex flex-col gap-1 pt-1 pb-3"
       >
-        {authorCounts.size > 1 &&
-          [...authorCounts.keys()].map((h) => (
-            <FilterChip
-              key={h}
-              pressed={authorSel.has(h)}
-              count={authorCounts.get(h) ?? 0}
-              icon={<AuthorChip handle={h} size="xs" variant="avatar" />}
-              onClick={() => setAuthorSel((s) => toggle(s, h))}
-            >
-              @{h}
-            </FilterChip>
-          ))}
-        {authorCounts.size > 1 && kinds.length > 1 && (
-          <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+        {showAuthors && (
+          <div className="flex flex-wrap items-center gap-1">
+            {[...authorCounts.keys()].map((h) => (
+              <FilterChip
+                key={h}
+                pressed={authorSel.has(h)}
+                count={authorCounts.get(h) ?? 0}
+                icon={<AuthorChip handle={h} size="xs" variant="avatar" />}
+                onClick={() => setAuthorSel((s) => toggle(s, h))}
+              >
+                @{h}
+              </FilterChip>
+            ))}
+            {!showKinds && summary}
+          </div>
         )}
-        {kinds.length > 1 &&
-          kinds.map((k) => (
-            <FilterChip
-              key={k}
-              pressed={kindSel.has(k)}
-              count={kindCounts.get(k) ?? 0}
-              icon={
-                <KindIcon
-                  kind={k}
-                  size={12}
-                  className={k === "failure" ? "text-danger" : "opacity-70"}
-                />
-              }
-              onClick={() => setKindSel((s) => toggle(s, k))}
-            >
-              {CHANGE_KIND_LABEL[k]}
-            </FilterChip>
-          ))}
-        {filtering && (
-          <Button variant="ghost" size="sm" onClick={clear} className="h-5 px-1.5 text-xs">
-            <X size={12} strokeWidth={1.75} aria-hidden />
-            Clear
-          </Button>
+        {showKinds && (
+          <div className="flex flex-wrap items-center gap-1">
+            {kinds.map((k) => (
+              <FilterChip
+                key={k}
+                pressed={kindSel.has(k)}
+                count={kindCounts.get(k) ?? 0}
+                icon={
+                  <KindIcon
+                    kind={k}
+                    size={12}
+                    className={k === "failure" ? "text-danger" : "opacity-70"}
+                  />
+                }
+                onClick={() => setKindSel((s) => toggle(s, k))}
+              >
+                {CHANGE_KIND_LABEL[k]}
+              </FilterChip>
+            ))}
+            {summary}
+          </div>
         )}
-        <span className="ml-auto pl-2 text-xs text-fg-faint tabular" aria-live="polite">
-          {filtering
-            ? `${visible.length} of ${changes.length}`
-            : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
-        </span>
+        {!showAuthors && !showKinds && <div className="flex items-center">{summary}</div>}
       </div>
 
       {days.length === 0 ? (
@@ -194,7 +214,7 @@ export function ChangesTimeline({
       ) : (
         days.map((day) => (
           <section key={day.label} aria-label={day.label}>
-            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-10 flex items-baseline gap-2 border-border border-b bg-bg/90 py-1.5 font-medium text-fg-muted text-sm backdrop-blur">
+            <h3 className="sticky top-[var(--wf-log-sticky,0px)] z-10 flex items-baseline gap-2 border-border border-b bg-bg/95 py-1.5 font-medium text-fg-muted text-sm backdrop-blur-sm">
               {day.label}
               <span className="font-normal text-fg-faint text-xs tabular">
                 {day.entries.length}
@@ -412,9 +432,9 @@ function EntryChips({
         tone={pass ? "success" : "danger"}
         icon={
           pass ? (
-            <Check size={12} strokeWidth={2} aria-hidden />
+            <Check size={12} strokeWidth={1.75} aria-hidden />
           ) : (
-            <X size={12} strokeWidth={2} aria-hidden />
+            <X size={12} strokeWidth={1.75} aria-hidden />
           )
         }
       >
@@ -429,7 +449,7 @@ function EntryChips({
         key="commit"
         mono
         icon={<GitCommitHorizontal size={12} strokeWidth={1.75} aria-hidden />}
-        onClick={() => copyText(sha, `commit ${sha.slice(0, 7)}`)}
+        onClick={() => copyWithToast(sha, `commit ${sha.slice(0, 7)}`)}
         tooltip={`Commit ${sha} · Click to copy`}
       >
         {sha.slice(0, 7)}
@@ -445,7 +465,7 @@ function EntryChips({
         <MetaChip
           key={`f:${f}`}
           mono
-          onClick={() => copyText(f, "path")}
+          onClick={() => copyWithToast(f, "path")}
           tooltip={`${f} · Click to copy`}
         >
           {basename(f)}
@@ -457,7 +477,7 @@ function EntryChips({
       chips.push(
         <MetaChip
           key="files-more"
-          onClick={() => copyText(more.join("\n"), `${more.length} more paths`)}
+          onClick={() => copyWithToast(more.join("\n"), `${more.length} more paths`)}
           tooltip={
             <span className="flex flex-col gap-0.5 font-mono">
               {more.map((f) => (
@@ -492,6 +512,7 @@ function PrChip({ pr }: { pr: string }) {
   return (
     <Tooltip content={`Open ${pr}`}>
       <a
+        data-wf="MetaChip"
         href={pr}
         target="_blank"
         rel="noreferrer"
@@ -516,7 +537,10 @@ function QAPair({
   issueId: string;
 }) {
   return (
-    <blockquote className="mt-1.5 flex flex-col gap-1 border-border-strong border-l-2 pl-3">
+    <blockquote
+      data-wf="QAPair"
+      className="mt-1.5 flex flex-col gap-1 border-border-strong border-l-2 pl-3"
+    >
       <div className="grid grid-cols-[18px_minmax(0,1fr)] items-baseline">
         <span className="font-medium font-mono text-fg-faint text-xs">Q:</span>
         <MarkdownProse md={q} issueId={issueId} compact className="text-fg-muted" />
@@ -578,11 +602,13 @@ export function MetaChip({
     </>
   );
   const el = onClick ? (
-    <button type="button" onClick={onClick} className={cn(cls, chipInteractive)}>
+    <button type="button" data-wf="MetaChip" onClick={onClick} className={cn(cls, chipInteractive)}>
       {inner}
     </button>
   ) : (
-    <span className={cls}>{inner}</span>
+    <span data-wf="MetaChip" className={cls}>
+      {inner}
+    </span>
   );
   return tooltip ? <Tooltip content={tooltip}>{el}</Tooltip> : el;
 }
@@ -616,7 +642,7 @@ function FilterChip({
 }
 
 const LINE_EM = 1.5;
-const FADE = "linear-gradient(to bottom, black 45%, transparent)";
+const FADE = "linear-gradient(to bottom, black calc(100% - 1.4em), transparent)";
 
 /** Markdown clamped to a few lines, with a "Show more" toggle only when it overflows. */
 export function ClampedProse({
@@ -654,11 +680,11 @@ export function ClampedProse({
 
   const clamped = !open;
   return (
-    <div className={className}>
+    <div data-wf="ClampedProse" className={className}>
       <div
         ref={outer}
         id={bodyId}
-        className="overflow-hidden"
+        className="overflow-hidden text-sm"
         style={
           clamped
             ? {
@@ -792,14 +818,26 @@ function stripTicks(s: string): string {
   return s.replace(/`/g, "");
 }
 
-function copyText(text: string, what: string) {
-  if (!navigator.clipboard) {
-    toast.error("Clipboard is not available in this browser.");
-    return;
-  }
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(`Copied ${what}`),
-    () => toast.error("Could not copy. The browser blocked clipboard access."),
+/** Copies text and confirms with a toast; `what` completes "Copied …". */
+export async function copyWithToast(text: string, what: string) {
+  if (await copyText(text)) toast.success(`Copied ${what}`);
+  else toast.error("Could not copy. The browser blocked clipboard access.");
+}
+
+/** The entry's id in faint mono; click copies its `[[issue#id]]` reference. */
+export function EntryIdButton({ issueId, id }: { issueId: string; id: string }) {
+  const ref = `[[${issueId}#${id}]]`;
+  return (
+    <Tooltip content={`Copy reference ${ref}`}>
+      <button
+        type="button"
+        data-wf="EntryIdButton"
+        onClick={() => copyWithToast(ref, `reference ${ref}`)}
+        className="rounded-sm px-0.5 font-mono text-fg-faint text-xs transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg-muted"
+      >
+        {id}
+      </button>
+    </Tooltip>
   );
 }
 

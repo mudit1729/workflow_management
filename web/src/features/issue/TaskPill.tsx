@@ -5,8 +5,8 @@
 // Markers: ready → accent dot (plus an accent hairline when the Ready highlight
 // is on); lease expired → amber dot; stale → amber id. Hover shows the full title,
 // lane, status, claimant and lease time.
-import { type ComponentProps, type Ref, useEffect, useState } from "react";
-import { AuthorChip, StatusIcon } from "@/components/common";
+import type { ComponentProps, Ref } from "react";
+import { AuthorChip, StatusIcon, useNow } from "@/components/common";
 import { Tooltip } from "@/components/ui";
 import type { Task } from "@/gen/types";
 import { cn } from "@/lib/cn";
@@ -39,6 +39,8 @@ export function TaskPill({
 }: TaskPillProps) {
   const interactive = onClick != null;
   const md = size === "md";
+  // Titles may hold `code` spans; a one-line pill shows them as plain text.
+  const title = plainTitle(task.title);
   const leaseExpired = task.lease === "expired";
   const finished = task.status === "done" || task.status === "cancelled";
 
@@ -58,7 +60,8 @@ export function TaskPill({
 
   const content = (
     <>
-      <StatusIcon status={task.status} size={md ? 12 : 11} />
+      {/* The status is spoken once, in the sr-only text below. */}
+      <StatusIcon status={task.status} size={md ? 12 : 11} aria-hidden="true" />
       <span
         className={cn(
           "shrink-0 font-mono text-xs tabular leading-none",
@@ -76,11 +79,12 @@ export function TaskPill({
             task.status === "cancelled" && "line-through",
           )}
         >
-          {task.title}
+          {title}
         </span>
       )}
       <PillMarkers task={task} leaseExpired={leaseExpired} />
       <span className="sr-only">
+        {!showTitle && ` ${title}`}
         {`, ${TASK_STATUS_LABEL[task.status]}`}
         {task.ready && ", ready to claim"}
         {leaseExpired && ", lease expired"}
@@ -120,6 +124,11 @@ export function TaskPill({
   );
 }
 
+/** A task title without its backticks, for one-line and plain-text uses. */
+export function plainTitle(title: string): string {
+  return title.replace(/`/g, "");
+}
+
 function PillMarkers({ task, leaseExpired }: { task: Task; leaseExpired: boolean }) {
   if (!task.ready && !leaseExpired && !task.claimed_by) return null;
   return (
@@ -149,12 +158,12 @@ function TaskPillTooltip({ task }: { task: Task }) {
         <span className="truncate">Lane {task.lane}</span>
       </div>
       <div className="font-medium text-sm leading-snug">
-        <span className="font-mono opacity-75">{task.id}</span> {task.title}
+        <span className="font-mono opacity-75">{task.id}</span> {plainTitle(task.title)}
       </div>
       {task.claimed_by && (
         <div className="opacity-75">
           Claimed by @{task.claimed_by}
-          {task.lease !== "none" && (
+          {task.lease === "live" && (
             <>
               {" · "}
               <LeaseText task={task} tone="inherit" />
@@ -197,7 +206,7 @@ export function LeaseText({
   tone?: "default" | "inherit";
   className?: string;
 }) {
-  const now = useNow(30_000);
+  const now = useNow();
   if (task.lease === "none") return null;
 
   const until = task.lease_until ? parseTs(task.lease_until) : null;
@@ -227,13 +236,4 @@ function formatMinutes(minutes: number): string {
   const h = Math.floor(m / 60);
   const rest = m % 60;
   return rest ? `${h}h ${rest}m` : `${h}h`;
-}
-
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
-  return now;
 }
