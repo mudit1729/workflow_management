@@ -137,7 +137,11 @@ export function globsOverlap(a: string[], b: string[]): boolean {
   );
 }
 
-function leaseState(holder: string | undefined, until: string | undefined, now: number): LeaseState {
+function leaseState(
+  holder: string | undefined,
+  until: string | undefined,
+  now: number,
+): LeaseState {
   if (!holder || !until) return "none";
   return tsMs(until) > now ? "live" : "expired";
 }
@@ -324,7 +328,16 @@ function buildIssue(
   ) => {
     const text = files[file] ?? "";
     const p = posOf(text, needle);
-    diagnostics.push({ rule, severity, file: path(file), line: p.line, col: p.col, span: p.span, message, fix });
+    diagnostics.push({
+      rule,
+      severity,
+      file: path(file),
+      line: p.line,
+      col: p.col,
+      span: p.span,
+      message,
+      fix,
+    });
   };
 
   // ---------------- tasks
@@ -351,7 +364,10 @@ function buildIssue(
 
   const taskOf = (t: TaskSrc, phaseName: string): Task => {
     const key = `${id}#${t.id}`;
-    const lease = t.status === "done" || t.status === "cancelled" ? "none" : leaseState(t.claimed_by, t.lease_until, now);
+    const lease =
+      t.status === "done" || t.status === "cancelled"
+        ? "none"
+        : leaseState(t.claimed_by, t.lease_until, now);
     const lastChange = latest(src.changes.filter((c) => c.task === t.id).map((c) => c.ts));
     const renewal = t.lease_until ? tsMs(t.lease_until) - cfg.leases_minutes * MIN : 0;
     const fresh = Math.max(lastChange ? tsMs(lastChange) : 0, renewal);
@@ -505,7 +521,8 @@ function buildIssue(
     }
     return out;
   };
-  const entryLine = (file: IssueFileName, entryId: string) => posOf(files[file] ?? "", `{#${entryId}}`).line;
+  const entryLine = (file: IssueFileName, entryId: string) =>
+    posOf(files[file] ?? "", `{#${entryId}}`).line;
 
   const changes: ChangeEntry[] = src.changes.map((c) => ({
     type: "change",
@@ -587,7 +604,11 @@ function buildIssue(
   const docs: DocFile[] = (src.docs ?? []).map((d) => {
     const ext = d.path.split(".").pop()?.toLowerCase() ?? "";
     const kind: DocFile["kind"] =
-      ext === "md" ? "markdown" : ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext) ? "image" : "other";
+      ext === "md"
+        ? "markdown"
+        : ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)
+          ? "image"
+          : "other";
     return {
       path: d.path,
       kind,
@@ -605,9 +626,18 @@ function buildIssue(
       const base = DIAGRAMS[did];
       if (!base || diagrams.some((x) => x.id === did)) continue;
       const line = posOf(files[file] ?? "", `id=${did}`).line;
-      const d: Diagram = opts.archify
-        ? { ...base, file, line, errors: [...base.errors] }
-        : { ...base, file, line, status: "unavailable", errors: [] };
+      // Invalid blocks stay invalid either way. Valid blocks render only when archify is
+      // available and the stand-in preview exists (`url` is empty for blocks that cannot render).
+      const d: Diagram =
+        base.status === "invalid"
+          ? { ...base, file, line, errors: [...base.errors] }
+          : {
+              ...base,
+              file,
+              line,
+              status: opts.archify && base.url ? "ready" : "unavailable",
+              errors: [],
+            };
       diagrams.push(d);
       if (d.status === "invalid") {
         const first = d.errors[0];
@@ -651,7 +681,9 @@ function buildIssue(
   const active = g.status !== "done" && g.status !== "cancelled";
   const coordState = active ? leaseState(g.claimed_by, g.lease_until, now) : "none";
   const coordinator: Lease | undefined =
-    g.claimed_by && g.lease_until ? { holder: g.claimed_by, until: g.lease_until, state: coordState } : undefined;
+    g.claimed_by && g.lease_until
+      ? { holder: g.claimed_by, until: g.lease_until, state: coordState }
+      : undefined;
   const expiredTasks = tasks.filter((t) => t.lease === "expired");
   const lastChangeTs = latest(src.changes.map((c) => c.ts));
   const freshest = latest([lastChangeTs, src.state?.updated_at]) ?? g.created;
@@ -659,7 +691,8 @@ function buildIssue(
 
   const signals: Signals = {
     done_unmet: g.status === "done" && progress.criteria.verified < progress.criteria.total,
-    in_progress_no_plan: g.status === "in_progress" && !src.plan && g.size !== "xs" && g.size !== "s",
+    in_progress_no_plan:
+      g.status === "in_progress" && !src.plan && g.size !== "xs" && g.size !== "s",
     stale: g.status === "in_progress" && now - tsMs(freshest) > cfg.staleness.issue_hours * HOUR,
     lease_expired: active && (coordState === "expired" || expiredTasks.length > 0),
     state_behind_changes:
@@ -685,10 +718,22 @@ function buildIssue(
     });
   }
   for (const k of Object.keys(g.extra ?? {}))
-    diag("F006", "info", "goal.md", `\n${k}:`, `Unknown frontmatter key \`${k}\`. wf keeps it and shows it.`);
+    diag(
+      "F006",
+      "info",
+      "goal.md",
+      `\n${k}:`,
+      `Unknown frontmatter key \`${k}\`. wf keeps it and shows it.`,
+    );
   for (const c of src.changes)
     for (const k of Object.keys(c.extra ?? {}))
-      diag("F006", "info", "changes.md", `- ${k}:`, `Unknown meta key \`${k}\` in ${c.id}. wf keeps it.`);
+      diag(
+        "F006",
+        "info",
+        "changes.md",
+        `- ${k}:`,
+        `Unknown meta key \`${k}\` in ${c.id}. wf keeps it.`,
+      );
 
   const statusNeedle = "\nstatus:";
   if (signals.done_unmet) {
@@ -703,7 +748,14 @@ function buildIssue(
     );
   }
   if (signals.in_progress_no_plan)
-    diag("Q002", "warn", "goal.md", statusNeedle, "The issue is in progress without plan.md.", "Run the `write-plan` skill.");
+    diag(
+      "Q002",
+      "warn",
+      "goal.md",
+      statusNeedle,
+      "The issue is in progress without plan.md.",
+      "Run the `write-plan` skill.",
+    );
   if (signals.stale)
     diag(
       "Q003",
@@ -750,14 +802,34 @@ function buildIssue(
   }
   if (state) {
     if (state.word_count > 400)
-      diag("Q008", "warn", "current_state.md", "summary:", `current_state.md has ${state.word_count} words (limit 400).`);
+      diag(
+        "Q008",
+        "warn",
+        "current_state.md",
+        "summary:",
+        `current_state.md has ${state.word_count} words (limit 400).`,
+      );
     if (!state.next_steps.length)
-      diag("Q008", "warn", "current_state.md", "summary:", "current_state.md has no Next steps.", "Add a numbered `## Next steps` list.");
+      diag(
+        "Q008",
+        "warn",
+        "current_state.md",
+        "summary:",
+        "current_state.md has no Next steps.",
+        "Add a numbered `## Next steps` list.",
+      );
   }
   for (const c of criteria) {
     const needle = `${c.id}: `;
     if (c.ears.pattern === "freeform")
-      diag("S08", "info", "goal.md", needle, `${c.id} does not match an EARS pattern.`, "Rewrite it as “When …, the <system> shall …”.");
+      diag(
+        "S08",
+        "info",
+        "goal.md",
+        needle,
+        `${c.id} does not match an EARS pattern.`,
+        "Rewrite it as “When …, the <system> shall …”.",
+      );
     if (!c.ears.measurable)
       diag(
         "S07",
@@ -777,11 +849,24 @@ function buildIssue(
         `Run \`wf verify ${id} ${c.id}\`, or add \`evidence:\`.`,
       );
     if (src.plan && c.satisfied_by.length === 0)
-      diag("Q006", "info", "goal.md", needle, `${c.id} is not covered by any task's \`satisfies\`.`);
+      diag(
+        "Q006",
+        "info",
+        "goal.md",
+        needle,
+        `${c.id} is not covered by any task's \`satisfies\`.`,
+      );
   }
   for (const t of tasks)
     if (t.satisfies.length === 0)
-      diag("Q007", "info", "plan.md", `### ${t.id}:`, `${t.id} satisfies no criterion.`, "Add `satisfies:` or drop the task.");
+      diag(
+        "Q007",
+        "info",
+        "plan.md",
+        `### ${t.id}:`,
+        `${t.id} satisfies no criterion.`,
+        "Add `satisfies:` or drop the task.",
+      );
 
   // Authors not in authors.md (Q012).
   const handles = uniq([
@@ -796,7 +881,14 @@ function buildIssue(
         : src.decisions.some((d) => d.author === h)
           ? "decisions.md"
           : "learnings.md";
-      diag("Q012", "warn", file, `@${h} `, `@${h} is not in authors.md.`, `Add \`## @${h}\` to authors.md.`);
+      diag(
+        "Q012",
+        "warn",
+        file,
+        `@${h} `,
+        `@${h} is not in authors.md.`,
+        `Add \`## @${h}\` to authors.md.`,
+      );
     }
 
   // Dangling references (F009).
@@ -822,11 +914,33 @@ function buildIssue(
 
   // ---------------- last activity
   const acts: LastActivity[] = [
-    ...src.changes.map((c) => ({ ts: c.ts, author: c.author, kind: "change" as const, title: c.title })),
-    ...src.decisions.map((d) => ({ ts: d.ts, author: d.author, kind: "decision" as const, title: d.title })),
-    ...src.learnings.map((l) => ({ ts: l.ts, author: l.author, kind: "learning" as const, title: l.title })),
+    ...src.changes.map((c) => ({
+      ts: c.ts,
+      author: c.author,
+      kind: "change" as const,
+      title: c.title,
+    })),
+    ...src.decisions.map((d) => ({
+      ts: d.ts,
+      author: d.author,
+      kind: "decision" as const,
+      title: d.title,
+    })),
+    ...src.learnings.map((l) => ({
+      ts: l.ts,
+      author: l.author,
+      kind: "learning" as const,
+      title: l.title,
+    })),
     ...(src.state
-      ? [{ ts: src.state.updated_at, author: src.state.updated_by, kind: "state" as const, title: src.state.summary }]
+      ? [
+          {
+            ts: src.state.updated_at,
+            author: src.state.updated_by,
+            kind: "state" as const,
+            title: src.state.summary,
+          },
+        ]
       : []),
     ...(src.activity ?? []),
   ];
@@ -902,7 +1016,11 @@ const EMPTY_BY_STATUS = (): Record<IssueStatus, number> => ({
   cancelled: 0,
 });
 
-function buildGroups(world: WorldSrc, ix: WorldIndex, summaries: Map<IssueId, IssueSummary>): GroupNode {
+function buildGroups(
+  world: WorldSrc,
+  ix: WorldIndex,
+  summaries: Map<IssueId, IssueSummary>,
+): GroupNode {
   const childrenOf = (gid: GroupId | undefined) =>
     world.groups
       .filter((g) => g.parent === gid)
@@ -932,7 +1050,8 @@ function buildGroups(world: WorldSrc, ix: WorldIndex, summaries: Map<IssueId, Is
     const rollNum = { num, den };
     for (const c of children) {
       issues += c.rollup.issues;
-      for (const k of Object.keys(by_status) as IssueStatus[]) by_status[k] += c.rollup.by_status[k];
+      for (const k of Object.keys(by_status) as IssueStatus[])
+        by_status[k] += c.rollup.by_status[k];
       needs_you += c.rollup.needs_you;
       stale += c.rollup.stale;
       blocked += c.rollup.blocked;
@@ -982,15 +1101,26 @@ function buildLibrary(
   const today = toDate(now);
   const summaries: LibrarySummary[] = [];
   const details = new Map<LibId, LibraryItemDetail>();
+  const issueText = new Map(
+    world.issues.map((src) => [
+      src.goal.id,
+      Object.values(files.get(src.goal.id) ?? {}).join("\n"),
+    ]),
+  );
   for (const l of world.library) {
     const citing: Ref[] = [];
     for (const src of world.issues) {
       const id = src.goal.id;
-      const texts = Object.values(files.get(id) ?? {}).join("\n");
-      const cites =
-        texts.includes(`[[${l.id}]]`) || (src.state?.library_refs ?? []).includes(l.id);
+      const texts = issueText.get(id) ?? "";
+      const cites = texts.includes(`[[${l.id}]]`) || (src.state?.library_refs ?? []).includes(l.id);
       if (cites)
-        citing.push({ kind: "issue", target: id, issue: id, title: src.goal.title, path: ix.dirs.get(id) });
+        citing.push({
+          kind: "issue",
+          target: id,
+          issue: id,
+          title: src.goal.title,
+          path: ix.dirs.get(id),
+        });
     }
     const overdue = l.status !== "retired" && !!l.review_after && l.review_after < today;
     const path = libraryPath(l);
@@ -1079,28 +1209,39 @@ export function derive(world: WorldSrc, opts: DeriveOptions): Derived {
     files.set(src.goal.id, b.files);
   }
 
-  // Issue backlinks: other issues and library items that reference this issue.
-  for (const [id, detail] of details) {
-    const back: Ref[] = [];
-    for (const [other, f] of files) {
-      if (other === id) continue;
-      for (const [name, text] of Object.entries(f)) {
-        const hit = findRefs(text ?? "").find((m) => m.issue === id);
-        if (!hit) continue;
-        const s = summaries.get(other);
-        back.push({
+  // Issue backlinks: other issues and library items that reference this issue. Each file is
+  // scanned once; an issue that cites another in several files counts once, via its first file.
+  const citedBy = new Map<IssueId, Ref[]>();
+  for (const [other, f] of files) {
+    const seen = new Set<IssueId>();
+    for (const [name, text] of Object.entries(f)) {
+      for (const m of findRefs(text ?? "")) {
+        if (!m.issue || m.issue === other || seen.has(m.issue)) continue;
+        seen.add(m.issue);
+        const list = citedBy.get(m.issue) ?? [];
+        list.push({
           kind: "issue",
-          target: hit.target,
+          target: m.target,
           issue: other,
-          title: s?.title ?? other,
+          title: summaries.get(other)?.title ?? other,
           path: `${ix.dirs.get(other)}/${name}`,
         });
-        break;
+        citedBy.set(m.issue, list);
       }
     }
+  }
+  for (const [id, detail] of details) {
+    const back: Ref[] = [...(citedBy.get(id) ?? [])];
     for (const l of world.library) {
       const hit = l.source.flatMap(findRefs).find((m) => m.issue === id);
-      if (hit) back.push({ kind: "library", target: l.id, id: l.id, title: l.title, path: libraryPath(l) });
+      if (hit)
+        back.push({
+          kind: "library",
+          target: l.id,
+          id: l.id,
+          title: l.title,
+          path: libraryPath(l),
+        });
     }
     detail.backlinks = back;
   }

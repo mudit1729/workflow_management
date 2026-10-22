@@ -274,3 +274,8 @@ export interface WorldSrc {
   library: LibrarySrc[];
   glossary: GlossaryTerm[];
 }
+
+/** Append to an issue's activity list (status moves, leases, ticks). */
+export function addActivity(src: IssueSrc, entry: ActivitySrc): void {
+  src.activity = [...(src.activity ?? []), entry];
+}

@@ -47,7 +47,8 @@ export function stubDiagrams(md: string, file: string, text: string): string {
   return md.replace(DIAGRAM_FENCE, (whole, id: string) => {
     const d = DIAGRAMS[id];
     if (!d) return whole;
-    const lineNo = text.split("\n").findIndex((l) => l.startsWith("```archify") && l.includes(`id=${id}`)) + 1;
+    const lineNo =
+      text.split("\n").findIndex((l) => l.startsWith("```archify") && l.includes(`id=${id}`)) + 1;
     return `[diagram ${d.type} "${d.title}" · ${d.nodes} nodes · ${file}:${lineNo}]`;
   });
 }
@@ -103,7 +104,11 @@ export function taskLines(t: TaskSrc): string[] {
   meta(out, "depends_on", t.depends_on?.join(", "));
   meta(out, "owns", t.owns?.map(tick).join(", "));
   meta(out, "satisfies", t.satisfies?.join(", "));
-  meta(out, "assignee", t.assignee && (t.assignee.startsWith("role:") ? t.assignee : at(t.assignee)));
+  meta(
+    out,
+    "assignee",
+    t.assignee && (t.assignee.startsWith("role:") ? t.assignee : at(t.assignee)),
+  );
   meta(out, "claimed_by", t.claimed_by && at(t.claimed_by));
   meta(out, "lease_until", t.lease_until);
   meta(out, "verify", t.verify);
@@ -247,11 +252,7 @@ export function learningLines(l: LearningSrc): string[] {
   const out = [heading(l.ts, l.author, l.title, l.id)];
   meta(out, "kind", l.kind);
   meta(out, "tags", l.tags?.join(", "));
-  meta(
-    out,
-    "applies_to",
-    l.applies_to?.map((a) => (/[/*.]/.test(a) ? tick(a) : a)).join(", "),
-  );
+  meta(out, "applies_to", l.applies_to?.map((a) => (/[/*.]/.test(a) ? tick(a) : a)).join(", "));
   meta(out, "promote", l.promote);
   out.push("", l.rule.trim());
   if (l.evidence) out.push("", `Evidence: ${l.evidence.trim()}`);
