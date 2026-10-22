@@ -1,0 +1,30 @@
+{
+  "meta": { "title": "Release candidate checklist" },
+  "nodes": [
+    { "id": "tag", "label": "Tag the release candidate", "kind": "start" },
+    { "id": "build", "label": "Build artifacts", "kind": "step" },
+    { "id": "unit", "label": "Run unit tests", "kind": "step" },
+    { "id": "e2e", "label": "Run end-to-end tests", "kind": "step" },
+    { "id": "gate", "label": "All checks green?", "kind": "decision" },
+    { "id": "approve", "label": "Product owner approves", "kind": "step" },
+    { "id": "staging", "label": "Deploy to staging", "kind": "step" },
+    { "id": "smoke", "label": "Smoke test staging", "kind": "step" },
+    { "id": "notes", "kind": "step" },
+    { "id": "publish", "label": "Publish the release", "kind": "end" },
+    { "id": "rollback", "label": "Roll back staging", "kind": "end" }
+  ],
+  "edges": [
+    { "from": "tag", "to": "build" },
+    { "from": "build", "to": "unit" },
+    { "from": "build", "to": "e2e" },
+    { "from": "unit", "to": "gate" },
+    { "from": "e2e", "to": "gate" },
+    { "from": "gate", "to": "approve", "label": "yes" },
+    { "from": "approve", "to": "staging" },
+    { "from": "staging", "to": "deploy-prod", "label": "promote" },
+    { "from": "staging", "to": "smoke" },
+    { "from": "smoke", "to": "notes", "label": "passes" },
+    { "from": "notes", "to": "publish" },
+    { "from": "smoke", "to": "rollback", "label": "fails" }
+  ]
+}

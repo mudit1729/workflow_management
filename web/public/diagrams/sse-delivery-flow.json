@@ -1,0 +1,103 @@
+{
+  "meta": { "title": "How a file change reaches the board" },
+  "groups": [{ "id": "server", "label": "wf serve" }, { "id": "client", "label": "Browser" }],
+  "nodes": [
+    {
+      "id": "event",
+      "label": "File event",
+      "kind": "start",
+      "group": "server",
+      "note": "Create, change, rename or delete"
+    },
+    {
+      "id": "debounce",
+      "label": "Debounce 250 ms",
+      "kind": "step",
+      "group": "server",
+      "note": "One burst of events becomes one pass"
+    },
+    {
+      "id": "ancestor",
+      "label": "Find nearest existing ancestor",
+      "kind": "step",
+      "group": "server",
+      "note": "A deleted folder rescans its parent"
+    },
+    { "id": "rescan", "label": "Rescan subtree", "kind": "step", "group": "server" },
+    {
+      "id": "diff",
+      "label": "blake3 diff",
+      "kind": "step",
+      "group": "server",
+      "note": "Compare file hashes with the snapshot"
+    },
+    { "id": "changed", "label": "Any file changed?", "kind": "decision", "group": "server" },
+    {
+      "id": "drop",
+      "label": "Drop the event",
+      "kind": "end",
+      "group": "server",
+      "note": "Our own write came back (echo)"
+    },
+    { "id": "parse", "label": "Parse changed files", "kind": "step", "group": "server" },
+    {
+      "id": "rollups",
+      "label": "Rebuild roll-ups and signals",
+      "kind": "step",
+      "group": "server"
+    },
+    {
+      "id": "swap",
+      "label": "Swap snapshot",
+      "kind": "step",
+      "group": "server",
+      "note": "ArcSwap. Readers never block."
+    },
+    {
+      "id": "broadcast",
+      "label": "Broadcast delta",
+      "kind": "step",
+      "group": "server",
+      "note": "SSE, ring buffer of 256 events"
+    },
+    {
+      "id": "gap",
+      "label": "Gap in Last-Event-ID?",
+      "kind": "decision",
+      "group": "client",
+      "note": "The client slept or lagged behind"
+    },
+    { "id": "resync", "label": "Receive resync", "kind": "step", "group": "client" },
+    { "id": "refetch", "label": "Refetch snapshot", "kind": "step", "group": "client" },
+    { "id": "newer", "label": "Rev newer than ours?", "kind": "decision", "group": "client" },
+    {
+      "id": "skip",
+      "label": "Ignore the delta",
+      "kind": "end",
+      "group": "client",
+      "note": "We already applied it"
+    },
+    { "id": "apply", "label": "Apply to query cache", "kind": "step", "group": "client" },
+    { "id": "fade", "label": "Fade changed cards", "kind": "end", "group": "client" }
+  ],
+  "edges": [
+    { "from": "event", "to": "debounce" },
+    { "from": "debounce", "to": "ancestor" },
+    { "from": "ancestor", "to": "rescan" },
+    { "from": "rescan", "to": "diff" },
+    { "from": "diff", "to": "changed" },
+    { "from": "changed", "to": "drop", "label": "no" },
+    { "from": "changed", "to": "parse", "label": "yes" },
+    { "from": "parse", "to": "rollups" },
+    { "from": "rollups", "to": "swap" },
+    { "from": "swap", "to": "broadcast" },
+    { "from": "broadcast", "to": "gap", "label": "SSE event" },
+    { "from": "gap", "to": "resync", "label": "yes" },
+    { "from": "gap", "to": "newer", "label": "no" },
+    { "from": "resync", "to": "refetch" },
+    { "from": "refetch", "to": "apply", "label": "replace cache" },
+    { "from": "newer", "to": "skip", "label": "no" },
+    { "from": "newer", "to": "apply", "label": "yes" },
+    { "from": "apply", "to": "fade" }
+  ]
+}

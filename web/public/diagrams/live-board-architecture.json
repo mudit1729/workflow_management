@@ -1,0 +1,115 @@
+{
+  "meta": { "title": "Live board architecture" },
+  "groups": [
+    { "id": "writers", "label": "Writers" },
+    { "id": "disk", "label": "Workspace on disk" },
+    { "id": "server", "label": "wf serve" },
+    { "id": "browser", "label": "Browser" }
+  ],
+  "nodes": [
+    { "id": "claude", "label": "Claude Code", "kind": "actor", "group": "writers" },
+    { "id": "codex", "label": "Codex", "kind": "actor", "group": "writers" },
+    {
+      "id": "hand",
+      "label": "Hand edit",
+      "kind": "actor",
+      "group": "writers",
+      "note": "Any editor. wf lint catches mistakes."
+    },
+    {
+      "id": "cli",
+      "label": "wf CLI",
+      "kind": "service",
+      "group": "writers",
+      "note": "wf append and wf state"
+    },
+    {
+      "id": "files",
+      "label": "Issue folder",
+      "kind": "store",
+      "group": "disk",
+      "note": "goal.md, plan.md, changes.md, current_state.md"
+    },
+    {
+      "id": "watcher",
+      "label": "Watcher",
+      "kind": "service",
+      "group": "server",
+      "note": "notify 8.2 with a 250 ms debouncer"
+    },
+    {
+      "id": "index",
+      "label": "wf-index",
+      "kind": "service",
+      "group": "server",
+      "note": "Rescan subtree, blake3 diff, parse, roll-ups"
+    },
+    {
+      "id": "snapshot",
+      "label": "Snapshot",
+      "kind": "store",
+      "group": "server",
+      "note": "ArcSwap, swapped once per change"
+    },
+    {
+      "id": "sse",
+      "label": "wf-server",
+      "kind": "service",
+      "group": "server",
+      "note": "SSE events: snapshot, delta, activity, resync. Ring buffer of 256."
+    },
+    {
+      "id": "edit",
+      "label": "wf-edit",
+      "kind": "service",
+      "group": "server",
+      "note": "Lock, hash check, splice, atomic rename"
+    },
+    {
+      "id": "leader",
+      "label": "Leader tab",
+      "kind": "client",
+      "group": "browser",
+      "note": "Holds the one EventSource"
+    },
+    {
+      "id": "tabs",
+      "label": "Other tabs",
+      "kind": "client",
+      "group": "browser",
+      "note": "Follow the leader over BroadcastChannel"
+    },
+    {
+      "id": "cache",
+      "label": "Query cache",
+      "kind": "store",
+      "group": "browser",
+      "note": "TanStack Query"
+    },
+    {
+      "id": "board",
+      "label": "Board",
+      "kind": "ui",
+      "group": "browser",
+      "note": "Draws the cards and fades the ones that changed"
+    }
+  ],
+  "edges": [
+    { "from": "claude", "to": "cli" },
+    { "from": "codex", "to": "cli" },
+    { "from": "cli", "to": "files", "label": "per-file lock, atomic write" },
+    { "from": "hand", "to": "files", "label": "by hand" },
+    { "from": "files", "to": "watcher", "label": "file events" },
+    { "from": "watcher", "to": "index", "label": "dirty path" },
+    { "from": "index", "to": "snapshot", "label": "swap" },
+    { "from": "index", "to": "sse", "label": "delta, activity" },
+    { "from": "sse", "to": "leader", "label": "SSE" },
+    { "from": "leader", "to": "tabs", "label": "BroadcastChannel" },
+    { "from": "leader", "to": "cache", "label": "apply delta" },
+    { "from": "cache", "to": "board", "label": "render" },
+    { "from": "board", "to": "sse", "label": "POST /api/ops" },
+    { "from": "sse", "to": "edit", "label": "op" },
+    { "from": "edit", "to": "files", "label": "atomic rename" },
+    { "from": "edit", "to": "index", "label": "new hash, echo ignored" }
+  ]
+}

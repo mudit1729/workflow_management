@@ -1,0 +1,6 @@
+{
+  "live-board-architecture": { "type": "architecture", "file": "goal.md", "line": 21 },
+  "sse-delivery-flow": { "type": "workflow", "file": "plan.md", "line": 14 },
+  "skills-flow": { "type": "workflow", "file": "goal.md", "line": 18 },
+  "broken-release-flow": { "type": "workflow", "file": "plan.md", "line": 32 }
+}
