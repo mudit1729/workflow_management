@@ -130,3 +130,45 @@ describe("connection", () => {
     expect(useLiveStore.getState().activity).toHaveLength(1);
   });
 });
+
+describe("workspace files", () => {
+  const GOAL = "issues/wf/web/live-board-updates/goal.md";
+
+  test("a written file reaches the board and marks the file queries stale", async () => {
+    const file = await api.file(GOAL);
+    queryClient.setQueryData(qk.files(), await api.files());
+    queryClient.setQueryData(qk.file(GOAL), file);
+    await api.writeFile({
+      path: GOAL,
+      text: (file.text as string).replace("\nstatus: in_progress\n", "\nstatus: review\n"),
+      base_rev: file.rev,
+    });
+    expect(cached()?.issues.find((i) => i.id === "wf-3k9x2")?.status).toBe("review");
+    expect(isRecentlyChanged("wf-3k9x2")).toBe(true);
+    expect(queryClient.getQueryState(qk.files())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(qk.file(GOAL))?.isInvalidated).toBe(true);
+    expect((await api.file(GOAL)).text).toContain("\nstatus: review\n");
+  });
+
+  test("a stale save toasts the conflict and resolves to undefined; a delete throws", async () => {
+    const { writeWorkspaceFile, deleteWorkspaceFile } = await import("@/lib/api/files");
+    const file = await api.file(GOAL);
+    await api.writeFile({ path: GOAL, text: `${file.text}\n` });
+    const res = await writeWorkspaceFile({ path: GOAL, text: "x", base_rev: file.rev });
+    expect(res).toBeUndefined();
+    expect(toasts.warning).toHaveBeenCalledTimes(1);
+    expect(String(toasts.warning.mock.calls[0][0])).toMatch(/goal\.md changed/);
+    await expect(deleteWorkspaceFile({ path: GOAL, base_rev: file.rev })).rejects.toThrow(
+      /goal\.md changed/,
+    );
+  });
+
+  test("a new file reaches the snapshot as a card", async () => {
+    await api.writeFile({
+      path: "issues/wf/web/new-card/goal.md",
+      text: "---\nid: wf-7ab3c\ntitle: New card\nstatus: planned\npriority: low\nsize: s\ncreated: 2026-10-22T16:30+05:30\n---\n\n## Context\n\nx\n\n## Success criteria\n\n- [ ] SC-1: When a user opens the card, the page shall show it within 1 s.\n",
+    });
+    expect(cached()?.issues.some((i) => i.id === "wf-7ab3c")).toBe(true);
+    expect(isRecentlyChanged("wf-7ab3c")).toBe(true);
+  });
+});

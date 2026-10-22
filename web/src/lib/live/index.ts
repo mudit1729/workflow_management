@@ -68,6 +68,9 @@ function onDelta(client: QueryClient, d: DeltaEvent) {
 
   for (const id of d.details_changed) void client.invalidateQueries({ queryKey: qk.issue(id) });
   for (const l of d.library_upserted) void client.invalidateQueries({ queryKey: qk.library(l.id) });
+  // Any write changes some file: the file list and an open file read again.
+  void client.invalidateQueries({ queryKey: qk.files() });
+  void client.invalidateQueries({ queryKey: ["file"] });
   markChanged([...d.issues_upserted.map((i) => i.id), ...d.details_changed]);
 }
 

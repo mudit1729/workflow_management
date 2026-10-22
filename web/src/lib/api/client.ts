@@ -13,7 +13,7 @@ import type {
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "./error";
 import { isRealApi, loadMock } from "./mock-bridge";
-import type { SearchScope, WfOp } from "./types";
+import type { SearchScope, WfOp, WorkspaceFile, WorkspaceFileInfo } from "./types";
 
 const BASE = "/api";
 
@@ -39,7 +39,16 @@ export interface Api {
   context(id: string, budget?: number): Promise<string>;
   ops(op: WfOp): Promise<OpResult>;
   health(): Promise<Health>;
+  /** Every file of the workspace, sorted by path. */
+  files(): Promise<WorkspaceFileInfo[]>;
+  file(path: string): Promise<WorkspaceFile>;
+  /** Save a hand edit. Creates the file when it is missing; 409 when `base_rev` is stale. */
+  writeFile(args: { path: string; text: string; base_rev?: string }): Promise<{ rev: string }>;
+  deleteFile(args: { path: string; base_rev?: string }): Promise<void>;
 }
+
+/** A workspace path in a URL: every segment encoded, the slashes kept. */
+const filePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
 const real: Api = {
   snapshot: () => request("/snapshot"),
@@ -57,6 +66,18 @@ const real: Api = {
       body: JSON.stringify(op),
     }),
   health: () => request("/health"),
+  files: () => request("/files"),
+  file: (path) => request(`/files/${filePath(path)}`),
+  writeFile: ({ path, text, base_rev }) =>
+    request(`/files/${filePath(path)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, base_rev }),
+    }),
+  deleteFile: async ({ path, base_rev }) => {
+    const query = base_rev ? `?${new URLSearchParams({ base_rev })}` : "";
+    await request<unknown>(`/files/${filePath(path)}${query}`, { method: "DELETE" }, "text");
+  },
 };
 
 const mock: Api = {
@@ -68,6 +89,10 @@ const mock: Api = {
   context: async (id, budget) => (await loadMock()).context(id, budget),
   ops: async (op) => (await loadMock()).ops(op),
   health: async () => (await loadMock()).health(),
+  files: async () => (await loadMock()).files(),
+  file: async (path) => (await loadMock()).file(path),
+  writeFile: async (args) => (await loadMock()).writeFile(args),
+  deleteFile: async (args) => (await loadMock()).deleteFile(args),
 };
 
 export const api: Api = isRealApi ? real : mock;

@@ -1,8 +1,8 @@
-// The mock world is modelled as "sources": plain objects that mirror what the
-// workspace FILES say (frontmatter keys, sections, checklist items, entries).
-// `serialize.ts` renders them back to file text and `derive.ts` turns them into
-// the API shapes of `@/gen/types`. Ops mutate sources and re-derive, so every
-// view stays consistent after a write.
+// The shape of what the workspace FILES say (frontmatter keys, sections, checklist items,
+// entries): the sources `md/index.ts` (`loadWorkspace`) parses the markdown into and
+// `derive.ts` turns into the API shapes of `@/gen/types`. The files are the only source of
+// the mock world; nothing builds these objects by hand. `md/render.ts` and `md/edit.ts`
+// write them back as text.
 import type {
   ActivityKind,
   Author,
@@ -22,7 +22,6 @@ import type {
   LibraryStatus,
   Priority,
   RequestKind,
-  Severity,
   Size,
   TaskId,
   TaskStatus,
@@ -195,17 +194,10 @@ export interface DocSrc {
   bytes?: number;
 }
 
-/** An explicit lint finding, located by searching `find` in the rendered file. */
-export interface FindingSrc {
-  rule: string;
-  severity: Severity;
-  file: "goal.md" | "plan.md" | "current_state.md" | "changes.md" | "decisions.md" | "learnings.md";
-  find: string;
-  message: string;
-  fix?: string;
-}
-
-/** Activity that is not an entry (status moves, leases, requests). Feeds `last_activity`. */
+/**
+ * Activity that is not an entry (status moves, leases, requests). No file records it: the store
+ * keeps it in memory for the session and it feeds `last_activity`.
+ */
 export interface ActivitySrc {
   ts: Ts;
   author: Handle;
@@ -230,7 +222,6 @@ export interface IssueSrc {
   decisions: DecisionSrc[];
   learnings: LearningSrc[];
   docs?: DocSrc[];
-  findings?: FindingSrc[];
   activity?: ActivitySrc[];
 }
 
@@ -273,9 +264,4 @@ export interface WorldSrc {
   issues: IssueSrc[];
   library: LibrarySrc[];
   glossary: GlossaryTerm[];
-}
-
-/** Append to an issue's activity list (status moves, leases, ticks). */
-export function addActivity(src: IssueSrc, entry: ActivitySrc): void {
-  src.activity = [...(src.activity ?? []), entry];
 }

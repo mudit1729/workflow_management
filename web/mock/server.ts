@@ -13,13 +13,22 @@ import type {
   WorkspaceSnapshot,
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "@/lib/api/error";
-import type { SearchScope, WfOp } from "@/lib/api/types";
+import type { SearchScope, WfOp, WorkspaceFile, WorkspaceFileInfo } from "@/lib/api/types";
 import { contextBundle } from "./context";
 import { createEventPlayer } from "./events";
+import { listFiles, readFile } from "./files";
 import { applyOp } from "./ops";
 import { search as searchCorpus } from "./search";
-import { type Connection, createStore, type Store, type StoreOptions } from "./store";
-import { clone } from "./util";
+import {
+  type Connection,
+  checkPath,
+  createStore,
+  MAX_FILE_BYTES,
+  type Store,
+  type StoreOptions,
+} from "./store";
+import { byteLength, clone } from "./util";
+import { onDiskChange } from "./workspace-bus";
 
 export type { Connection } from "./store";
 
@@ -32,7 +41,7 @@ export interface MockControls {
   setArchifyAvailable: (available: boolean) => void;
   /** `reconnecting` and `offline` hold events back; `live` replays them. */
   setConnection: (state: Connection) => void;
-  /** Re-seed the world. */
+  /** Back to the workspace files as they are on disk. */
   reset: () => void;
 }
 
@@ -52,6 +61,12 @@ export interface MockServer {
   context(id: string, budget?: number): Promise<string>;
   ops(op: WfOp): Promise<OpResult>;
   health(): Promise<Health>;
+  /** Every file of the workspace, sorted by path. */
+  files(): Promise<WorkspaceFileInfo[]>;
+  file(path: string): Promise<WorkspaceFile>;
+  /** A hand edit saved to the workspace: creates the file when it is missing. */
+  writeFile(args: { path: string; text: string; base_rev?: string }): Promise<{ rev: string }>;
+  deleteFile(args: { path: string; base_rev?: string }): Promise<void>;
   subscribe(fn: (e: ServerEvent) => void): () => void;
   onConnection(fn: (state: Connection) => void): () => void;
   connection(): Connection;
@@ -100,6 +115,21 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     },
   };
 
+  /** The error of a refused file edit, in the shape of a 422. */
+  const invalid = (...gaps: string[]) => new ApiError(422, { diagnostics: [], gaps });
+
+  /** Run a commit; a workspace that cannot be read after it is a 422, not a crash. */
+  function commit(fn: () => void): void {
+    try {
+      fn();
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      throw invalid(
+        `The workspace could not be read after this change: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   return {
     snapshot: () => read(() => store.derived.snapshot),
     issue: (id) =>
@@ -136,6 +166,27 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         archify: store.derived.snapshot.config.archify,
         rev: store.rev,
       })),
+    files: () => read(() => listFiles(store)),
+    file: (path) => read(() => readFile(store, path)),
+    writeFile: async ({ path, text, base_rev }) => {
+      await delay();
+      const checked = checkPath(path);
+      if ("error" in checked) throw invalid(checked.error);
+      if (store.assets()[checked.path])
+        throw invalid(`${checked.path} is a binary file. The editor writes text.`);
+      if (byteLength(text) > MAX_FILE_BYTES) throw invalid("That file is too large to save.");
+      store.guardFile(checked.path, base_rev);
+      commit(() => store.applyChanges([{ path: checked.path, text }], store.me, "file"));
+      return { rev: store.pathRev(checked.path) ?? "" };
+    },
+    deleteFile: async ({ path, base_rev }) => {
+      await delay();
+      const checked = checkPath(path);
+      if ("error" in checked) throw invalid(checked.error);
+      if (store.text(checked.path) === undefined) throw new NotFoundError(`File ${checked.path}`);
+      store.guardFile(checked.path, base_rev);
+      commit(() => store.applyChanges([{ path: checked.path, text: null }], store.me, "file"));
+    },
     subscribe: store.subscribe,
     onConnection: store.onConnection,
     connection: store.connection,
@@ -209,6 +260,10 @@ export const search = server.search;
 export const context = server.context;
 export const ops = server.ops;
 export const health = server.health;
+export const files = server.files;
+export const file = server.file;
+export const writeFile = server.writeFile;
+export const deleteFile = server.deleteFile;
 export const subscribe = server.subscribe;
 export const onConnection = server.onConnection;
 export const connection = server.connection;
@@ -218,5 +273,13 @@ if (isBrowser && import.meta.env.VITE_API !== "real") {
   (window as unknown as { __wf?: MockControls }).__wf = mockControls;
 }
 
-// A hot reload replaces this module (and its store): stop the old timer.
-if (import.meta.hot) import.meta.hot.dispose(() => server.dispose());
+// The mock watcher: when a file under mock/workspace changes on disk, the bundler hands the new
+// set of files over (see workspace-files.ts) and the store applies what differs.
+const stopWatching = isBrowser ? onDiskChange((disk) => server.store.applyDisk(disk)) : undefined;
+
+// A hot reload replaces this module (and its store): stop the old timer and the watcher.
+if (import.meta.hot)
+  import.meta.hot.dispose(() => {
+    server.dispose();
+    stopWatching?.();
+  });

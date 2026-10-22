@@ -1,14 +1,40 @@
 // The scripted live loop: eight events that other authors cause while you watch. Each one is
-// a real write through the store, so the board, the drawer and the inbox change for real.
+// a text edit of the workspace files through the store (an entry appended to changes.md, a
+// line of goal.md flipped), so the board, the drawer and the inbox change for real.
 // An event whose target no longer allows it (you already moved the issue, the request is
 // answered) is skipped, and the player moves on to the next one that applies.
 import type { Handle, IssueId } from "@/gen/types";
-import { EVENT_TARGETS } from "./data";
-import { addActivity, type IssueSrc, type RequestSrc, type TaskSrc } from "./source";
-import type { ActivityDraft, Store, Touch } from "./store";
+import {
+  addRequest,
+  answerRequest,
+  appendChange,
+  appendDecision,
+  expireLease,
+  markBlocked,
+  overwriteState,
+  setIssueStatus,
+  toggleStep,
+} from "./md/edit";
+import type { ChangeSrc, DecisionSrc, IssueSrc, RequestSrc, TaskSrc } from "./source";
+import type { ActivityDraft, Draft, Store, Touch } from "./store";
 import { toTs, tsMs } from "./time";
 
 export const EVENT_INTERVAL_MS = 20_000;
+
+/**
+ * Targets of the scripted live events. The IDs are fixed by UI_BUILD.md: the event loop and
+ * the DevPanel depend on them, and the workspace files hold the matching issues.
+ */
+export const EVENT_TARGETS = {
+  appendChange: { issue: "wf-3k9x2", task: "T-3" },
+  rewriteState: "wf-3k9x2",
+  newBlockingQuestion: "wf-x5hd3",
+  leaseExpires: { issue: "wf-skf01", task: "T-2" },
+  moveToReview: "wf-h2tb7",
+  markBlocked: { issue: "wf-t3jp5", by: "wf-w8vz4" },
+  appendDecision: "wf-skf01",
+  answerFyi: { issue: "wf-y4bz7", request: "Q-5ys8j" },
+} as const;
 
 interface Ctx {
   store: Store;
@@ -34,6 +60,13 @@ function sha(): string {
   return Math.floor(Math.random() * 0x10000000)
     .toString(16)
     .padStart(7, "0");
+}
+
+/** Read a file of the draft; the events only run where the files exist, so a miss is a bug. */
+function textOf(w: Draft, path: string): string {
+  const text = w.read(path);
+  if (text === undefined) throw new Error(`${path} does not exist.`);
+  return text;
 }
 
 function asked(store: Store, request: RequestSrc, issue: IssueId): ActivityDraft | undefined {
@@ -78,24 +111,25 @@ const codexProgress: ScriptedEvent = {
     const v = pick(PROGRESS, n);
     const author: Handle = "codex";
     const id = store.newId("C-");
-    const touches: Touch[] = [{ file: store.filePath(issue, "changes.md"), anchors: [id] }];
-    if (tick) touches.push({ file: store.filePath(issue, "plan.md"), anchors: [`${task}.2`] });
+    const changesFile = store.filePath(issue, "changes.md");
+    const planFile = store.filePath(issue, "plan.md");
+    const touches: Touch[] = [{ file: changesFile, anchors: [id] }];
+    if (tick) touches.push({ file: planFile, anchors: [`${task}.2`] });
+    const entry: ChangeSrc = {
+      id,
+      ts: store.stamp(),
+      author,
+      title: v.title,
+      kind: "progress",
+      task,
+      commit: sha(),
+      files: v.files,
+      model: "gpt-5-codex",
+      body: v.body,
+    };
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      s.changes.push({
-        id,
-        ts: store.stamp(),
-        author,
-        title: v.title,
-        kind: "progress",
-        task,
-        commit: sha(),
-        files: v.files,
-        model: "gpt-5-codex",
-        body: v.body,
-      });
-      const step = tasksOf(s).find((t) => t.id === task)?.steps?.[1];
-      if (tick && step) step.done = true;
+      w.write(changesFile, appendChange(w.read(changesFile), entry));
+      if (tick) w.write(planFile, toggleStep(textOf(w, planFile), task, 2, true));
       return {
         touches,
         activity: [{ issue_id: issue, kind: "change", author, title: v.title }],
@@ -147,17 +181,20 @@ const opusState: ScriptedEvent = {
     if (!src?.state) return false;
     const v = pick(STATES, n);
     const author: Handle = "claude-opus";
+    const file = store.filePath(issue, "current_state.md");
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      if (s.state) {
-        s.state.summary = v.summary;
-        s.state.in_flight = v.in_flight;
-        s.state.next_steps = v.next;
-        s.state.updated_at = store.stamp();
-        s.state.updated_by = author;
-      }
+      w.write(
+        file,
+        overwriteState(textOf(w, file), {
+          summary: v.summary,
+          in_flight: v.in_flight,
+          next_steps: v.next,
+          updated_at: store.stamp(),
+          updated_by: author,
+        }),
+      );
       return {
-        touches: [{ file: store.filePath(issue, "current_state.md"), anchors: "all" }],
+        touches: [{ file, anchors: "all" }],
         activity: [{ issue_id: issue, kind: "state", author, title: v.summary }],
       };
     });
@@ -193,25 +230,20 @@ const sonnetAsks: ScriptedEvent = {
       asked: store.stamp(),
     };
     const created = !src.state;
+    const file = store.filePath(issue, "current_state.md");
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      if (s.state) s.state.needs_you.push(request);
-      else
-        s.state = {
+      w.write(
+        file,
+        addRequest(w.read(file), request, {
           summary: "Waiting for an answer before the next step.",
           updated_at: store.stamp(),
           updated_by: author,
-          needs_you: [request],
           next_steps: [`Continue once @${store.me} answers [[#${id}]].`],
-        };
+        }),
+      );
       const draft = asked(store, request, issue);
       return {
-        touches: [
-          {
-            file: store.filePath(issue, "current_state.md"),
-            anchors: created ? "all" : [id],
-          },
-        ],
+        touches: [{ file, anchors: created ? "all" : [id] }],
         activity: draft ? [draft] : [],
       };
     });
@@ -232,16 +264,16 @@ const leaseLapses: ScriptedEvent = {
     if (tsMs(live.lease_until) <= store.now()) return false;
     const holder = live.claimed_by;
     const title = `The lease of @${holder} on ${task} expired`;
+    const file = store.filePath(issue, "plan.md");
     store.mutate(holder, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      const t = tasksOf(s).find((x) => x.id === task);
-      if (t) t.lease_until = toTs(store.now() - 3 * 60_000);
-      addActivity(s, { ts: store.stamp(), author: holder, kind: "lease", title });
+      // The lease ran out three minutes ago: `lease_until` moves into the past.
+      w.write(file, expireLease(textOf(w, file), task, toTs(store.now() - 3 * 60_000)));
       return {
-        touches: [{ file: store.filePath(issue, "plan.md"), anchors: [task] }],
+        touches: [{ file, anchors: [task] }],
         activity: [
           { issue_id: issue, kind: "lease", author: holder, title, notable: "lease_expired" },
         ],
+        log: [{ issue_id: issue, kind: "lease", author: holder, title }],
       };
     });
     return true;
@@ -257,18 +289,13 @@ const toReview: ScriptedEvent = {
     const src = store.issueSrc(issue);
     if (src?.goal.status !== "in_progress") return false;
     const author: Handle = "claude-sonnet";
+    const file = store.filePath(issue, "goal.md");
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      s.goal.status = "review";
-      addActivity(s, {
-        ts: store.stamp(),
-        author,
-        kind: "status",
-        title: "In progress → Review",
-      });
+      w.write(file, setIssueStatus(textOf(w, file), "review"));
       return {
-        touches: [{ file: store.filePath(issue, "goal.md"), anchors: ["status"] }],
+        touches: [{ file, anchors: ["status"] }],
         activity: [{ issue_id: issue, kind: "status", author, title: "Moved to Review" }],
+        log: [{ issue_id: issue, kind: "status", author, title: "In progress → Review" }],
       };
     });
     return true;
@@ -287,30 +314,26 @@ const blocksIssue: ScriptedEvent = {
     const author: Handle = "codex";
     const id = store.newId("C-");
     const title = `Paused: waiting for "${blocker}"`;
+    const goalFile = store.filePath(issue, "goal.md");
+    const changesFile = store.filePath(issue, "changes.md");
+    const entry: ChangeSrc = {
+      id,
+      ts: store.stamp(),
+      author,
+      title,
+      kind: "progress",
+      model: "gpt-5-codex",
+      body: `Marked the issue blocked by [[${by}]]. Resume when it moves to review.`,
+    };
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      s.goal.status = "blocked";
-      s.goal.blocked_by = [...s.goal.blocked_by, by];
-      s.changes.push({
-        id,
-        ts: store.stamp(),
-        author,
-        title,
-        kind: "progress",
-        model: "gpt-5-codex",
-        body: `Marked the issue blocked by [[${by}]]. Resume when it moves to review.`,
-      });
-      addActivity(s, {
-        ts: store.stamp(),
-        author,
-        kind: "status",
-        title: "In progress → Blocked",
-      });
+      w.write(goalFile, markBlocked(textOf(w, goalFile), by));
+      w.write(changesFile, appendChange(w.read(changesFile), entry));
       return {
         touches: [
-          { file: store.filePath(issue, "goal.md"), anchors: ["status"] },
-          { file: store.filePath(issue, "changes.md"), anchors: [id] },
+          { file: goalFile, anchors: ["status"] },
+          { file: changesFile, anchors: [id] },
         ],
+        log: [{ issue_id: issue, kind: "status", author, title: "In progress → Blocked" }],
         activity: [
           {
             issue_id: issue,
@@ -365,23 +388,24 @@ const opusDecides: ScriptedEvent = {
     const v = DECISIONS[n];
     const author: Handle = "claude-opus";
     const id = store.newId("D-");
+    const file = store.filePath(issue, "decisions.md");
+    const entry: DecisionSrc = {
+      id,
+      ts: store.stamp(),
+      author,
+      title: v.title,
+      status: "accepted",
+      topic: v.topic,
+      decided_by: [author],
+      decision: v.decision,
+      because: v.because,
+      rejected: v.rejected,
+      revisit: v.revisit,
+    };
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      s.decisions.push({
-        id,
-        ts: store.stamp(),
-        author,
-        title: v.title,
-        status: "accepted",
-        topic: v.topic,
-        decided_by: [author],
-        decision: v.decision,
-        because: v.because,
-        rejected: v.rejected,
-        revisit: v.revisit,
-      });
+      w.write(file, appendDecision(w.read(file), entry));
       return {
-        touches: [{ file: store.filePath(issue, "decisions.md"), anchors: [id] }],
+        touches: [{ file, anchors: [id] }],
         activity: [{ issue_id: issue, kind: "decision", author, title: v.title }],
       };
     });
@@ -399,17 +423,14 @@ const muditAnswers: ScriptedEvent = {
     if (!live || live.answered) return false;
     const author = live.to;
     const answer = live.options?.[0] ?? "Noted. No change needed from me.";
+    const file = store.filePath(issue, "current_state.md");
     store.mutate(author, issue, (w) => {
-      const s = w.issues.find((i) => i.goal.id === issue) as IssueSrc;
-      const r = s.state?.needs_you.find((x) => x.id === request);
-      if (r) {
-        r.answered = true;
-        r.answer = answer;
-        r.answered_by = author;
-        r.answered_at = store.stamp();
-      }
+      w.write(
+        file,
+        answerRequest(textOf(w, file), request, { answer, by: author, at: store.stamp() }),
+      );
       return {
-        touches: [{ file: store.filePath(issue, "current_state.md"), anchors: [request] }],
+        touches: [{ file, anchors: [request] }],
         activity: [{ issue_id: issue, kind: "request", author, title: `Answered ${request}` }],
       };
     });

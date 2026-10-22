@@ -1,15 +1,16 @@
-// Guards the seed world: every roster issue exists with its status, IDs follow the grammar,
-// every signal of the contract appears on the issue that is meant to show it, the inbox holds
-// the six requests, and every [[ref]] and diagram reference resolves.
+// Guards the seed world, which lives in the markdown files under mock/workspace: every roster
+// issue exists with its status, IDs follow the grammar, every signal of the contract appears on
+// the issue that is meant to show it, the inbox holds the six requests, and every [[ref]] and
+// diagram reference resolves. The world is what the store reads from those files.
 import { beforeAll, describe, expect, it } from "vitest";
-import type { Derived } from "../derive";
-import { derive } from "../derive";
-import { DIAGRAMS } from "../diagrams";
-import { diagramIds } from "../serialize";
-import type { IssueSrc, WorldSrc } from "../source";
-import { toDate } from "../time";
-import { CROCKFORD } from "../util";
-import { EVENT_TARGETS, seedConfig, seedWorld } from "./index";
+import type { Derived } from "./derive";
+import { EVENT_TARGETS } from "./events";
+import { diagramIds } from "./md/render";
+import type { LoadedWorkspace } from "./md/types";
+import type { IssueSrc, WorldSrc } from "./source";
+import { createStore } from "./store";
+import { toDate } from "./time";
+import { CROCKFORD } from "./util";
 
 const NOW = Date.now();
 const CROCKFORD_5 = new RegExp(`^[${CROCKFORD}]{5}$`);
@@ -76,13 +77,16 @@ const FIXED_GROUP_IDS = ["g-wf001", "g-core1", "g-web01", "g-skl01", "g-plat1", 
 const FIXED_ISSUE_IDS = ["wf-ss0lo"];
 
 let world: WorldSrc;
+let source: LoadedWorkspace;
 let d: Derived;
 let withArchify: Derived;
 
 beforeAll(() => {
-  world = seedWorld();
-  d = derive(world, { rev: "r-test", now: NOW, archify: false });
-  withArchify = derive(seedWorld(), { rev: "r-test", now: NOW, archify: true });
+  const store = createStore({ clock: () => NOW });
+  world = store.world;
+  source = store.source;
+  d = store.derived;
+  withArchify = createStore({ clock: () => NOW, archify: true }).derived;
 });
 
 const summary = (id: string) => {
@@ -104,7 +108,7 @@ const src = (id: string): IssueSrc => {
 
 describe("config", () => {
   it("names the workspace and sets the limits", () => {
-    expect(seedConfig()).toEqual({
+    expect(world.config).toEqual({
       name: "wf",
       wf_format: 1,
       id_prefix: "wf",
@@ -117,16 +121,17 @@ describe("config", () => {
     });
   });
 
-  it("returns a fresh deep world on every call", () => {
-    const a = seedWorld();
-    const b = seedWorld();
-    expect(a).not.toBe(b);
-    a.issues[0].goal.title = "changed";
-    a.library[0].tags.push("x");
-    a.issues[0].changes.length = 0;
-    expect(b.issues[0].goal.title).toBe("Live board updates");
-    expect(b.library[0].tags).not.toContain("x");
-    expect(b.issues[0].changes.length).toBeGreaterThan(5);
+  it("gives every store its own working copy of the files", () => {
+    const a = createStore({ clock: () => NOW });
+    const b = createStore({ clock: () => NOW });
+    const goal = a.filePath("wf-3k9x2", "goal.md");
+    a.mutate("shruti", "wf-3k9x2", (w) => {
+      w.write(goal, (w.read(goal) ?? "").replace("title: Live board updates", "title: Changed"));
+      return { touches: [{ file: goal, anchors: "all" }], activity: [] };
+    });
+    expect(a.summary("wf-3k9x2")?.title).toBe("Changed");
+    expect(b.summary("wf-3k9x2")?.title).toBe("Live board updates");
+    expect(b.text(goal)).not.toBe(a.text(goal));
   });
 });
 
@@ -295,7 +300,7 @@ describe("derive", () => {
   it("references only diagrams that exist", () => {
     for (const s of world.issues) {
       const md = [s.context, s.out_of_scope, s.links, s.plan?.approach];
-      for (const id of md.flatMap(diagramIds)) expect(DIAGRAMS[id], id).toBeDefined();
+      for (const id of md.flatMap(diagramIds)) expect(source.diagrams[id], id).toBeDefined();
     }
     expect(
       detail("wf-3k9x2")
@@ -454,7 +459,9 @@ describe("wf-3k9x2, the dogfood issue", () => {
       ["notes/research.md", "markdown"],
       ["evidence/sc2.png", "image"],
     ]);
-    expect(docs[1].url).toBe("/files/issues/wf/web/live-board-updates/evidence/sc2.png");
+    // The image is served by the bundler (a hashed asset in a build).
+    expect(docs[1].url).toMatch(/sc2.*\.png/);
+    expect(docs[1].size).toBe(95362);
   });
 
   it("holds a live coordinator lease", () => {
@@ -1043,34 +1050,22 @@ describe("file grammar (contract 1.3 to 1.5)", () => {
 });
 
 describe("files", () => {
-  // `node:fs` has no types in this project, so the module is loaded by a variable name.
-  const specifier = "node:fs";
-  interface Fs {
-    existsSync(p: string): boolean;
-    readFileSync(p: string, enc?: string): string;
-    statSync(p: string): { size: number };
-  }
-  let fs: Fs;
-  let root: string;
-
-  beforeAll(async () => {
-    fs = (await import(/* @vite-ignore */ specifier)) as Fs;
-    const url = new URL("../../public/files/", import.meta.url);
-    root = decodeURIComponent(url.pathname);
-  });
-
-  it("serves every doc of every issue from web/public/files", () => {
+  it("serves every doc of every issue from the workspace files", () => {
     let seen = 0;
     for (const s of world.issues) {
       const dir = detail(s.goal.id).summary.path;
       for (const doc of s.docs ?? []) {
-        const file = `${root}${dir}/${doc.path}`;
-        expect(fs.existsSync(file), file).toBe(true);
-        if (doc.body !== undefined) expect(fs.readFileSync(file, "utf8"), file).toBe(doc.body);
-        else {
-          const size = fs.statSync(file).size;
-          expect(size, file).toBe(doc.bytes);
-          expect(size, file).toBeLessThan(150 * 1024);
+        const shown = detail(s.goal.id).docs.find((x) => x.path === doc.path);
+        expect(shown, `${dir}/${doc.path}`).toBeDefined();
+        if (doc.body !== undefined) {
+          // A markdown doc is a file of the workspace: its text is the file's text.
+          expect(shown?.body_md, doc.path).toBe(doc.body);
+          expect(source.texts, doc.path).toBeDefined();
+        } else {
+          // An image is served by the bundler: the loader was told its URL and size.
+          expect(shown?.url, doc.path).toBeTruthy();
+          expect(shown?.size, doc.path).toBe(doc.bytes);
+          expect(shown?.size, doc.path).toBeLessThan(150 * 1024);
         }
         seen++;
       }

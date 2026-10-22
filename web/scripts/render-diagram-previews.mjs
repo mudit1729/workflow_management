@@ -1,11 +1,17 @@
-// Writes the stand-in diagram previews: public/diagrams/<id>.html (+ <id>.json).
+// Writes the stand-in diagram previews: public/diagrams/<id>.html, one page per archify block
+// of the workspace, and mock/diagram-previews.json (the ids that have a page).
 //
 // archify is not installed in this environment, so the prototype cannot render real
-// diagrams. This script draws each valid candidate in mock/diagrams/ as a small
-// self-contained page instead (layered layout, SVG curves, wf tokens, no external requests).
-// The cards show it when the DevPanel's "Archify available" switch is on.
+// diagrams. The blocks live in the markdown of the workspace (```archify <type> id=<id> in the
+// goal.md and plan.md files under mock/workspace/issues, contract 1.5); this script reads them
+// from there and draws each valid one as a small self-contained page instead (layered layout,
+// SVG curves, wf tokens, no external requests). The cards show the page when the DevPanel's
+// "Archify available" switch is on. A block with defects gets no page; the loader marks it
+// invalid with the same checks.
 //
-// usage: node scripts/render-diagram-previews.mjs
+// usage: node scripts/render-diagram-previews.mjs [--quiet]
+//   The dev server runs it again when a workspace file with an archify block changes. It writes
+//   only the files whose content differs.
 //
 // Page protocol (the bridge the daemon also injects into real archify pages):
 //   ?embed=1            hide the page header (used inside ArchifyCard)
@@ -13,13 +19,18 @@
 //   -> parent           { type: "wf:size", h }      content height, once per frame
 //   <- parent           { type: "wf:theme", theme } switch theme without a reload
 
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SRC = join(WEB, "mock/diagrams");
+const WORKSPACE = join(WEB, "mock/workspace");
 const OUT = join(WEB, "public/diagrams");
+const LIST = join(WEB, "mock/diagram-previews.json");
+const quiet = process.argv.includes("--quiet");
+const say = (line) => {
+  if (!quiet) console.log(line);
+};
 
 // ---------------------------------------------------------------- styles
 // Values copied from src/styles/tokens.css (light and dark).
@@ -631,32 +642,108 @@ ${drawDiagram.toString()}</script>
 
 // ---------------------------------------------------------------- main
 
-/** Same rules the mock validator applies: refuse to draw a candidate archify would reject. */
+/** The checks `archify finalize` makes before it draws (the loader makes the same ones). */
 function problems(spec) {
-  const ids = new Set((spec.nodes ?? []).map((n) => n.id));
+  if (typeof spec !== "object" || spec === null || Array.isArray(spec)) return ["$ is not an object"];
+  const nodes = Array.isArray(spec.nodes) ? spec.nodes : [];
+  const edges = Array.isArray(spec.edges) ? spec.edges : [];
+  const groups = new Set((Array.isArray(spec.groups) ? spec.groups : []).map((g) => g?.id));
+  const ids = new Set();
   const out = [];
-  (spec.nodes ?? []).forEach((n, i) => {
+  nodes.forEach((n, i) => {
+    if (!n.id) out.push(`nodes[${i}].id is missing`);
+    else if (ids.has(n.id)) out.push(`nodes[${i}].id is a duplicate`);
+    else ids.add(n.id);
     if (!n.label?.trim()) out.push(`nodes[${i}].label is missing`);
+    if (n.group && !groups.has(n.group)) out.push(`nodes[${i}].group is unknown`);
   });
-  (spec.edges ?? []).forEach((e, i) => {
+  const exits = new Map();
+  edges.forEach((e, i) => {
     if (!ids.has(e.from)) out.push(`edges[${i}].from is unknown`);
     if (!ids.has(e.to)) out.push(`edges[${i}].to is unknown`);
+    if (ids.has(e.from) && ids.has(e.to)) exits.set(e.from, (exits.get(e.from) ?? 0) + 1);
+  });
+  nodes.forEach((n, i) => {
+    if (n.kind === "decision" && (exits.get(n.id) ?? 0) < 2) out.push(`nodes[${i}] is a decision with fewer than 2 exits`);
   });
   return out;
 }
 
-const manifest = JSON.parse(readFileSync(join(SRC, "manifest.json"), "utf8"));
-mkdirSync(OUT, { recursive: true });
-for (const [id, info] of Object.entries(manifest)) {
-  const text = readFileSync(join(SRC, `${id}.json`), "utf8");
-  const spec = JSON.parse(text);
-  const bad = problems(spec);
-  if (bad.length) {
-    console.log(`skipped ${id}: ${bad.length} defects (${bad[0]})`);
-    continue;
-  }
-  const html = page(id, info.type, spec);
-  writeFileSync(join(OUT, `${id}.html`), html);
-  copyFileSync(join(SRC, `${id}.json`), join(OUT, `${id}.json`));
-  console.log(`wrote public/diagrams/${id}.html (${(html.length / 1024).toFixed(1)} KB)`);
+/** goal.md and plan.md files under issues/, in path order (the order the loader reads them). */
+function issueFiles(dir) {
+  const out = [];
+  const walk = (d) => {
+    for (const entry of readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "node_modules" && entry.name !== ".git") walk(full);
+      } else if (entry.name === "goal.md" || entry.name === "plan.md") out.push(full);
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return out;
 }
+
+/** The archify fences of a markdown text: [{ type, id, body }]. */
+function blocksOf(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const open = /^ {0,3}(`{3,}|~{3,})\s*archify(?:\s+(.*))?$/.exec(lines[i]);
+    if (!open) continue;
+    const mark = open[1];
+    let close = i + 1;
+    const end = new RegExp(`^ {0,3}${mark[0]}{${mark.length},}\\s*$`);
+    while (close < lines.length && !end.test(lines[close])) close++;
+    const words = (open[2] ?? "").split(/\s+/).filter(Boolean);
+    const id = words.find((w) => w.startsWith("id="))?.slice(3);
+    const type = words.find((w) => !w.startsWith("id=")) ?? "";
+    if (id) out.push({ type, id, body: lines.slice(i + 1, close).join("\n") });
+    i = close;
+  }
+  return out;
+}
+
+/** Write a file only when its content differs. Returns true when it wrote. */
+function put(file, content) {
+  if (existsSync(file) && readFileSync(file, "utf8") === content) return false;
+  writeFileSync(file, content);
+  return true;
+}
+
+mkdirSync(OUT, { recursive: true });
+const taken = new Map();
+const written = [];
+for (const file of issueFiles(join(WORKSPACE, "issues"))) {
+  for (const block of blocksOf(readFileSync(file, "utf8"))) {
+    // The loader keeps the first block of an id and numbers later ones (`id-2`).
+    let id = block.id;
+    for (let n = 2; taken.has(id); n++) id = `${block.id}-${n}`;
+    taken.set(id, file);
+    let spec;
+    try {
+      spec = JSON.parse(block.body);
+    } catch (err) {
+      say(`skipped ${id}: invalid JSON (${err.message})`);
+      continue;
+    }
+    const bad = problems(spec);
+    if (bad.length) {
+      say(`skipped ${id}: ${bad.length} defects (${bad[0]})`);
+      continue;
+    }
+    const html = page(id, block.type, spec);
+    const changed = put(join(OUT, `${id}.html`), html);
+    written.push(id);
+    say(`${changed ? "wrote" : "kept "} public/diagrams/${id}.html (${(html.length / 1024).toFixed(1)} KB)`);
+  }
+}
+
+// Pages of blocks that are gone (or turned invalid) are removed, so the store never offers them.
+const before = existsSync(LIST) ? JSON.parse(readFileSync(LIST, "utf8")) : [];
+for (const id of before) {
+  if (written.includes(id)) continue;
+  rmSync(join(OUT, `${id}.html`), { force: true });
+  say(`removed public/diagrams/${id}.html`);
+}
+put(LIST, `${JSON.stringify([...written].sort())}\n`);

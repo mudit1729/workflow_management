@@ -1,7 +1,13 @@
+import { execFile } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+const ROOT = fileURLToPath(new URL(".", import.meta.url));
+const WORKSPACE = `${ROOT}mock/workspace/`;
 
 /** Matches `/node_modules/<package>/` in a module id, whether or not pnpm nested it under `.pnpm`. */
 const pkg = (names: string[]) => new RegExp(`/node_modules/(?:${names.join("|")})/`);
@@ -52,8 +58,124 @@ const MARKDOWN = [
   "@shikijs/[^/]+",
 ];
 
+/**
+ * `import info from "./file.png?wf-asset"` gives `{ url, bytes }`: where the bundler serves the
+ * file and how large it is. The mock workspace lists its images with their sizes this way
+ * (`mock/workspace-files.ts`), because a plain `?url` import has no size.
+ */
+function workspaceAssets(): Plugin {
+  const SUFFIX = "?wf-asset";
+  return {
+    name: "wf:workspace-assets",
+    enforce: "pre",
+    async load(id) {
+      if (!id.endsWith(SUFFIX)) return null;
+      const file = id.slice(0, -SUFFIX.length);
+      this.addWatchFile(file);
+      const { size } = await stat(file);
+      return `import url from ${JSON.stringify(`${file}?url`)};\nexport default { url, bytes: ${size} };\n`;
+    },
+  };
+}
+
+/**
+ * The mock "watcher". A file added, changed or removed under `mock/workspace` re-runs
+ * `mock/workspace-files.ts`, which accepts its own update and hands the new file set to the
+ * store (`mock/workspace-bus.ts`). An edit keeps the file's own `?raw` module in the update
+ * (so the watcher imports the new text) and adds the watcher itself. An add or a remove is
+ * the watcher alone: by default Vite also puts every module that ever failed to resolve into
+ * the update of an added file, and one dead end there reloads the page and drops the
+ * in-memory workspace. Dev server only.
+ */
+function workspaceHot(): Plugin {
+  const WATCHER = `${ROOT}mock/workspace-files.ts`;
+  return {
+    name: "wf:workspace-hot",
+    apply: "serve",
+    hotUpdate: {
+      order: "post",
+      handler({ file, type, modules }) {
+        if (!file.startsWith(WORKSPACE)) return;
+        const watcher = [...(this.environment.moduleGraph.getModulesByFile(WATCHER) ?? [])];
+        return type === "update" ? [...modules, ...watcher] : watcher;
+      },
+    },
+  };
+}
+
+/**
+ * Dev server only: keeps the stand-in diagram previews (`public/diagrams`) in step with the
+ * archify blocks of the workspace. When a markdown file under `mock/workspace` that holds, or
+ * held, an archify block changes, `scripts/render-diagram-previews.mjs` runs again. It writes
+ * only what differs, so a run that changes nothing makes no noise. A failed run is logged and
+ * the page keeps the previews it has.
+ */
+function diagramPreviews(): Plugin {
+  const holders = new Set<string>();
+  const hasBlock = (text: string) => /^\s{0,3}(`{3,}|~{3,})\s*archify\b/m.test(text);
+  return {
+    name: "wf:diagram-previews",
+    apply: "serve",
+    configureServer(server) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let running = false;
+      let again = false;
+      const run = () => {
+        if (running) {
+          again = true;
+          return;
+        }
+        running = true;
+        execFile(
+          process.execPath,
+          [`${ROOT}scripts/render-diagram-previews.mjs`, "--quiet"],
+          { cwd: ROOT },
+          (err, _out, stderr) => {
+            running = false;
+            if (err) server.config.logger.warn(`diagram previews: ${stderr || err.message}`);
+            if (again) {
+              again = false;
+              run();
+            }
+          },
+        );
+      };
+      // Know which files hold a block now, so removing the last one from a file re-renders.
+      try {
+        for (const rel of readdirSync(WORKSPACE, { recursive: true }) as string[]) {
+          if (!rel.endsWith(".md")) continue;
+          const file = `${WORKSPACE}${rel}`;
+          if (hasBlock(readFileSync(file, "utf8"))) holders.add(file);
+        }
+      } catch {
+        // No workspace folder: nothing to watch.
+      }
+      const touch = (file: string, exists: boolean) => {
+        if (!file.startsWith(WORKSPACE) || !file.endsWith(".md")) return;
+        let relevant = holders.has(file);
+        if (exists) {
+          try {
+            const now = hasBlock(readFileSync(file, "utf8"));
+            relevant = relevant || now;
+            if (now) holders.add(file);
+            else holders.delete(file);
+          } catch {
+            // The file vanished between the event and the read: the removal event follows.
+          }
+        } else holders.delete(file);
+        if (!relevant) return;
+        clearTimeout(timer);
+        timer = setTimeout(run, 150);
+      };
+      server.watcher.on("change", (f) => touch(f, true));
+      server.watcher.on("add", (f) => touch(f, true));
+      server.watcher.on("unlink", (f) => touch(f, false));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), workspaceAssets(), workspaceHot(), diagramPreviews()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

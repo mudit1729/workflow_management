@@ -7,6 +7,12 @@ export {
   NotFoundError,
   type UnprocessableError,
 } from "./error";
+export {
+  useDeleteWorkspaceFile,
+  useWorkspaceFile,
+  useWorkspaceFiles,
+  useWriteWorkspaceFile,
+} from "./files";
 export { type MoveGateState, requestMove, useMoveGate, useMoveIssue } from "./gate";
 export { qk } from "./keys";
 export {
@@ -41,4 +47,11 @@ export {
   useIssueSummary,
   useMe,
 } from "./selectors";
-export type { NewIssueOp, OpArgs, SearchScope, WfOp } from "./types";
+export type {
+  NewIssueOp,
+  OpArgs,
+  SearchScope,
+  WfOp,
+  WorkspaceFile,
+  WorkspaceFileInfo,
+} from "./types";

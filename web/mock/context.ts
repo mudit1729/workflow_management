@@ -4,7 +4,7 @@
 // as reference data.
 import type { Criterion, IssueDetail, LibraryItemDetail, Task } from "@/gen/types";
 import type { Derived, IssueFileName } from "./derive";
-import { stubDiagrams } from "./serialize";
+import { stubDiagrams } from "./md/render";
 import { tsMs } from "./time";
 
 /** Rough token count: four characters per token, the usual rule of thumb. */
@@ -50,7 +50,7 @@ function taskLine(t: Task): string {
 
 function stub(md: string | undefined, file: IssueFileName, d: Derived, issue: string) {
   if (!md) return "";
-  return stubDiagrams(md, file, d.files.get(issue)?.[file] ?? "");
+  return stubDiagrams(md, file, d.files.get(issue)?.[file] ?? "", (id) => d.diagrams[id]);
 }
 
 function librarySection(items: LibraryItemDetail[]): Section | undefined {

@@ -1,7 +1,8 @@
-// `POST /api/ops` for the mock: every Op of `@/gen/types`, applied to the sources.
+// `POST /api/ops` for the mock: every Op of `@/gen/types`, applied to the workspace FILES as a
+// minimal text edit (ticking SC-3 flips `[ ]` to `[x]` on its line and nothing else changes).
 // Order inside each op: find the target → 409 if the client's rev is stale → 422 if the
-// move or value is not allowed → change a copy of the world through `store.mutate`.
-import type { Handle, IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
+// move or value is not allowed → edit the text through `store.mutate`, which loads the result.
+import type { IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
 import type { NewIssueOp, WfOp } from "@/lib/api/types";
 import {
@@ -11,16 +12,21 @@ import {
   STATUS_LABEL,
   TASK_STATUS_LABEL,
 } from "@/lib/status";
-import { libraryPath } from "./serialize";
 import {
-  addActivity,
-  type IssueSrc,
-  type LibrarySrc,
-  type RequestSrc,
-  type TaskSrc,
-  type WorldSrc,
-} from "./source";
-import type { Applied, Mutation, Store } from "./store";
+  answerRequestsReferring,
+  answerRequest as answerRequestText,
+  approveLibraryItem,
+  EditError,
+  moveTask,
+  newGroupFile,
+  newIssueGoal,
+  promote as promoteTexts,
+  setIssueStatus,
+  toggleCriterion as toggleCriterionText,
+  toggleStep as toggleStepText,
+} from "./md/edit";
+import type { IssueSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./source";
+import type { Applied, Draft, Mutation, Store } from "./store";
 import { dateIn, toTs } from "./time";
 import { hashColor, slugify } from "./util";
 
@@ -71,14 +77,21 @@ function requestIn(src: IssueSrc, id: string): RequestSrc {
   );
 }
 
-function logActivity(
-  src: IssueSrc,
-  store: Store,
-  by: Handle,
-  kind: "status" | "state",
-  title: string,
-) {
-  addActivity(src, { ts: store.stamp(), author: by, kind, title });
+/** The text of a file the op edits. A missing file is a 422, not a crash. */
+function read(w: Draft, path: string): string {
+  const text = w.read(path);
+  if (text === undefined) reject(`${path} does not exist.`);
+  return text;
+}
+
+/** Run a text edit; an edit that cannot find its target is a 422 with the edit's own words. */
+function edit<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof EditError) reject(err.message);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------- the dispatcher
@@ -137,10 +150,10 @@ function setStatus(store: Store, op: Of<"set_status">): OpResult {
   const by = store.me;
   const from = summary.status;
   const m = store.mutate(by, op.issue, (w) => {
-    const src = issueIn(w, op.issue);
-    src.goal.status = op.status;
-    const title = `${STATUS_LABEL[from]} → ${STATUS_LABEL[op.status]}`;
-    logActivity(src, store, by, "status", title);
+    w.write(
+      file,
+      edit(() => setIssueStatus(read(w, file), op.status)),
+    );
     return {
       touches: [{ file, anchors: ["status"] }],
       activity: [
@@ -149,6 +162,14 @@ function setStatus(store: Store, op: Of<"set_status">): OpResult {
           kind: "status",
           author: by,
           title: `Moved to ${STATUS_LABEL[op.status]}`,
+        },
+      ],
+      log: [
+        {
+          issue_id: op.issue,
+          kind: "status",
+          author: by,
+          title: `${STATUS_LABEL[from]} → ${STATUS_LABEL[op.status]}`,
         },
       ],
     };
@@ -167,26 +188,17 @@ function toggleCriterion(store: Store, op: Of<"toggle_criterion">): OpResult {
     return result(store, store.unchanged(file, op.issue), op.issue);
 
   const by = store.me;
+  const title = `${op.checked ? "Ticked" : "Unticked"} ${op.id}`;
   const m = store.mutate(by, op.issue, (w) => {
-    const src = issueIn(w, op.issue);
-    const c = src.criteria[index];
-    c.checked = op.checked;
     // Unticking drops the evidence: a criterion is verified only while it is ticked with proof.
-    if (!op.checked) {
-      c.evidence = undefined;
-      c.verified_by = undefined;
-    }
-    logActivity(src, store, by, "state", `${op.checked ? "Ticked" : "Unticked"} ${op.id}`);
+    w.write(
+      file,
+      edit(() => toggleCriterionText(read(w, file), op.id, op.checked)),
+    );
     return {
       touches: [{ file, anchors: [op.id] }],
-      activity: [
-        {
-          issue_id: op.issue,
-          kind: "state",
-          author: by,
-          title: `${op.checked ? "Ticked" : "Unticked"} ${op.id}`,
-        },
-      ],
+      activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title }],
     };
   });
   return result(store, m, op.issue);
@@ -202,23 +214,19 @@ function setTaskStatus(store: Store, op: Of<"set_task_status">): OpResult {
 
   const by = store.me;
   const leaseMs = store.world.config.leases_minutes * 60_000;
+  const title = `${op.task} → ${TASK_STATUS_LABEL[op.status]}`;
   const m = store.mutate(by, op.issue, (w) => {
-    const src = issueIn(w, op.issue);
-    const task = taskIn(src, op.task);
-    task.status = op.status;
-    if (op.status === "todo") {
-      // Back to the queue: release the claim.
-      task.claimed_by = undefined;
-      task.lease_until = undefined;
-    } else if (op.status === "in_progress" && !task.claimed_by) {
-      task.claimed_by = by;
-      task.lease_until = toTs(store.now() + leaseMs);
-    }
-    const title = `${op.task} → ${TASK_STATUS_LABEL[op.status]}`;
-    logActivity(src, store, by, "state", title);
+    // Back to the queue releases the claim; in progress claims the task when nobody holds it.
+    const claim =
+      op.status === "in_progress" ? { by, leaseUntil: toTs(store.now() + leaseMs) } : undefined;
+    w.write(
+      file,
+      edit(() => moveTask(read(w, file), op.task, op.status, claim)),
+    );
     return {
       touches: [{ file, anchors: [op.task] }],
       activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title }],
     };
   });
   return result(store, m, op.issue);
@@ -234,15 +242,16 @@ function toggleStep(store: Store, op: Of<"toggle_step">): OpResult {
   if (step.done === op.checked) return result(store, store.unchanged(file, op.issue), op.issue);
 
   const by = store.me;
+  const title = `${op.checked ? "Ticked" : "Unticked"} step ${op.index} of ${op.task}`;
   const m = store.mutate(by, op.issue, (w) => {
-    const src = issueIn(w, op.issue);
-    const target = taskIn(src, op.task).steps?.[op.index - 1];
-    if (target) target.done = op.checked;
-    const title = `${op.checked ? "Ticked" : "Unticked"} step ${op.index} of ${op.task}`;
-    logActivity(src, store, by, "state", title);
+    w.write(
+      file,
+      edit(() => toggleStepText(read(w, file), op.task, op.index, op.checked)),
+    );
     return {
       touches: [{ file, anchors: [anchor] }],
       activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title }],
     };
   });
   return result(store, m, op.issue);
@@ -266,22 +275,26 @@ function answerRequest(store: Store, op: Of<"answer_request">): OpResult {
 
   const by = store.me;
   const m = store.mutate(by, op.issue, (w) => {
-    const src = issueIn(w, op.issue);
-    const r = requestIn(src, op.id);
-    r.answered = true;
-    r.answer = answer;
-    r.answered_by = by;
-    r.answered_at = store.stamp();
-    logActivity(src, store, by, "state", `Answered ${op.id}`);
+    w.write(
+      file,
+      edit(() => answerRequestText(read(w, file), op.id, { answer, by, at: store.stamp() })),
+    );
     return {
       touches: [{ file, anchors: [op.id] }],
       activity: [{ issue_id: op.issue, kind: "request", author: by, title: `Answered ${op.id}` }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title: `Answered ${op.id}` }],
     };
   });
   return result(store, m, op.issue);
 }
 
 // ---------------------------------------------------------------- library
+
+/** Workspace path of a library item: `<library_dir>/<kind>s/<slug>.md`. */
+function libraryFile(store: Store, item: Pick<LibrarySrc, "kind" | "slug">): string {
+  const dir = store.world.config.library_dir.replace(/\/+$/, "");
+  return `${dir}/${item.kind}s/${item.slug}.md`;
+}
 
 const SECTION_HEADINGS: Record<LibraryKind, string[]> = {
   pattern: ["Rule", "When to use", "Example", "Evidence"],
@@ -384,9 +397,10 @@ function promote(store: Store, op: Of<"promote">): OpResult {
       };
 
   const slugBase = op.slug && SLUG.test(op.slug) ? op.slug : slugify(entry.title);
-  const taken = new Set(store.world.library.map((l) => libraryPath(l)));
+  const taken = new Set(Object.values(store.source.libraryPaths));
   let slug = slugBase || "untitled";
-  for (let n = 2; taken.has(libraryPath({ kind: op.kind, slug })); n++) slug = `${slugBase}-${n}`;
+  for (let n = 2; taken.has(libraryFile(store, { kind: op.kind, slug })); n++)
+    slug = `${slugBase}-${n}`;
 
   // The "Use when…" line the promote dialog previews: where the rule applies, then the rule.
   const lead = decision
@@ -422,9 +436,8 @@ function promote(store: Store, op: Of<"promote">): OpResult {
   };
 
   const stateFile = store.filePath(op.issue, "current_state.md");
+  const itemFile = libraryFile(store, item);
   const m = store.mutate(by, op.issue, (w) => {
-    w.library.push(item);
-    const src = issueIn(w, op.issue);
     const request: RequestSrc = {
       id: reqId,
       question: `Review the draft "${item.title}" before it enters agent context?`,
@@ -436,21 +449,25 @@ function promote(store: Store, op: Of<"promote">): OpResult {
       options: ["approve", "reject"],
       ref: `[[${libId}]]`,
     };
-    const createdState = !src.state;
-    if (src.state) src.state.needs_you.push(request);
-    else
-      src.state = {
-        summary: "A library draft waits for review.",
-        updated_at: store.stamp(),
-        updated_by: by,
-        needs_you: [request],
-        next_steps: [`Review the draft [[${libId}]].`],
-      };
-    logActivity(src, store, by, "state", `Promoted ${op.entry} to ${libId}`);
+    const createdState = w.read(stateFile) === undefined;
+    // The draft item, and the review request in the issue's current_state.md.
+    const out = edit(() =>
+      promoteTexts({ stateText: w.read(stateFile), item, request, by, now: store.stamp() }),
+    );
+    w.write(itemFile, out.library);
+    w.write(stateFile, out.state);
     return {
       touches: [
-        { file: libraryPath(item), anchors: "all" },
+        { file: itemFile, anchors: "all" },
         { file: stateFile, anchors: createdState ? "all" : [reqId] },
+      ],
+      log: [
+        {
+          issue_id: op.issue,
+          kind: "state",
+          author: by,
+          title: `Promoted ${op.entry} to ${libId}`,
+        },
       ],
       activity: [
         {
@@ -471,7 +488,7 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
     store.world.library.find((l) => l.id === op.id),
     `Library item ${op.id}`,
   );
-  const file = libraryPath(live);
+  const file = store.source.libraryPaths[op.id] ?? libraryFile(store, live);
   store.guard(file, "status", op.base_rev, () => ({ status: live.status }));
   if (live.status === "retired") reject(`${op.id} is retired. Retired items cannot be approved.`);
   if (live.status === "reviewed") return result(store, store.unchanged(file));
@@ -481,25 +498,26 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
   const issueRef = new RegExp(`^\\[\\[(${store.world.config.id_prefix}-[0-9a-z]{5})`);
   const sourceIssue = live.source.map((s) => issueRef.exec(s)?.[1]).find(Boolean);
   const m = store.mutate(by, sourceIssue, (w) => {
-    const item = need(
-      w.library.find((l) => l.id === op.id),
-      `Library item ${op.id}`,
+    w.write(
+      file,
+      edit(() => approveLibraryItem(read(w, file), { by, today, reviewAfter: dateIn(180) })),
     );
-    item.status = "reviewed";
-    item.reviewed_by = by;
-    item.last_reviewed = today;
-    item.review_after = dateIn(180);
     // Close the review request that asked for this approval.
     const touches: Applied["touches"] = [{ file, anchors: ["status"] }];
-    for (const src of w.issues) {
-      for (const r of src.state?.needs_you ?? []) {
-        if (r.answered || !r.ref?.includes(op.id)) continue;
-        r.answered = true;
-        r.answer = "approve";
-        r.answered_by = by;
-        r.answered_at = store.stamp();
-        touches.push({ file: store.filePath(src.goal.id, "current_state.md"), anchors: [r.id] });
-      }
+    for (const src of store.world.issues) {
+      const stateFile = store.filePath(src.goal.id, "current_state.md");
+      const text = w.read(stateFile);
+      if (!text) continue;
+      const closed = edit(() =>
+        answerRequestsReferring(text, `[[${op.id}]]`, {
+          answer: "approve",
+          by,
+          at: store.stamp(),
+        }),
+      );
+      if (closed.closed.length === 0) continue;
+      w.write(stateFile, closed.text);
+      touches.push({ file: stateFile, anchors: closed.closed });
     }
     return {
       touches,
@@ -508,7 +526,7 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
           issue_id: sourceIssue ?? "",
           kind: "learning",
           author: by,
-          title: `Approved "${item.title}"`,
+          title: `Approved "${live.title}"`,
         },
       ],
     };
@@ -517,42 +535,6 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
 }
 
 // ---------------------------------------------------------------- creation
-
-interface Scaffold {
-  context: string;
-  criterion: string;
-  extra?: string;
-  labels: string[];
-}
-
-const SCAFFOLDS: Record<NewIssueOp["template"], Scaffold> = {
-  default: {
-    context:
-      "Why this matters, who feels the problem today and what changes when it is done.\n\nRun the `write-goal` skill to fill in this section.",
-    criterion: "When the work is complete, the system shall behave as the context describes.",
-    labels: [],
-  },
-  bug: {
-    context:
-      "What happens today, what should happen and the steps to reproduce it.\n\nRun the `write-goal` skill to fill in this section.",
-    criterion: "When the failing step runs, the system shall behave as the context describes.",
-    extra: "A regression test shall cover the failing step.",
-    labels: ["bug"],
-  },
-  research: {
-    context:
-      "The question to answer, why it matters and who decides.\n\nRun the `write-goal` skill to fill in this section.",
-    criterion:
-      "The research note shall answer the question with a recommendation and its trade-offs.",
-    labels: ["research"],
-  },
-  doc: {
-    context:
-      "Who reads this document and what they can do once they have read it.\n\nRun the `write-goal` skill to fill in this section.",
-    criterion: "The document shall explain each step a new reader needs to finish the task.",
-    labels: ["docs"],
-  },
-};
 
 function newIssue(store: Store, op: NewIssueOp): OpResult {
   const group = need(
@@ -569,36 +551,24 @@ function newIssue(store: Store, op: NewIssueOp): OpResult {
 
   const by = store.me;
   const id = store.newId(`${store.world.config.id_prefix}-`);
-  const scaffold = SCAFFOLDS[op.template];
   const dir = store.derived.groupDirs.get(group.id) ?? group.slug;
   const file = `${dir}/${op.slug}/goal.md`;
   const m = store.mutate(by, undefined, (w) => {
-    w.issues.push({
-      slug: op.slug,
-      group: group.id,
-      goal: {
+    w.write(
+      file,
+      newIssueGoal({
         id,
         title,
-        status: "backlog",
-        priority: "none",
-        size: op.size ?? "m",
         owner: by,
-        labels: [...scaffold.labels],
-        blocked_by: [],
+        size: op.size ?? "m",
+        template: op.template,
         created: store.stamp(),
-      },
-      context: scaffold.context,
-      criteria: [scaffold.criterion, scaffold.extra]
-        .filter((c): c is string => !!c)
-        .map((text) => ({ text, checked: false, verify: "manual" })),
-      changes: [],
-      decisions: [],
-      learnings: [],
-      activity: [{ ts: store.stamp(), author: by, kind: "status", title: "Created" }],
-    });
+      }),
+    );
     return {
       touches: [{ file, anchors: "all" }],
       activity: [{ issue_id: id, kind: "status", author: by, title: `Created ${id}: ${title}` }],
+      log: [{ issue_id: id, kind: "status", author: by, title: "Created" }],
       created: id,
     };
   });
@@ -622,18 +592,21 @@ function newGroup(store: Store, op: Of<"new_group">): OpResult {
   const by = store.me;
   const id = store.newId("g-");
   const dir = `${store.derived.groupDirs.get(parent.id) ?? parent.slug}/${op.slug}`;
+  const siblings = store.world.groups.filter((g) => g.parent === parent.id);
   const m = store.mutate(by, undefined, (w) => {
-    const siblings = w.groups.filter((g) => g.parent === parent.id);
-    w.groups.push({
-      id,
-      title,
-      slug: op.slug,
-      parent: parent.id,
-      owner: by,
-      color: op.color ?? hashColor(id),
-      order: siblings.reduce((max, g) => Math.max(max, g.order), 0) + 1,
-      implicit: false,
-    });
+    w.write(
+      `${dir}/_group.md`,
+      newGroupFile({
+        id,
+        title,
+        slug: op.slug,
+        parent: parent.id,
+        owner: by,
+        color: op.color ?? hashColor(id),
+        order: siblings.reduce((max, g) => Math.max(max, g.order), 0) + 1,
+        implicit: false,
+      }),
+    );
     return {
       touches: [{ file: `${dir}/_group.md`, anchors: "all" }],
       activity: [],

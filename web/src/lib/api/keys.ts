@@ -8,4 +8,6 @@ export const qk = {
   glossary: () => ["glossary"] as const,
   search: (q: string, scope: SearchScope, k: number) => ["search", scope, k, q] as const,
   context: (id: string, budget: number) => ["context", id, budget] as const,
+  files: () => ["files"] as const,
+  file: (path: string) => ["file", path] as const,
 };

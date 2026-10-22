@@ -1,6 +1,7 @@
-// Mock clock helpers. Every seed timestamp is relative to the real clock, so the
-// prototype always reads naturally ("12m ago", "lease 40m left"). Timestamps are
-// RFC 3339 with the workspace offset +05:30 and minute precision (contract 1.3).
+// Mock clock helpers. The workspace files hold times from the day they were recorded; the store
+// shifts them to the real clock (`md/rebase.ts`), so the prototype always reads naturally
+// ("12m ago", "lease 40m left"). Timestamps are RFC 3339 with the workspace offset +05:30 and
+// minute precision (contract 1.3).
 import type { DateStr, Ts } from "@/gen/types";
 
 const MIN = 60_000;
@@ -22,25 +23,6 @@ export function toDate(ms: number): DateStr {
 /** The current instant as a timestamp. */
 export function nowTs(): Ts {
   return toTs(Date.now());
-}
-
-/** A timestamp `minutes` before now. */
-export function ago(minutes: number): Ts {
-  return toTs(Date.now() - minutes * MIN);
-}
-
-/** A timestamp `minutes` after now. */
-export function ahead(minutes: number): Ts {
-  return toTs(Date.now() + minutes * MIN);
-}
-
-/** A wall-clock time (+05:30) on the day `d` days before today. */
-export function daysAgo(d: number, hh: number, mm: number): Ts {
-  const today = toDate(Date.now());
-  const [y, m, day] = today.split("-").map(Number);
-  // Midnight of that local day, in UTC ms.
-  const localMidnightUtc = Date.UTC(y, m - 1, day - d) - OFFSET_MIN * MIN;
-  return toTs(localMidnightUtc + (hh * 60 + mm) * MIN);
 }
 
 /** A local date `days` from today (negative for the past). */

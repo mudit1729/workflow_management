@@ -10,8 +10,7 @@ import type {
 } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
 import type { WfOp } from "@/lib/api/types";
-import { EVENT_TARGETS } from "./data";
-import { SCRIPT } from "./events";
+import { EVENT_TARGETS, SCRIPT } from "./events";
 import { createMockServer, type MockServer } from "./server";
 import { toDate } from "./time";
 

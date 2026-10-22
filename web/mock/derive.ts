@@ -2,7 +2,6 @@
 // Everything the index computes lives here: EARS, criterion states, task
 // readiness, dependency levels, staleness, leases, progress, signals, lint,
 // supersession, promotion backlinks, roll-ups and the inbox.
-import { DIAGRAMS } from "@mock/diagrams";
 import type {
   ChangeEntry,
   Criterion,
@@ -39,18 +38,8 @@ import type {
   WorkspaceSnapshot,
 } from "@/gen/types";
 import { classifyEars } from "./ears";
-import {
-  diagramIds,
-  libraryPath,
-  renderChanges,
-  renderDecisions,
-  renderGoal,
-  renderLearnings,
-  renderLibraryItem,
-  renderPlan,
-  renderState,
-  stateBody,
-} from "./serialize";
+import { diagramIds, libraryPath, stateBody } from "./md/render";
+import { ISSUE_FILES, type IssueFileName, type LoadedWorkspace } from "./md/types";
 import type { GroupSrc, IssueSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./source";
 import { toDate, tsMs } from "./time";
 import { byteLength, countWords, posOf, rev, uniq } from "./util";
@@ -58,18 +47,16 @@ import { byteLength, countWords, posOf, rev, uniq } from "./util";
 const HOUR = 3_600_000;
 const MIN = 60_000;
 
-export type IssueFileName =
-  | "goal.md"
-  | "plan.md"
-  | "current_state.md"
-  | "changes.md"
-  | "decisions.md"
-  | "learnings.md";
+export type { IssueFileName };
 
 export interface DeriveOptions {
   rev: string;
   now: number;
   archify: boolean;
+  /** Ids of the diagrams that have a stand-in preview page (`public/diagrams/<id>.html`). */
+  previews?: ReadonlySet<string>;
+  /** Where "Open raw" of a markdown doc points to: `(workspace path, text) => url`. */
+  rawUrl?: (path: string, text: string) => string;
 }
 
 export interface Derived {
@@ -78,8 +65,10 @@ export interface Derived {
   snapshot: WorkspaceSnapshot;
   details: Map<IssueId, IssueDetail>;
   library: Map<LibId, LibraryItemDetail>;
-  /** Rendered file text per issue, keyed by file name. */
+  /** File text per issue, keyed by file name: the text of the workspace files, as read. */
   files: Map<IssueId, Partial<Record<IssueFileName, string>>>;
+  /** The diagrams the archify blocks of the workspace hold, by id (for `wf context` stubs). */
+  diagrams: Record<string, Diagram>;
   /** Workspace-relative folder per issue. */
   dirs: Map<IssueId, string>;
   /** Workspace-relative folder per group. */
@@ -180,13 +169,15 @@ interface WorldIndex {
   anchors: Map<IssueId, Map<string, string>>;
   authors: Set<string>;
   libraryText: Map<LibId, string>;
+  libraryPaths: Map<LibId, string>;
 }
 
 function allTasks(src: IssueSrc): TaskSrc[] {
   return src.plan?.phases.flatMap((p) => p.tasks) ?? [];
 }
 
-function buildIndex(world: WorldSrc, now: number): WorldIndex {
+function buildIndex(source: LoadedWorkspace, now: number): WorldIndex {
+  const world = source.world;
   const groups = new Map(world.groups.map((g) => [g.id, g]));
   const groupDirs = new Map<GroupId, string>();
   const groupTitles = new Map<GroupId, string[]>();
@@ -211,7 +202,7 @@ function buildIndex(world: WorldSrc, now: number): WorldIndex {
 
   for (const src of world.issues) {
     const id = src.goal.id;
-    dirs.set(id, `${groupDirs.get(src.group) ?? "issues"}/${src.slug}`);
+    dirs.set(id, source.issueDirs[id] ?? `${groupDirs.get(src.group) ?? "issues"}/${src.slug}`);
     const a = new Map<string, string>();
     src.criteria.forEach((c, i) => {
       a.set(`SC-${i + 1}`, c.text);
@@ -235,7 +226,10 @@ function buildIndex(world: WorldSrc, now: number): WorldIndex {
     anchors.set(id, a);
   }
 
-  const libraryText = new Map(world.library.map((l) => [l.id, renderLibraryItem(l)]));
+  const libraryText = new Map(world.library.map((l) => [l.id, source.libraryTexts[l.id] ?? ""]));
+  const libraryPaths = new Map(
+    world.library.map((l) => [l.id, source.libraryPaths[l.id] ?? libraryPath(l)]),
+  );
   return {
     groups,
     groupDirs,
@@ -248,6 +242,7 @@ function buildIndex(world: WorldSrc, now: number): WorldIndex {
     anchors,
     authors: new Set(world.authors.map((a) => a.handle)),
     libraryText,
+    libraryPaths,
   };
 }
 
@@ -256,7 +251,13 @@ function resolveRef(ix: WorldIndex, m: RefMatch, fromIssue?: IssueId): Ref | und
   if (m.lib) {
     const l = ix.libs.get(m.lib);
     if (!l) return undefined;
-    return { kind: "library", target: m.target, id: l.id, title: l.title, path: libraryPath(l) };
+    return {
+      kind: "library",
+      target: m.target,
+      id: l.id,
+      title: l.title,
+      path: ix.libraryPaths.get(l.id) ?? libraryPath(l),
+    };
   }
   const issueId = m.issue ?? fromIssue;
   if (!issueId) return undefined;
@@ -284,29 +285,38 @@ interface IssueBuild {
   files: Partial<Record<IssueFileName, string>>;
 }
 
-function renderFiles(src: IssueSrc): Partial<Record<IssueFileName, string>> {
-  const f: Partial<Record<IssueFileName, string>> = { "goal.md": renderGoal(src) };
-  if (src.plan) f["plan.md"] = renderPlan(src.plan);
-  if (src.state) f["current_state.md"] = renderState(src.state);
-  if (src.changes.length) f["changes.md"] = renderChanges(src.changes);
-  if (src.decisions.length) f["decisions.md"] = renderDecisions(src.decisions);
-  if (src.learnings.length) f["learnings.md"] = renderLearnings(src.learnings);
-  return f;
+/** A place in a file: where the Q rules point. */
+interface Place {
+  line: number;
+  col: number;
+  span: [number, number];
+}
+
+/** Char index of the start of 1-based `line`. */
+function lineStart(text: string, line: number): number {
+  let at = 0;
+  for (let n = 1; n < line; n++) {
+    const next = text.indexOf("\n", at);
+    if (next < 0) return text.length;
+    at = next + 1;
+  }
+  return at;
 }
 
 function buildIssue(
   src: IssueSrc,
-  world: WorldSrc,
+  source: LoadedWorkspace,
   ix: WorldIndex,
   opts: DeriveOptions,
   promotedTo: Map<string, LibId>,
 ): IssueBuild {
+  const world = source.world;
   const now = opts.now;
   const cfg = world.config;
   const g = src.goal;
   const id = g.id;
   const dir = ix.dirs.get(id) ?? src.slug;
-  const files = renderFiles(src);
+  const files: Partial<Record<IssueFileName, string>> = { ...(source.texts[id] ?? {}) };
   const fileRev: Record<string, string> = {};
   for (const [name, text] of Object.entries(files)) fileRev[name] = rev(text ?? "");
   const goalText = files["goal.md"] ?? "";
@@ -317,20 +327,29 @@ function buildIssue(
     anchor,
   });
 
-  const diagnostics: Diagnostic[] = [];
+  // F and S findings come from the text (`loadWorkspace`); Q findings are computed here.
+  const diagnostics: Diagnostic[] = ISSUE_FILES.flatMap((name) =>
+    (source.diagnostics[path(name)] ?? []).map((d) => ({ ...d })),
+  );
+  const quiet = new Set(source.lint.disable);
+  /** Where `anchor` sits in `file` (the parsed position), else the first `needle`. */
+  const where = (file: IssueFileName, anchor: string | undefined, needle: string): Place => {
+    const a = anchor ? source.anchors[path(file)]?.[anchor] : undefined;
+    if (a) return { line: a.line, col: 1, span: a.span };
+    return posOf(files[file] ?? "", needle);
+  };
   const diag = (
     rule: string,
     severity: Severity,
     file: IssueFileName,
-    needle: string,
+    p: Place,
     message: string,
     fix?: string,
   ) => {
-    const text = files[file] ?? "";
-    const p = posOf(text, needle);
+    if (quiet.has(rule)) return;
     diagnostics.push({
       rule,
-      severity,
+      severity: source.lint.severity[rule] ?? severity,
       file: path(file),
       line: p.line,
       col: p.col,
@@ -522,7 +541,7 @@ function buildIssue(
     return out;
   };
   const entryLine = (file: IssueFileName, entryId: string) =>
-    posOf(files[file] ?? "", `{#${entryId}}`).line;
+    source.anchors[path(file)]?.[entryId]?.line ?? posOf(files[file] ?? "", `{#${entryId}}`).line;
 
   const changes: ChangeEntry[] = src.changes.map((c) => ({
     type: "change",
@@ -609,6 +628,7 @@ function buildIssue(
         : ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)
           ? "image"
           : "other";
+    const full = `${dir}/${d.path}`;
     return {
       path: d.path,
       kind,
@@ -616,44 +636,30 @@ function buildIssue(
       rev: rev(d.body ?? `${d.path}:${d.bytes ?? 0}`),
       title: d.title,
       body_md: kind === "markdown" ? d.body : undefined,
-      url: `${import.meta.env.BASE_URL}files/${dir}/${d.path}`,
+      // Images are served by the bundler; text is handed over as a blob in the browser.
+      url: source.assets[full]?.url ?? opts.rawUrl?.(full, d.body ?? "") ?? "",
     };
   });
 
   const diagrams: Diagram[] = [];
-  const addDiagrams = (file: IssueFileName, md: (string | undefined)[]) => {
+  const addDiagrams = (md: (string | undefined)[]) => {
     for (const did of md.flatMap(diagramIds)) {
-      const base = DIAGRAMS[did];
+      const base = source.diagrams[did];
       if (!base || diagrams.some((x) => x.id === did)) continue;
-      const line = posOf(files[file] ?? "", `id=${did}`).line;
-      // Invalid blocks stay invalid either way. Valid blocks render only when archify is
-      // available and the stand-in preview exists (`url` is empty for blocks that cannot render).
-      const d: Diagram =
+      // The block is read from the text (file, line, hash, errors). Invalid blocks stay
+      // invalid. A valid block renders only when archify is available and its stand-in preview
+      // page exists; the page URL is known whenever the page exists.
+      const preview = opts.previews?.has(did) ?? false;
+      const url = preview ? `${import.meta.env.BASE_URL}diagrams/${did}.html` : "";
+      diagrams.push(
         base.status === "invalid"
-          ? { ...base, file, line, errors: [...base.errors] }
-          : {
-              ...base,
-              file,
-              line,
-              status: opts.archify && base.url ? "ready" : "unavailable",
-              errors: [],
-            };
-      diagrams.push(d);
-      if (d.status === "invalid") {
-        const first = d.errors[0];
-        diag(
-          "F011",
-          "error",
-          file,
-          `id=${did}`,
-          `Archify render failed with ${plural(d.errors.length, "error")}${first ? `. ${first.path}: ${first.msg}` : "."}`,
-          "Fix the JSON paths in the block, then run `wf lint --render`.",
-        );
-      }
+          ? { ...base, errors: base.errors.map((e) => ({ ...e })), url: "" }
+          : { ...base, errors: [], url, status: opts.archify && preview ? "ready" : "unavailable" },
+      );
     }
   };
-  addDiagrams("goal.md", [src.context, src.out_of_scope, src.links]);
-  if (src.plan) addDiagrams("plan.md", [src.plan.approach]);
+  addDiagrams([src.context, src.out_of_scope, src.links]);
+  if (src.plan) addDiagrams([src.plan.approach]);
 
   // ---------------- progress and signals
   const progress: Progress = {
@@ -701,48 +707,15 @@ function buildIssue(
     needs_you_blocking: openRequests.filter((r) => r.urgency === "blocking").length,
   };
 
-  // ---------------- diagnostics
-  if (src.yaml_error) {
-    const key = src.yaml_error.key;
-    const text = goalText;
-    const p = posOf(text, `${key}: @`);
-    diagnostics.push({
-      rule: "F001",
-      severity: "error",
-      file: path("goal.md"),
-      line: p.line,
-      col: p.col + key.length + 2,
-      span: [p.span[0] + key.length + 2, p.span[1]],
-      message: src.yaml_error.message,
-      fix: src.yaml_error.fix,
-    });
-  }
-  for (const k of Object.keys(g.extra ?? {}))
-    diag(
-      "F006",
-      "info",
-      "goal.md",
-      `\n${k}:`,
-      `Unknown frontmatter key \`${k}\`. wf keeps it and shows it.`,
-    );
-  for (const c of src.changes)
-    for (const k of Object.keys(c.extra ?? {}))
-      diag(
-        "F006",
-        "info",
-        "changes.md",
-        `- ${k}:`,
-        `Unknown meta key \`${k}\` in ${c.id}. wf keeps it.`,
-      );
-
-  const statusNeedle = "\nstatus:";
+  // ---------------- diagnostics (the Q rules; F and S came from the text above)
+  const statusAt = where("goal.md", "status", "\nstatus:");
   if (signals.done_unmet) {
     const open = progress.criteria.total - progress.criteria.verified;
     diag(
       "Q001",
       "warn",
       "goal.md",
-      statusNeedle,
+      statusAt,
       `The issue is done, but ${open} of ${progress.criteria.total} criteria ${open === 1 ? "is" : "are"} not verified.`,
       "Reopen the issue, or add evidence with `wf check --evidence`.",
     );
@@ -752,7 +725,7 @@ function buildIssue(
       "Q002",
       "warn",
       "goal.md",
-      statusNeedle,
+      statusAt,
       "The issue is in progress without plan.md.",
       "Run the `write-plan` skill.",
     );
@@ -761,7 +734,7 @@ function buildIssue(
       "Q003",
       "warn",
       "goal.md",
-      statusNeedle,
+      statusAt,
       `No change entry or state update for ${ago(now - tsMs(freshest))} (limit ${cfg.staleness.issue_hours} h).`,
       "Append a change, or run the `write-current-state` skill.",
     );
@@ -770,24 +743,25 @@ function buildIssue(
       "Q004",
       "warn",
       "goal.md",
-      "\nlease_until:",
+      where("goal.md", "lease_until", "\nlease_until:"),
       `The coordinator lease of @${g.claimed_by} expired ${ago(now - tsMs(g.lease_until))} ago.`,
       "Renew it with `wf heartbeat`, or take it with `wf claim --steal`.",
     );
   for (const t of expiredTasks) {
+    // The `lease_until:` line inside the task's block.
     const text = files["plan.md"] ?? "";
-    const from = text.indexOf(`### ${t.id}:`);
-    const p = posOf(text, "- lease_until:", Math.max(0, from));
-    diagnostics.push({
-      rule: "Q004",
-      severity: "warn",
-      file: path("plan.md"),
-      line: p.line,
-      col: p.col,
-      span: p.span,
-      message: `The lease of @${t.claimed_by} on ${t.id} expired ${ago(now - tsMs(t.lease_until ?? ""))} ago.`,
-      fix: `Renew it with \`wf heartbeat ${id}#${t.id}\`, or take it with \`wf claim ${id}#${t.id} --steal\`.`,
-    });
+    const heading = source.anchors[path("plan.md")]?.[t.id];
+    const from = heading
+      ? lineStart(text, heading.line)
+      : Math.max(0, text.indexOf(`### ${t.id}:`));
+    diag(
+      "Q004",
+      "warn",
+      "plan.md",
+      posOf(text, "- lease_until:", from),
+      `The lease of @${t.claimed_by} on ${t.id} expired ${ago(now - tsMs(t.lease_until ?? ""))} ago.`,
+      `Renew it with \`wf heartbeat ${id}#${t.id}\`, or take it with \`wf claim ${id}#${t.id} --steal\`.`,
+    );
   }
   if (signals.state_behind_changes && src.state) {
     const behind = src.changes.filter((c) => tsMs(c.ts) > tsMs(src.state?.updated_at ?? "")).length;
@@ -795,18 +769,19 @@ function buildIssue(
       "Q005",
       "warn",
       "current_state.md",
-      "updated_at:",
+      where("current_state.md", "updated_at", "updated_at:"),
       `current_state.md is older than the latest ${plural(behind, "change")}.`,
       "Run the `write-current-state` skill.",
     );
   }
   if (state) {
+    const summaryAt = where("current_state.md", "summary", "summary:");
     if (state.word_count > 400)
       diag(
         "Q008",
         "warn",
         "current_state.md",
-        "summary:",
+        summaryAt,
         `current_state.md has ${state.word_count} words (limit 400).`,
       );
     if (!state.next_steps.length)
@@ -814,48 +789,24 @@ function buildIssue(
         "Q008",
         "warn",
         "current_state.md",
-        "summary:",
+        summaryAt,
         "current_state.md has no Next steps.",
         "Add a numbered `## Next steps` list.",
       );
   }
   for (const c of criteria) {
-    const needle = `${c.id}: `;
-    if (c.ears.pattern === "freeform")
-      diag(
-        "S08",
-        "info",
-        "goal.md",
-        needle,
-        `${c.id} does not match an EARS pattern.`,
-        "Rewrite it as “When …, the <system> shall …”.",
-      );
-    if (!c.ears.measurable)
-      diag(
-        "S07",
-        "warn",
-        "goal.md",
-        needle,
-        `${c.id} cannot be measured.`,
-        "Add a number with a unit, a backticked literal or a `verify:` line.",
-      );
+    const at = where("goal.md", c.id, `${c.id}: `);
     if (c.state === "claimed")
       diag(
         "Q010",
         "info",
         "goal.md",
-        needle,
+        at,
         `${c.id} is ticked without evidence.`,
         `Run \`wf verify ${id} ${c.id}\`, or add \`evidence:\`.`,
       );
     if (src.plan && c.satisfied_by.length === 0)
-      diag(
-        "Q006",
-        "info",
-        "goal.md",
-        needle,
-        `${c.id} is not covered by any task's \`satisfies\`.`,
-      );
+      diag("Q006", "info", "goal.md", at, `${c.id} is not covered by any task's \`satisfies\`.`);
   }
   for (const t of tasks)
     if (t.satisfies.length === 0)
@@ -863,7 +814,7 @@ function buildIssue(
         "Q007",
         "info",
         "plan.md",
-        `### ${t.id}:`,
+        where("plan.md", t.id, `### ${t.id}:`),
         `${t.id} satisfies no criterion.`,
         "Add `satisfies:` or drop the task.",
       );
@@ -885,30 +836,11 @@ function buildIssue(
         "Q012",
         "warn",
         file,
-        `@${h} `,
+        posOf(files[file] ?? "", `@${h} `),
         `@${h} is not in authors.md.`,
         `Add \`## @${h}\` to authors.md.`,
       );
     }
-
-  // Dangling references (F009).
-  for (const [name, text] of Object.entries(files) as [IssueFileName, string][]) {
-    for (const m of findRefs(text)) {
-      if (resolveRef(ix, m, id)) continue;
-      const p = posOf(text, `[[${m.target}]]`);
-      diagnostics.push({
-        rule: "F009",
-        severity: "warn",
-        file: path(name),
-        line: p.line,
-        col: p.col,
-        span: p.span,
-        message: `[[${m.target}]] does not resolve to an issue, entry or library item.`,
-      });
-    }
-  }
-
-  for (const f of src.findings ?? []) diag(f.rule, f.severity, f.file, f.find, f.message, f.fix);
 
   diagnostics.sort((a, b) => (a.file === b.file ? a.line - b.line : a.file.localeCompare(b.file)));
 
@@ -975,14 +907,15 @@ function buildIssue(
     status_ref: ref("goal.md", "status"),
   };
 
+  const frontmatterOk = source.frontmatter[id]?.ok ?? true;
   const goal = {
     context_md: src.context,
     criteria_heading: src.criteria_heading ?? "Success criteria",
     out_of_scope_md: src.out_of_scope,
     links_md: src.links,
     extra: { ...(g.extra ?? {}) },
-    frontmatter_ok: !src.yaml_error,
-    raw: src.yaml_error ? goalText : undefined,
+    frontmatter_ok: frontmatterOk,
+    raw: frontmatterOk ? undefined : goalText,
     edit: ref("goal.md", "goal"),
   };
 
@@ -1093,11 +1026,13 @@ function buildGroups(
 // ---------------------------------------------------------------- library
 
 function buildLibrary(
-  world: WorldSrc,
+  source: LoadedWorkspace,
   ix: WorldIndex,
   files: Map<IssueId, Partial<Record<IssueFileName, string>>>,
   now: number,
 ): { summaries: LibrarySummary[]; details: Map<LibId, LibraryItemDetail> } {
+  const world = source.world;
+  const quiet = new Set(source.lint.disable);
   const today = toDate(now);
   const summaries: LibrarySummary[] = [];
   const details = new Map<LibId, LibraryItemDetail>();
@@ -1123,7 +1058,7 @@ function buildLibrary(
         });
     }
     const overdue = l.status !== "retired" && !!l.review_after && l.review_after < today;
-    const path = libraryPath(l);
+    const path = ix.libraryPaths.get(l.id) ?? libraryPath(l);
     const text = ix.libraryText.get(l.id) ?? "";
     const summary: LibrarySummary = {
       id: l.id,
@@ -1141,12 +1076,14 @@ function buildLibrary(
       used_by: citing.length,
       path,
     };
-    const diagnostics: Diagnostic[] = [];
-    if (overdue) {
-      const p = posOf(text, "review_after:");
+    // F and S findings come from the text; Q013 is computed here.
+    const diagnostics: Diagnostic[] = (source.diagnostics[path] ?? []).map((d) => ({ ...d }));
+    if (overdue && !quiet.has("Q013")) {
+      const a = source.anchors[path]?.review_after;
+      const p = a ? { line: a.line, col: 1, span: a.span } : posOf(text, "review_after:");
       diagnostics.push({
         rule: "Q013",
-        severity: "info",
+        severity: source.lint.severity.Q013 ?? "info",
         file: path,
         line: p.line,
         col: p.col,
@@ -1154,30 +1091,19 @@ function buildLibrary(
         message: `Review is overdue since ${l.review_after}.`,
         fix: `Run the \`curate-library\` skill, then \`wf library approve ${l.id}\` or \`retire\`.`,
       });
+      diagnostics.sort((x, y) => x.line - y.line);
     }
-    const source: Ref[] = [];
+    const sources: Ref[] = [];
     for (const s of l.source) {
       for (const m of findRefs(s)) {
         const r = resolveRef(ix, m);
-        if (r) source.push(r);
-        else {
-          const p = posOf(text, s);
-          diagnostics.push({
-            rule: "F009",
-            severity: "warn",
-            file: path,
-            line: p.line,
-            col: p.col,
-            span: p.span,
-            message: `${s} does not resolve to an issue, entry or library item.`,
-          });
-        }
+        if (r) sources.push(r);
       }
     }
     summaries.push(summary);
     details.set(l.id, {
       summary,
-      source,
+      source: sources,
       reviewed_by: l.reviewed_by,
       superseded_by: l.superseded_by,
       sections: l.sections.map((s) => ({ ...s })),
@@ -1191,8 +1117,10 @@ function buildLibrary(
 
 // ---------------------------------------------------------------- the world
 
-export function derive(world: WorldSrc, opts: DeriveOptions): Derived {
-  const ix = buildIndex(world, opts.now);
+/** Turn a parsed workspace into the API shapes. The text of the files is the only input. */
+export function derive(source: LoadedWorkspace, opts: DeriveOptions): Derived {
+  const world = source.world;
+  const ix = buildIndex(source, opts.now);
 
   const promotedTo = new Map<string, LibId>();
   for (const l of world.library)
@@ -1203,7 +1131,7 @@ export function derive(world: WorldSrc, opts: DeriveOptions): Derived {
   const details = new Map<IssueId, IssueDetail>();
   const files = new Map<IssueId, Partial<Record<IssueFileName, string>>>();
   for (const src of world.issues) {
-    const b = buildIssue(src, world, ix, opts, promotedTo);
+    const b = buildIssue(src, source, ix, opts, promotedTo);
     summaries.set(src.goal.id, b.summary);
     details.set(src.goal.id, b.detail);
     files.set(src.goal.id, b.files);
@@ -1240,13 +1168,13 @@ export function derive(world: WorldSrc, opts: DeriveOptions): Derived {
           target: l.id,
           id: l.id,
           title: l.title,
-          path: libraryPath(l),
+          path: ix.libraryPaths.get(l.id) ?? libraryPath(l),
         });
     }
     detail.backlinks = back;
   }
 
-  const lib = buildLibrary(world, ix, files, opts.now);
+  const lib = buildLibrary(source, ix, files, opts.now);
   const groups = buildGroups(world, ix, summaries);
 
   const inbox = [...details.values()]
@@ -1287,6 +1215,7 @@ export function derive(world: WorldSrc, opts: DeriveOptions): Derived {
     details,
     library: lib.details,
     files,
+    diagrams: source.diagrams,
     dirs: ix.dirs,
     groupDirs: ix.groupDirs,
   };
