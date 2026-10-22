@@ -10,11 +10,15 @@ interface ShellState {
   newIssueOpen: boolean;
   /** Group preselected in the New issue dialog; falls back to the board group. */
   newIssueGroup?: GroupId;
+  newGroupOpen: boolean;
+  /** Parent preselected in the New group dialog; falls back to the board group. */
+  newGroupParent?: GroupId;
   devPanelOpen: boolean;
   mobileNavOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   setNewIssueOpen: (open: boolean, group?: GroupId) => void;
+  setNewGroupOpen: (open: boolean, parent?: GroupId) => void;
   setDevPanelOpen: (open: boolean) => void;
   setMobileNavOpen: (open: boolean) => void;
 }
@@ -24,12 +28,16 @@ export const useShell = create<ShellState>()((set) => ({
   shortcutsOpen: false,
   newIssueOpen: false,
   newIssueGroup: undefined,
+  newGroupOpen: false,
+  newGroupParent: undefined,
   devPanelOpen: false,
   mobileNavOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setNewIssueOpen: (newIssueOpen, group) =>
     set(newIssueOpen ? { newIssueOpen, newIssueGroup: group } : { newIssueOpen }),
+  setNewGroupOpen: (newGroupOpen, parent) =>
+    set(newGroupOpen ? { newGroupOpen, newGroupParent: parent } : { newGroupOpen }),
   setDevPanelOpen: (devPanelOpen) => set({ devPanelOpen }),
   setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
 }));
@@ -37,6 +45,11 @@ export const useShell = create<ShellState>()((set) => ({
 /** Open the New issue dialog, optionally preselecting a group. */
 export function openNewIssue(group?: GroupId) {
   useShell.getState().setNewIssueOpen(true, group);
+}
+
+/** Open the New group dialog, optionally preselecting the parent group. */
+export function openNewGroup(parent?: GroupId) {
+  useShell.getState().setNewGroupOpen(true, parent);
 }
 
 /** Open the command palette. */

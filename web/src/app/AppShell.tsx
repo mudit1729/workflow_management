@@ -4,18 +4,16 @@
 import { Outlet } from "@tanstack/react-router";
 import { Menu, Search } from "lucide-react";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
-import { useEffect } from "react";
 import { MoveGateDialog } from "@/components/common";
 import { Button } from "@/components/ui";
 import { useInbox, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
-import { setLiveNavigator } from "@/lib/live";
-import { useOpenIssue } from "@/lib/nav";
 import { usePrefs } from "@/lib/prefs";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
 import { LiveBadge, NavRail } from "./NavRail";
+import { NewGroupDialog } from "./NewGroupDialog";
 import { NewIssueDialog } from "./NewIssueDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
@@ -31,7 +29,9 @@ export function AppShell() {
     <div
       data-wf="AppShell"
       className={cn(
-        "grid h-dvh w-full overflow-hidden bg-bg text-fg",
+        // `relative`: sr-only text is absolutely positioned; the shell clips it so it cannot
+        // extend the document and make the locked page scrollable.
+        "relative grid h-dvh w-full overflow-hidden bg-bg text-fg",
         mobile
           ? "grid-cols-[minmax(0,1fr)] grid-rows-[var(--wf-topbar-h)_minmax(0,1fr)]"
           : "grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]",
@@ -49,22 +49,11 @@ export function AppShell() {
       <CommandPalette />
       <ShortcutsDialog />
       <NewIssueDialog />
+      <NewGroupDialog />
       <MoveGateDialog />
       <GlobalShortcuts />
-      <LiveNavigatorBridge />
     </div>
   );
-}
-
-/** Live toasts ("Open") open issues through the same path as the board. */
-function LiveNavigatorBridge() {
-  const openIssue = useOpenIssue();
-  useEffect(() => {
-    setLiveNavigator((id: string) => {
-      void openIssue(id);
-    });
-  }, [openIssue]);
-  return null;
 }
 
 function MobileTopBar() {

@@ -90,7 +90,7 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
             className="flex h-7 w-full items-center gap-2 rounded-md border border-border bg-bg px-2 text-fg-faint transition-colors duration-100 ease-wf hover:border-border-strong hover:text-fg-muted"
           >
             <Search {...ICON} aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-left">Search or jump to…</span>
+            <span className="min-w-0 flex-1 truncate text-left">Search or jump…</span>
             <Kbd combo="mod+k" />
           </button>
         )}

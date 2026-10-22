@@ -374,7 +374,7 @@ function GroupRow({
       <span
         className={cn(
           "min-w-0 flex-1 truncate",
-          node.implicit && "text-fg-faint italic",
+          node.implicit && !isRoot && "text-fg-faint italic",
           isRoot && "text-fg",
         )}
       >
@@ -402,7 +402,7 @@ function SignalDot({ signal, className }: { signal: "needs_you" | "stale"; class
 
 const BAR_STATUSES: IssueStatus[] = STATUS_ORDER.filter((s) => s !== "cancelled");
 
-/** 28 × 3 px bar: each segment is a status's share of the subtree. */
+/** 32 × 3 px bar: each segment is a status's share of the subtree. */
 function MiniBar({ rollup }: { rollup: GroupRollup }) {
   const parts = BAR_STATUSES.map((s) => ({ status: s, n: rollup.by_status[s] ?? 0 })).filter(
     (p) => p.n > 0,
@@ -418,7 +418,7 @@ function MiniBar({ rollup }: { rollup: GroupRollup }) {
       <span
         aria-hidden
         className={cn(
-          "flex h-[3px] w-[28px] shrink-0 gap-px overflow-hidden rounded-full",
+          "flex h-[3px] w-[32px] shrink-0 gap-px overflow-hidden rounded-full",
           total === 0 && "bg-border",
         )}
       >

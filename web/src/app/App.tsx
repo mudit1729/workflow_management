@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { Toaster } from "@/components/common";
 import { TooltipProvider } from "@/components/ui";
 import { queryClient, useInbox, useSnapshot } from "@/lib/api";
-import { startLive } from "@/lib/live";
+import { setLiveNavigator, startLive } from "@/lib/live";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { router } from "./router";
 
@@ -25,20 +25,49 @@ export function App() {
 
 function DocumentSync() {
   useLiveConnection();
+  useLiveNavigator();
   useThemeSync();
   useDensitySync();
   useTabTitle();
   return null;
 }
 
-// startLive subscribes once for the app's lifetime. The flag keeps StrictMode's
-// double effect from opening a second stream.
-let liveStarted = false;
+// startLive is idempotent: StrictMode's second effect run gets the stream already open.
 function useLiveConnection() {
   useEffect(() => {
-    if (liveStarted) return;
-    liveStarted = true;
     startLive(queryClient);
+  }, []);
+}
+
+/**
+ * Live toasts live outside the route tree, so their "Open" action navigates through the
+ * router instance: the drawer on wide screens, the full page below 768 px (as `useOpenIssue`).
+ */
+function openIssueFromToast(id: string) {
+  if (window.innerWidth < 768) return router.navigate({ to: "/i/$id", params: { id } });
+  const onBoard = router.state.location.pathname.startsWith("/w");
+  return router.navigate({
+    to: "/w/i/$id",
+    params: { id },
+    // Keep the board filters (group, swim, author, q, show) behind the drawer; drop tab and log.
+    search: onBoard
+      ? (prev) => ({
+          group: prev.group,
+          swim: prev.swim,
+          author: prev.author,
+          q: prev.q,
+          show: prev.show,
+        })
+      : {},
+  });
+}
+
+function useLiveNavigator() {
+  useEffect(() => {
+    setLiveNavigator((id: string) => {
+      void openIssueFromToast(id);
+    });
+    return () => setLiveNavigator(undefined);
   }, []);
 }
 

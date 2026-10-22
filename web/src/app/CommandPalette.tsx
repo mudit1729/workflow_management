@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Component,
+  FolderPlus,
   Inbox,
   Keyboard,
   LayoutGrid,
@@ -127,22 +128,34 @@ function PaletteBody({ close }: { close: () => void }) {
 
 // ---------------------------------------------------------------- ranking
 
+/**
+ * cmdk's scorer accepts any subsequence, so "move" would match half the workspace.
+ * Word and prefix matches score above 0.5, scattered letters below 0.15: cut there.
+ */
+const MIN_SCORE = 0.2;
+
+interface Ranked<T> {
+  items: T[];
+  /** Best score in the list, used to order the sections. */
+  best: number;
+}
+
 function rank<T>(
   items: T[],
   query: string,
   text: (t: T) => [string, string[]],
   limit: number,
-): T[] {
-  if (!query) return [];
-  return items
+): Ranked<T> {
+  if (!query) return { items: [], best: 0 };
+  const scored = items
     .map((item) => {
       const [value, keywords] = text(item);
       return { item, score: defaultFilter(value, query, keywords) };
     })
-    .filter((r) => r.score > 0)
+    .filter((r) => r.score >= MIN_SCORE)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((r) => r.item);
+    .slice(0, limit);
+  return { items: scored.map((r) => r.item), best: scored[0]?.score ?? 0 };
 }
 
 function flattenGroups(root: GroupNode): { node: GroupNode; path: string[] }[] {
@@ -190,10 +203,10 @@ function RootPage({
   const actions = useActions(openIssue, setPage);
   const q = query.trim();
 
-  const issues = useMemo(() => {
+  const issues = useMemo<Ranked<IssueSummary>>(() => {
     const all = snapshot?.issues ?? [];
     if (!q) {
-      return [...all]
+      const recent = [...all]
         .filter((i) => i.status !== "cancelled" && i.status !== "done")
         .sort(
           (a, b) =>
@@ -201,6 +214,7 @@ function RootPage({
             (a.last_activity ? parseTs(a.last_activity.ts) : 0),
         )
         .slice(0, LIMIT.recent);
+      return { items: recent, best: 1 };
     }
     return rank(
       all,
@@ -219,7 +233,7 @@ function RootPage({
             (g) => [g.node.title, [...g.path, g.node.slug]],
             LIMIT.groups,
           )
-        : [],
+        : { items: [], best: 0 },
     [root, q],
   );
 
@@ -234,14 +248,112 @@ function RootPage({
     [snapshot, q],
   );
 
-  const visibleActions = q
-    ? actions.filter((a) => defaultFilter(a.label, q, a.keywords) > 0)
-    : actions;
+  const matchedActions = useMemo<Ranked<Action>>(() => {
+    if (!q) return { items: actions, best: 0.5 };
+    const scored = actions
+      .map((a) => ({ a, score: defaultFilter(a.label, q, a.keywords) }))
+      .filter((r) => r.score >= MIN_SCORE)
+      .sort((x, y) => y.score - x.score);
+    return { items: scored.map((r) => r.a), best: scored[0]?.score ?? 0 };
+  }, [actions, q]);
 
   const runAction = (a: Action) => {
     if (!a.stay) close();
     a.run();
   };
+
+  type SectionKey = "issues" | "groups" | "library" | "actions";
+  const sections: Record<SectionKey, ReactNode> = {
+    issues: issues.items.length > 0 && (
+      <CommandGroup key="issues" heading={q ? "Issues" : "Recent issues"}>
+        {issues.items.map((issue) => (
+          <CommandItem
+            key={issue.id}
+            value={`issue:${issue.id}`}
+            icon={<StatusIcon status={issue.status} size={14} />}
+            hint={issue.group_path.join(" / ")}
+            onSelect={() => {
+              close();
+              void open(issue.id);
+            }}
+          >
+            <span className="mr-2 inline-block w-[64px] font-mono text-fg-faint text-xs">
+              {issue.id}
+            </span>
+            {issue.title}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
+    groups: groups.items.length > 0 && (
+      <CommandGroup key="groups" heading="Groups">
+        {groups.items.map(({ node, path }) => (
+          <CommandItem
+            key={node.id}
+            value={`group:${node.id}`}
+            icon={
+              <span
+                className="size-2 rounded-full"
+                style={{ background: `var(--wf-hue-${node.color})` }}
+              />
+            }
+            hint={`${node.rollup.issues} ${node.rollup.issues === 1 ? "issue" : "issues"}`}
+            onSelect={() => {
+              close();
+              selectGroup(node.id);
+            }}
+          >
+            {path.length > 0 && <span className="text-fg-faint">{path.join(" / ")} / </span>}
+            <span className={node.implicit ? "text-fg-muted italic" : undefined}>{node.title}</span>
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
+    library: library.items.length > 0 && (
+      <CommandGroup key="library" heading="Library">
+        {library.items.map((item: LibrarySummary) => (
+          <CommandItem
+            key={item.id}
+            value={`lib:${item.id}`}
+            icon={<KindIcon kind={item.kind} size={14} />}
+            hint={item.status === "draft" ? "Draft" : item.description}
+            onSelect={() => {
+              close();
+              go.libraryItem(item.id);
+            }}
+          >
+            {item.title}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
+    actions: matchedActions.items.length > 0 && (
+      <CommandGroup key="actions" heading="Actions">
+        {matchedActions.items.map((a) => (
+          <CommandItem
+            key={a.id}
+            value={`action:${a.id}`}
+            icon={a.icon}
+            shortcut={a.shortcut}
+            hint={a.hint}
+            onSelect={() => runAction(a)}
+          >
+            {a.label}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
+  };
+  // The section holding the best match comes first, so Enter runs what you typed.
+  // Ties keep the default order. Without a query: recent issues, then actions.
+  const order = (["issues", "groups", "library", "actions"] as const)
+    .map((key, i) => ({
+      key,
+      i,
+      best: { issues, groups, library, actions: matchedActions }[key].best,
+    }))
+    .sort((x, y) => y.best - x.best || x.i - y.i)
+    .map((x) => x.key);
 
   return (
     <>
@@ -252,90 +364,7 @@ function RootPage({
         </span>
       </CommandEmpty>
 
-      {issues.length > 0 && (
-        <CommandGroup heading={q ? "Issues" : "Recent issues"}>
-          {issues.map((issue) => (
-            <CommandItem
-              key={issue.id}
-              value={`issue:${issue.id}`}
-              icon={<StatusIcon status={issue.status} size={14} />}
-              hint={issue.group_path.join(" / ")}
-              onSelect={() => {
-                close();
-                void open(issue.id);
-              }}
-            >
-              <span className="mr-2 inline-block w-[64px] font-mono text-fg-faint text-xs">
-                {issue.id}
-              </span>
-              {issue.title}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      )}
-
-      {groups.length > 0 && (
-        <CommandGroup heading="Groups">
-          {groups.map(({ node, path }) => (
-            <CommandItem
-              key={node.id}
-              value={`group:${node.id}`}
-              icon={
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: `var(--wf-hue-${node.color})` }}
-                />
-              }
-              hint={`${node.rollup.issues} ${node.rollup.issues === 1 ? "issue" : "issues"}`}
-              onSelect={() => {
-                close();
-                selectGroup(node.id);
-              }}
-            >
-              {path.length > 0 && <span className="text-fg-faint">{path.join(" / ")} / </span>}
-              <span className={node.implicit ? "text-fg-muted italic" : undefined}>
-                {node.title}
-              </span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      )}
-
-      {library.length > 0 && (
-        <CommandGroup heading="Library">
-          {library.map((item: LibrarySummary) => (
-            <CommandItem
-              key={item.id}
-              value={`lib:${item.id}`}
-              icon={<KindIcon kind={item.kind} size={14} />}
-              hint={item.status === "draft" ? "Draft" : item.description}
-              onSelect={() => {
-                close();
-                go.libraryItem(item.id);
-              }}
-            >
-              {item.title}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      )}
-
-      {visibleActions.length > 0 && (
-        <CommandGroup heading="Actions">
-          {visibleActions.map((a) => (
-            <CommandItem
-              key={a.id}
-              value={`action:${a.id}`}
-              icon={a.icon}
-              shortcut={a.shortcut}
-              hint={a.hint}
-              onSelect={() => runAction(a)}
-            >
-              {a.label}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      )}
+      {order.map((key) => sections[key])}
     </>
   );
 }
@@ -359,6 +388,13 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       shortcut: "n",
       keywords: ["create", "add"],
       run: () => shell.setNewIssueOpen(true),
+    },
+    {
+      id: "new-group",
+      label: "New group…",
+      icon: <FolderPlus {...ICON} />,
+      keywords: ["create", "add", "folder"],
+      run: () => shell.setNewGroupOpen(true),
     },
   ];
 
