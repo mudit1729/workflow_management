@@ -23,7 +23,10 @@ const theme = opt("theme", "light");
 const density = opt("density", "comfy");
 const wait = Number(opt("wait", 600));
 
-const browser = await chromium.launch();
+// Fall back to a system Chromium when Playwright's own build is not installed (e.g. cloud containers).
+const browser = await chromium
+  .launch()
+  .catch(() => chromium.launch({ executablePath: process.env.PW_CHROMIUM ?? "/opt/pw-browsers/chromium" }));
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
 await page.addInitScript(
   ([t, d]) => {
