@@ -17,6 +17,11 @@ Goal: a clickable prototype of every UI element, running on mock data, so the us
 can review each element and give feedback. It must look finished: calm, precise,
 Linear-like. It is also the real `web/` codebase, so write production-quality code.
 
+**The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
+markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
+what the board shows, edit a file there, or open **Workspace files** in the UI. Never add a
+TypeScript object that holds content.
+
 ## Ground rules
 
 - **Own only your files.** Each builder owns the paths listed under its name.
@@ -72,10 +77,13 @@ Linear-like. It is also the real `web/` codebase, so write production-quality co
 | `/lib` | `LibraryView` | `tab (items\|glossary), kind, q` |
 | `/lib/$id` | `LibraryView` with `LibraryItemView id` open | |
 | `/inbox` | `InboxView` | |
+| `/files` | `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed) |
 | `/kit` | `KitPage` (component gallery) | |
 
 Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`,
-`useIssueTab`, `useGo` from `@/lib/nav`. Hash routing is used when `VITE_HASH_ROUTER=1`.
+`useIssueTab`, `useGo` from `@/lib/nav`; the Workspace files feature has `useFilesNav` and
+`filesHref` (`@/features/files`). Hash routing is used when `VITE_HASH_ROUTER=1`
+(`/#/files?path=…`, as in the static build).
 
 ## Module map and public APIs
 
@@ -136,11 +144,14 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 
 `src/lib/api/index.ts` re-exports:
 - `queryClient` (TanStack Query client)
-- `api` — `{ snapshot(), issue(id), libraryItem(id), glossary(), search(q, scope?, k?), context(id, budget?), ops(op) }`.
-  Uses the in-memory mock server (`@mock/server`) unless `import.meta.env.VITE_API === "real"`, then `fetch("/api/…")`.
+- `api` — `{ snapshot(), issue(id), libraryItem(id), glossary(), search(q, scope?, k?), context(id, budget?), ops(op),
+  files(), file(path), writeFile({ path, text, base_rev? }), deleteFile({ path, base_rev? }) }`.
+  Uses the in-memory mock server (`@mock/server`) unless `import.meta.env.VITE_API === "real"`, then `fetch("/api/…")`
+  (the file calls are prototype endpoints beyond contract §1.10: `GET /api/files`, `GET|PUT|DELETE /api/files/{path}`).
   `ops` rejects with `ApiError { status: 409 | 422, body: Conflict | Unprocessable }`.
 - Queries: `useSnapshot()`, `useIssue(id?: string)`, `useLibraryItem(id?)`, `useGlossary()`, `useSearch(q, scope?)`,
-  `useContextBundle(id)`.
+  `useContextBundle(id)`, `useWorkspaceFiles(): UseQueryResult<WorkspaceFileInfo[]>` (sorted by path, stale on every
+  delta), `useWorkspaceFile(path?): UseQueryResult<WorkspaceFile>` (disabled without a path).
 - Selectors (built on `useSnapshot`): `useAuthors(): Map<string, Author>`, `useAuthor(handle)`, `useMe(): string`
   (acting author = `config.author`), `useIssueSummary(id)`, `useIssueMap(): Map<id, IssueSummary>`,
   `useGroupTree(): GroupNode | undefined`, `useGroup(id)`, `useGroupIndex(): Map<id, GroupNode>`,
@@ -153,34 +164,98 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   - `useToggleCriterion(issueId)`, `useToggleStep(issueId)`, `useSetTaskStatus(issueId)`, `useAnswerRequest()`,
     `usePromote()`, `useApproveLibrary()`, `useNewIssue()`, `useNewGroup()` — each returns
     `(args) => Promise<OpResult | undefined>`.
+  - `useWriteWorkspaceFile(): (args: { path, text, base_rev? }) => Promise<{ rev } | undefined>` — saves a whole file;
+    toasts 409/422/other itself and resolves `undefined`. `useDeleteWorkspaceFile(): (args: { path, base_rev? }) => Promise<void>`
+    — throws `ApiError`/`NotFoundError`, the caller explains. (Plain functions: `writeWorkspaceFile`, `deleteWorkspaceFile`.)
 - `ApiError` class.
 
 `src/lib/live/index.ts` exports:
 - `startLive(queryClient)` — called once by the shell. Subscribes to the mock event stream (or `EventSource` on
   `/api/events` when real); applies `delta` to the snapshot cache only when `rev` is newer; invalidates changed issue
-  details; plays scripted activity (see below).
+  details and marks the file queries stale; plays scripted activity (see below).
 - `useLiveStatus(): { state: "live"|"reconnecting"|"offline", rev: string }`
 - `useRecentlyChanged(id: string): boolean` — true for 1.5 s after a delta touched that issue (cards add `wf-flash`).
 - `useActivity(): ActivityEvent[]` — latest 50, newest first.
 - Activity toasts: only `notable` events (needs-you, blocked, expired lease), via sonner, with "Open" action.
 - Optional browser notifications for blocking requests when `usePrefs().notifications` is on.
 
-`web/mock/` contents:
-- `time.ts` — `ago(minutes)`, `ahead(minutes)`, `daysAgo(d, hh, mm)` → RFC 3339 strings with `+05:30`, computed from
-  the real clock at load so relative times always read naturally.
-- `data/*.ts` — seed workspace (see "Mock world" below), typed with `@/gen/types`.
-- `server.ts` — in-memory store; `snapshot()`, `issue(id)` (full detail for rich issues, generated detail for the rest),
-  `libraryItem(id)`, `glossary()`, `search()` (simple scoring over titles/bodies), `context(id)` (markdown bundle text),
-  `ops(op)` (applies to the store, bumps revs, emits `delta` + `activity`), `subscribe(fn)` event stream,
-  and `mockControls`: `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"), reset() }`
-  exposed on `window.__wf`. Latency 80–160 ms.
-- Scripted live events: every ~20 s the server plays the next event of a loop (codex appends a change to
-  wf-3k9x2 T-3; claude-opus rewrites current_state; a new blocking needs-you request; a lease expires on another
-  issue (amber); claude-sonnet moves an issue to review; …). The DevPanel can play them on demand.
-- `diagrams.ts` is owned by the **diagram builder** and exports `DIAGRAMS: Record<string, Diagram>` keyed by id:
-  `live-board-architecture` (architecture, goal.md of wf-3k9x2), `sse-delivery-flow` (workflow, plan.md of wf-3k9x2),
-  `skills-flow` (workflow, goal.md of the skills-flowchart issue), `broken-release-flow` (status `invalid`, 2 errors).
-  The data builder imports it: `import { DIAGRAMS } from "@mock/diagrams"`.
+#### Markdown first: how `web/mock/` works
+
+**The files are the source of truth.** `web/mock/workspace/` is a real `wf` workspace (`wf_format = 1`): `workflow.toml`,
+`authors.md`, `glossary.md`, `issues/<group path>/<slug>/{goal,plan,current_state,changes,decisions,learnings}.md` with
+docs and assets, `issues/**/_group.md`, `library/<kind>s/<slug>.md`. The grammar is `docs/plan/contract.md` §1.2–1.7.
+Diagrams are archify blocks inside `goal.md` / `plan.md` (` ```archify <type> id=<id> `). Read the folder's own
+`README.md` first. Nothing else describes the mock world: there is no TypeScript seed, and `mock/data/**`,
+`mock/diagrams.ts` and `mock/serialize.ts` no longer exist.
+
+```
+mock/workspace/**  ──(Vite glob ?raw / ?wf-asset)──▶  workspace-files.ts  DISK (recording-frame files)
+                                                         │  HMR: self-accepting, publishDisk()
+                                                         ▼  workspace-bus.ts
+store.ts  working copy: Record<path, text>  ◀── applyDisk(): shift by the store's clock, skip echoes
+   │ every commit:  rebaseWorkspace (at load/reset)  →  md/loadWorkspace(files)  →  derive(source)  →  delta + activity
+   ▼
+server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files, file, writeFile, deleteFile, events)
+```
+
+- **`mock/md/` — the markdown layer.** `loadWorkspace(files, { binary?, now? }): LoadedWorkspace` parses the files the way the
+  daemon does and never throws (bad input becomes findings). It returns the sources `derive()` needs (`world`), the raw
+  `texts` per issue file, `diagnostics` per path (all **F** and **S** lint rules computed from the text, `[lint]` config
+  applied), `anchors` (line and byte span of every SC-n, T-n, Q-xxxxx, entry id and frontmatter key), `diagrams`, `assets`.
+  The parser replaces each archify block in the API prose by a ` ```wf-diagram\n<id>\n``` ` fence, like the daemon.
+  Files: `parse-*.ts` (one per file kind), `frontmatter.ts`, `blocks.ts`, `lint.ts` + `checks.ts` + `prose.ts` (rules),
+  `render.ts` (sources → canonical text), `edit.ts`, `rebase.ts`, `templates.ts`.
+- **`derive.ts`** turns a `LoadedWorkspace` into the API shapes of `@/gen/types` (snapshot, `IssueDetail`s, library, signals,
+  inbox). Revs, line numbers, word counts and every `EditRef` come from the real text. F and S findings come from the loader;
+  the **Q** rules (state versus goal: drift, stale, lease, needs-you) stay in `derive` and respect `[lint]` disable and severity.
+  `src/gen/types.ts` is unchanged by all this, so the UI cannot tell where the data came from.
+- **`store.ts`** keeps the working copy of the files (path → text) in memory. `mutate(by, issue, fn)` hands the caller a draft;
+  the caller edits text; only when the edited files load and derive does the store swap them in, bump the rev and emit a
+  `delta` plus the `activity` events the write declared. 409 checks use the anchor's rev (`guard`) or the file's rev
+  (`guardFile`). A write that throws leaves the store untouched. `reset()` goes back to the files as they are on disk now.
+- **Every write is a minimal text edit** (`md/edit.ts`, like `wf-edit`'s splice). `ops.ts` maps each Op to edits and `events.ts`
+  does the same for the 8 scripted live events (`SCRIPT`, one every ~20 s, played from the DevPanel too). Ticking SC-3 flips
+  `[ ]` to `[x]` on that line of `goal.md` and changes nothing else; unticking also drops that criterion's `evidence` and
+  `verified_by` lines; `set_status` changes one `status:` line; `answer_request` ticks the box and adds `answer:`,
+  `answered_by`, `answered_at`; `new_issue` creates one `goal.md`; `promote` creates a library file and appends the review
+  request to `current_state.md`. Files are never re-serialized (two contract-defined overwrites aside). `mock/ops.test.ts`
+  asserts the line diff of every Op.
+- **The watcher (dev server).** `mock/workspace-files.ts` globs the folder and accepts its own HMR update. When a file under
+  `mock/workspace/` is saved, added or removed, it hands the new file set to `store.applyDisk` through `workspace-bus.ts`.
+  The store applies only what differs from its working copy, as one commit: re-parse, delta, card fade, and an activity line
+  `@<author or disk> edited goal.md` (the author is taken from a new entry heading when there is one). A file whose text the
+  store already holds is an echo and is ignored. A change to `authors.md`, `glossary.md` or `workflow.toml` also emits
+  `resync`, because those are not part of a delta. The Vite plugin `workspaceHot` (`vite.config.ts`) keeps an add or a
+  remove from reloading the page: the update is the watcher module alone. Browser edits survive a disk change and are never
+  written back to disk.
+- **The file API (`mock/files.ts`, `server.ts`).** `files()` lists every workspace file with `kind`, bytes, rev, owning
+  `issue`/`group`/`library` and the error, warning and info counts; `file(path)` returns the text (or the asset URL) and the
+  file's diagnostics; `writeFile` and `deleteFile` take an optional `base_rev` (409 with `"goal.md changed by @x"` or
+  `"…changed on disk"`; 422 for a bad path, a binary file, more than 1 MB or a workspace that cannot be read afterwards; 404
+  for a missing file). Saving a file re-loads the whole workspace, so a new `goal.md` is a new card and a broken
+  frontmatter is F001 with the raw file shown.
+- **Times: `RECORDED_AT`.** The files hold absolute times, written once at `RECORDED_AT` (`mock/md/recorded-at.ts`). At load
+  and on `reset()` the store calls `rebaseWorkspace(files, shiftSinceRecording(now))`: every RFC 3339 timestamp anywhere in
+  the text moves by `now − RECORDED_AT` (rounded to whole minutes, offset and precision kept) and every date-only value of
+  `due`, `created`, `last_reviewed`, `review_after` moves by the matching number of local days. "12m ago" stays "12m ago",
+  a lease 40 min ahead stays 40 min ahead, on any day. The files on disk never change by this. A time typed by hand into a
+  file on disk is shifted like the rest (write it relative to `RECORDED_AT`); a time typed in the Workspace files editor
+  is taken as is, because the editor shows the working copy. `time.ts` has the formatters (`toTs`, `toDate`, `nowTs`, `dateIn`).
+- **Diagrams.** The loader finds the archify blocks, validates them (valid, or `invalid` with JSON-path errors, F011) and
+  returns a `Diagram` per block. A valid one is `ready` with a `url` only when the Prototype panel's archify switch is on
+  and a stand-in preview page exists for its id (`mock/diagram-previews.json`, pages in `public/diagrams/<id>.html`);
+  otherwise it is `unavailable` with its JSON source. `node scripts/render-diagram-previews.mjs` redraws the pages from
+  the workspace's blocks, writing only what differs; the dev server runs it again when a file with a block changes.
+- **Lint.** Findings carry the file, line and column of the text. Implemented: F001–F014, F016, F017, S01–S03, S05–S09, S11,
+  S13 (see `md/lint.ts`, `md/checks.ts`, the parsers), plus an inline `<!-- wf-lint-disable S06 -->`. `[lint] disable = ["S09"]`
+  in `workflow.toml` is on purpose (the web issues say "card"); delete it to see S09 appear.
+- **Not representable in files.** `IssueSrc.activity` (status moves, tick and lease activity) has no file form: UI ops keep it
+  in memory (`Applied.log`) so cards can still read "Moved to Review" until `reset()`.
+- **Tests** read the files as they ship: `mock/md/*.test.ts` (grammar of every file, the declared findings, tolerant reader,
+  edits, rebase, templates), `mock/world.test.ts`, `mock/ops.test.ts`, `mock/files.test.ts`, `mock/server.test.ts`. A large
+  hand edit of the workspace can break a test that names an issue by id; fix the test or the edit.
+- **`window.__wf`** (`mockControls`): `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"|"offline"), reset() }`.
+  Latency 80–160 ms.
 
 ### shell builder: `src/main.tsx`, `src/app/**`
 
@@ -195,19 +270,21 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   `<div className="min-w-0 flex-1"><BoardPage/></div>` and the drawer `<Outlet/>`. The drawer route renders
   `IssueDrawer`, which is a flex item when docked and `absolute inset-y-0 right-0` when overlaid.
 - `app/NavRail.tsx` — collapsible (232 ↔ 52 px; ⌘B or `[`): workspace name + acting author at top; nav items
-  Board (`g w`), Inbox with count (`g i`), Library (`g l`), Kit; the `GroupTree`; footer with theme (system/light/dark),
+  Board (`g w`), Inbox with count (`g i`), Library (`g l`), Files (`g f`, Workspace files), Kit; the `GroupTree`; footer with theme (system/light/dark),
   density, notifications toggle, ⌘K hint, `?` hint.
 - `app/GroupTree.tsx` — `role="tree"`; nested groups from `useGroupTree()`; each node: color dot (group hue), title,
   roll-up count, 32 px mini progress bar (status-colored segments), needs-you dot; selecting sets board `group`.
   Implicit groups show in italic. Collapsible nodes, keyboard arrows.
 - `app/CommandPalette.tsx` — ⌘K. Groups: Issues (search), Groups, Library, Actions (move open issue to…, new issue,
-  new group, toggle theme, density, go to inbox/board/library/kit, simulate conflict, play live event).
+  new group, toggle theme, density, go to inbox/board/library/files/kit, "Edit goal.md of <open issue>", simulate conflict,
+  play live event).
 - `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from contract §6 with `Kbd`.
 - `app/NewIssueDialog.tsx` — `n`: group picker, slug (auto from title), title, template (default|bug|research|doc), size.
   Calls `useNewIssue()`; opens the new issue.
 - `app/DevPanel.tsx` — a small "Prototype" pill bottom-left; opens controls: play next live event, simulate conflict
-  on next write, archify available toggle, connection state, reset data, jump to Kit. Hidden behind `.` key too.
-- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w`, `g l`, `g i`, `g k` (kit), `n`, `?`.
+  on next write, archify available toggle, connection state, reset data (back to the files on disk), open Workspace files,
+  jump to Kit. Hidden behind `.` key too.
+- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w`, `g l`, `g i`, `g f` (files), `g k` (kit), `n`, `?`.
 
 ### board builder: `src/features/board/**`
 
@@ -312,7 +389,7 @@ before the other files exist.)
 - `LearningCards({ learnings, issueId })` — kind icon (tip/gotcha/pattern), the rule in bold, evidence (≤3 lines),
   tags; `promote: candidate` → "Promote" button (PromoteDialog); `promoted_to` → "In library ↗" link.
 
-### diagram builder: `src/features/diagram/**`, `web/mock/diagrams.ts`, `web/public/diagrams/**`
+### diagram builder: `src/features/diagram/**`, `web/public/diagrams/**`
 
 `index.ts` exports `ArchifyCard, DiagramDialog`.
 - Render real diagrams with the archify CLI (skill at `~/.claude/skills/archify`, read its SKILL.md):
@@ -321,7 +398,10 @@ before the other files exist.)
   ResizeObserver posts `{type:"wf:size", h}` to parent; a `message` listener for `{type:"wf:theme", theme}` sets the
   theme without reload), save as `web/public/diagrams/<id>.html`. `Diagram.url` = `/diagrams/<id>.html`
   (relative-safe for static builds: build it as `${import.meta.env.BASE_URL}diagrams/<id>.html`).
-- `web/mock/diagrams.ts` exports `DIAGRAMS` (see data builder) with real `source` JSON, `nodes` counts, titles.
+- The diagram sources are the archify blocks in the workspace's `goal.md` / `plan.md` files (`live-board-architecture` and
+  `sse-delivery-flow` in wf-3k9x2, `skills-flow` in the skills flowchart issue, the invalid `broken-release-flow` in wf-g5rx8).
+  The loader (`mock/md/`) turns them into `Diagram`s with real `source` JSON, `nodes` counts and titles;
+  `node scripts/render-diagram-previews.mjs` draws the three valid ones into `public/diagrams/<id>.html`.
 - `ArchifyCard({ diagram: Diagram, compact?: boolean })` — card with title, type chip, node count, "Open" button;
   body height `clamp(220px, 32vh, 420px)`, iframe `src={url + "?embed=1&theme=" + theme}`,
   `sandbox="allow-scripts"`, mounted only when an IntersectionObserver sees the card; listens for `wf:size` to grow up to
@@ -352,9 +432,44 @@ before the other files exist.)
   (`useAnswerRequest`); blocking first; empty state "Nothing needs you". Notification opt-in banner for blocking
   requests (uses `usePrefs().setNotifications` + `Notification.requestPermission`).
 
-## Mock world (data builder; others may rely on these ids)
+### workspace-files builder: `src/features/files/**` (+ View source in `features/issue/{tabs/FilesTab,DocsList,DocView}.tsx`)
 
-Workspace "wf" (`id_prefix = "wf"`), acting author **shruti**. Authors (`authors.md`):
+The prototype's way to see and change the markdown the board is built from. Route `/files?path=<workspace-relative path>`;
+nav item "Files" (`g f`); palette "Open workspace files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
+A "Prototype" chip in the top bar says it is a prototype surface (the product edits files in an editor, not the browser).
+`index.ts` exports `WorkspaceView`, `WorkspaceTree`, `SourceView`, `SourceEditor`, `NewFileDialog`, `useFilesNav`, `FilesLink`, `filesHref`,
+`requestFileEdit`, `ISSUE_FILE_NAMES`, `issueFileTemplate`, `templateForPath`, `type FilesSearch`; `@/app/search` has `validateFilesSearch`.
+- `WorkspaceView({ path? })` — 44 px top bar (title, one-line explanation, Prototype chip, "New file"), a 280 px tree at the left
+  and `SourceView` at the right. Below 768 px the tree and the file are separate screens with a back arrow.
+- `WorkspaceTree({ selectedPath?, onSelect, onNewFile?, className? })` — `role="tree"`. Issue folders show the issue's
+  `StatusIcon`, title and a faint slug; group folders their color dot (italic when implicit); root files sit under "Workspace";
+  the library lists its kinds in a fixed order. A file with findings has a dot and count; a collapsed folder rolls up its
+  children. Folders default open down to issue level and open down to the selected file. The filter matches path, issue title
+  or issue id. Arrow keys, Home/End, Enter.
+- `SourceView({ path, variant?: "pane" | "inline", pathLabel?, onBack?, onDeleted?, className? })` — header with the mono path
+  and copy button, rev, size, line count, a one-line note on what the file drives, "Open issue" / "Open library item" /
+  "Open group", Edit and a ⋯ menu (copy path, copy text, Delete with a confirm dialog). The text has line numbers, light
+  highlighting (tokens only; archify fences marked) and a gutter marker per finding (tooltip `S06 · message Fix: …`);
+  "N findings" cycles through them. Images show with their size, other binaries get a "no preview" state, a missing path
+  "No file at …" with "Create this file". `workflow.toml` is editable (saving it re-applies `[lint]`, leases and staleness).
+- Edit mode (`SourceEditor`, rendered by `SourceView`) — a mono textarea with the same metrics as the view. Save is ⌘S / ⌘↵ with `base_rev`,
+  Cancel is Esc, an "Unsaved" dot shows when edited. On success the toast reads "Saved goal.md · the board re-read it" with an
+  "Open board" action, and the view returns scrolled to the first changed line with the changed lines faded. If the file's rev
+  moved past the one the editor opened from, a bar says "This file changed while you edited it" (Reload / Overwrite). Esc on a
+  dirty draft asks "Discard?"; leaving the route with a dirty draft opens a dialog (`useBlocker`, no `window.confirm`).
+- `NewFileDialog({ open, onOpenChange, defaultGroup?, defaultIssue?, onCreated, onEdit })` — templates "New issue (goal.md)"
+  (title, group folder, slug; writes a valid backlog `goal.md` with a fresh `wf-xxxxx` id), "Change entry" (opens the issue's
+  `changes.md` with a new entry appended and its title selected) and "Empty file". The path input is always visible and
+  validated (workspace-relative, `.md` or `.toml`, no `..`, no ignored folders, no duplicates).
+- Issue Files tab — every issue file and doc row has "View source" (inline `SourceView`, with Edit and "Open in Workspace
+  files"); a missing issue file has "Create", which opens the editor with a starting text. `DocView` has "View source" too.
+- Data: only `useWorkspaceFiles`, `useWorkspaceFile`, `useWriteWorkspaceFile`, `useDeleteWorkspaceFile` from `@/lib/api`.
+  The editor never holds data of its own; what you save is read back through the same loader as a file saved on disk.
+
+## Mock world (the workspace folder; others may rely on these ids)
+
+These are the files under `web/mock/workspace/` (not objects in code). Workspace "wf" (`id_prefix = "wf"`), acting
+author **shruti**. Authors (`authors.md`):
 - `shruti` human, Shruti Joshi, color 1, lanes web, skills
 - `claude-opus` agent, claude-code, model claude-opus-5-5, color 7, coordinator
 - `codex` agent, codex, color 2, lanes server, core
