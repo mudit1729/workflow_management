@@ -1,0 +1,548 @@
+// ⌘K — search issues, groups and library items, and run actions. Filters the
+// snapshot on the client (cmdk's scorer, capped per section). "Move … to…" opens
+// a second page listing statuses; Esc or Backspace on an empty field goes back.
+import { defaultFilter } from "cmdk";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Component,
+  Inbox,
+  Keyboard,
+  LayoutGrid,
+  Library,
+  PanelLeft,
+  Play,
+  Plus,
+  Rows3,
+  SunMoon,
+  Terminal,
+  Zap,
+} from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { KindIcon, StatusIcon } from "@/components/common";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  Kbd,
+} from "@/components/ui";
+import type { GroupNode, IssueStatus, IssueSummary, LibrarySummary } from "@/gen/types";
+import { useGroupTree, useIssueMap, useMoveIssue, useSnapshot } from "@/lib/api";
+import { parseTs } from "@/lib/format";
+import { useGo, useOpenIssue, useOpenIssueId } from "@/lib/nav";
+import { resolveTheme, usePrefs } from "@/lib/prefs";
+import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
+import { copyText } from "./clipboard";
+import { withMockControls } from "./mock-controls";
+import { useShell } from "./shell-store";
+import { useSelectGroup } from "./useSelectGroup";
+
+const ICON = { size: 14, strokeWidth: 1.75 } as const;
+const LIMIT = { issues: 8, groups: 5, library: 5, recent: 6 };
+
+type Page = "root" | "move";
+
+export function CommandPalette() {
+  const open = useShell((s) => s.paletteOpen);
+  const setOpen = useShell((s) => s.setPaletteOpen);
+
+  return (
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      title="Command palette"
+      commandProps={{ shouldFilter: false, loop: true }}
+    >
+      <PaletteBody close={() => setOpen(false)} />
+    </CommandDialog>
+  );
+}
+
+/** Lives inside the dialog content, so its state resets every time the palette closes. */
+function PaletteBody({ close }: { close: () => void }) {
+  const [query, setQuery] = useState("");
+  const [page, setPageState] = useState<Page>("root");
+  const openId = useOpenIssueId();
+  const issueMap = useIssueMap();
+  const openIssue = openId ? issueMap.get(openId) : undefined;
+
+  const setPage = (next: Page) => {
+    setPageState(next);
+    setQuery("");
+  };
+
+  // Esc on a sub-page goes back instead of closing. A window capture listener runs
+  // before Radix's document-level Escape handler, which skips handled events.
+  useEffect(() => {
+    if (page === "root") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setPageState("root");
+      setQuery("");
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [page]);
+
+  return (
+    <div data-wf="CommandPalette" className="flex min-h-0 flex-col">
+      {page === "move" && openIssue && (
+        <div className="flex items-center gap-1.5 px-3 pt-2.5 text-fg-muted text-xs">
+          <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono">{openIssue.id}</span>
+          <span className="min-w-0 truncate">{openIssue.title}</span>
+        </div>
+      )}
+      <CommandInput
+        value={query}
+        onValueChange={setQuery}
+        placeholder={
+          page === "move" && openIssue
+            ? `Move ${openIssue.id} to…`
+            : "Search issues, groups and library, or type a command…"
+        }
+        aria-label="Search or run a command"
+        onKeyDown={(e) => {
+          if (page !== "root" && e.key === "Backspace" && query === "") {
+            e.preventDefault();
+            setPage("root");
+          }
+        }}
+      />
+      <CommandList>
+        {page === "move" && openIssue ? (
+          <MovePage issue={openIssue} query={query} close={close} />
+        ) : (
+          <RootPage query={query} openIssue={openIssue} setPage={setPage} close={close} />
+        )}
+      </CommandList>
+      <PaletteFooter page={page} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- ranking
+
+function rank<T>(
+  items: T[],
+  query: string,
+  text: (t: T) => [string, string[]],
+  limit: number,
+): T[] {
+  if (!query) return [];
+  return items
+    .map((item) => {
+      const [value, keywords] = text(item);
+      return { item, score: defaultFilter(value, query, keywords) };
+    })
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((r) => r.item);
+}
+
+function flattenGroups(root: GroupNode): { node: GroupNode; path: string[] }[] {
+  const out: { node: GroupNode; path: string[] }[] = [];
+  const walk = (nodes: GroupNode[], path: string[]) => {
+    for (const node of nodes) {
+      out.push({ node, path });
+      walk(node.children, [...path, node.title]);
+    }
+  };
+  walk(root.children, []);
+  return out;
+}
+
+// ---------------------------------------------------------------- root page
+
+interface Action {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  shortcut?: string;
+  hint?: string;
+  keywords?: string[];
+  /** Keep the palette open (sub-pages). */
+  stay?: boolean;
+  run: () => void;
+}
+
+function RootPage({
+  query,
+  openIssue,
+  setPage,
+  close,
+}: {
+  query: string;
+  openIssue?: IssueSummary;
+  setPage: (p: Page) => void;
+  close: () => void;
+}) {
+  const snapshot = useSnapshot().data;
+  const root = useGroupTree();
+  const open = useOpenIssue();
+  const go = useGo();
+  const selectGroup = useSelectGroup();
+  const actions = useActions(openIssue, setPage);
+  const q = query.trim();
+
+  const issues = useMemo(() => {
+    const all = snapshot?.issues ?? [];
+    if (!q) {
+      return [...all]
+        .filter((i) => i.status !== "cancelled" && i.status !== "done")
+        .sort(
+          (a, b) =>
+            (b.last_activity ? parseTs(b.last_activity.ts) : 0) -
+            (a.last_activity ? parseTs(a.last_activity.ts) : 0),
+        )
+        .slice(0, LIMIT.recent);
+    }
+    return rank(
+      all,
+      q,
+      (i) => [`${i.id} ${i.title}`, [...i.group_path, ...i.labels]],
+      LIMIT.issues,
+    );
+  }, [snapshot, q]);
+
+  const groups = useMemo(
+    () =>
+      root
+        ? rank(
+            flattenGroups(root),
+            q,
+            (g) => [g.node.title, [...g.path, g.node.slug]],
+            LIMIT.groups,
+          )
+        : [],
+    [root, q],
+  );
+
+  const library = useMemo(
+    () =>
+      rank(
+        snapshot?.library ?? [],
+        q,
+        (l) => [`${l.id} ${l.title}`, [l.kind, l.description, ...l.tags]],
+        LIMIT.library,
+      ),
+    [snapshot, q],
+  );
+
+  const visibleActions = q
+    ? actions.filter((a) => defaultFilter(a.label, q, a.keywords) > 0)
+    : actions;
+
+  const runAction = (a: Action) => {
+    if (!a.stay) close();
+    a.run();
+  };
+
+  return (
+    <>
+      <CommandEmpty>
+        <span className="block text-fg">No results for “{q}”</span>
+        <span className="mt-1 block text-fg-faint">
+          Try an issue id like wf-3k9x2, a group name or a command.
+        </span>
+      </CommandEmpty>
+
+      {issues.length > 0 && (
+        <CommandGroup heading={q ? "Issues" : "Recent issues"}>
+          {issues.map((issue) => (
+            <CommandItem
+              key={issue.id}
+              value={`issue:${issue.id}`}
+              icon={<StatusIcon status={issue.status} size={14} />}
+              hint={issue.group_path.join(" / ")}
+              onSelect={() => {
+                close();
+                void open(issue.id);
+              }}
+            >
+              <span className="mr-2 inline-block w-[64px] font-mono text-fg-faint text-xs">
+                {issue.id}
+              </span>
+              {issue.title}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+
+      {groups.length > 0 && (
+        <CommandGroup heading="Groups">
+          {groups.map(({ node, path }) => (
+            <CommandItem
+              key={node.id}
+              value={`group:${node.id}`}
+              icon={
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: `var(--wf-hue-${node.color})` }}
+                />
+              }
+              hint={`${node.rollup.issues} ${node.rollup.issues === 1 ? "issue" : "issues"}`}
+              onSelect={() => {
+                close();
+                selectGroup(node.id);
+              }}
+            >
+              {path.length > 0 && <span className="text-fg-faint">{path.join(" / ")} / </span>}
+              <span className={node.implicit ? "text-fg-muted italic" : undefined}>
+                {node.title}
+              </span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+
+      {library.length > 0 && (
+        <CommandGroup heading="Library">
+          {library.map((item: LibrarySummary) => (
+            <CommandItem
+              key={item.id}
+              value={`lib:${item.id}`}
+              icon={<KindIcon kind={item.kind} size={14} />}
+              hint={item.status === "draft" ? "Draft" : item.description}
+              onSelect={() => {
+                close();
+                go.libraryItem(item.id);
+              }}
+            >
+              {item.title}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+
+      {visibleActions.length > 0 && (
+        <CommandGroup heading="Actions">
+          {visibleActions.map((a) => (
+            <CommandItem
+              key={a.id}
+              value={`action:${a.id}`}
+              icon={a.icon}
+              shortcut={a.shortcut}
+              hint={a.hint}
+              onSelect={() => runAction(a)}
+            >
+              {a.label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+    </>
+  );
+}
+
+function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => void): Action[] {
+  const go = useGo();
+  const theme = usePrefs((s) => s.theme);
+  const setTheme = usePrefs((s) => s.setTheme);
+  const density = usePrefs((s) => s.density);
+  const setDensity = usePrefs((s) => s.setDensity);
+  const navCollapsed = usePrefs((s) => s.navCollapsed);
+  const toggleNav = usePrefs((s) => s.toggleNav);
+  const shell = useShell();
+
+  const dark = resolveTheme(theme) === "dark";
+  const actions: Action[] = [
+    {
+      id: "new-issue",
+      label: "New issue…",
+      icon: <Plus {...ICON} />,
+      shortcut: "n",
+      keywords: ["create", "add"],
+      run: () => shell.setNewIssueOpen(true),
+    },
+  ];
+
+  if (openIssue) {
+    actions.push(
+      {
+        id: "move",
+        label: `Move ${openIssue.id} to…`,
+        icon: <ArrowRight {...ICON} />,
+        keywords: ["status", "change status", openIssue.title],
+        stay: true,
+        run: () => setPage("move"),
+      },
+      {
+        id: "open-page",
+        label: `Open ${openIssue.id} as a full page`,
+        icon: <ArrowUpRight {...ICON} />,
+        shortcut: "o",
+        keywords: ["page", "expand"],
+        run: () => go.issuePage(openIssue.id),
+      },
+      {
+        id: "copy-context",
+        label: `Copy “wf context ${openIssue.id}”`,
+        icon: <Terminal {...ICON} />,
+        keywords: ["handoff", "agent", "cli", "command"],
+        run: () => copyText(`wf context ${openIssue.id}`, "Command copied"),
+      },
+    );
+  }
+
+  actions.push(
+    {
+      id: "go-board",
+      label: "Go to Board",
+      icon: <LayoutGrid {...ICON} />,
+      shortcut: "g w",
+      run: () => go.board(),
+    },
+    {
+      id: "go-inbox",
+      label: "Go to Inbox",
+      icon: <Inbox {...ICON} />,
+      shortcut: "g i",
+      keywords: ["needs you", "requests"],
+      run: () => go.inbox(),
+    },
+    {
+      id: "go-library",
+      label: "Go to Library",
+      icon: <Library {...ICON} />,
+      shortcut: "g l",
+      keywords: ["glossary", "patterns"],
+      run: () => go.library(),
+    },
+    {
+      id: "go-kit",
+      label: "Go to Component kit",
+      icon: <Component {...ICON} />,
+      shortcut: "g k",
+      keywords: ["gallery", "components"],
+      run: () => go.kit(),
+    },
+    {
+      id: "theme",
+      label: dark ? "Switch to light theme" : "Switch to dark theme",
+      icon: <SunMoon {...ICON} />,
+      keywords: ["theme", "dark", "light", "appearance"],
+      run: () => setTheme(dark ? "light" : "dark"),
+    },
+    {
+      id: "density",
+      label: density === "comfy" ? "Switch to compact density" : "Switch to comfortable density",
+      icon: <Rows3 {...ICON} />,
+      keywords: ["density", "compact", "comfortable", "spacing"],
+      run: () => setDensity(density === "comfy" ? "compact" : "comfy"),
+    },
+    {
+      id: "nav",
+      label: navCollapsed ? "Expand sidebar" : "Collapse sidebar",
+      icon: <PanelLeft {...ICON} />,
+      shortcut: "mod+b",
+      keywords: ["sidebar", "nav", "navigation"],
+      run: toggleNav,
+    },
+    {
+      id: "shortcuts",
+      label: "Keyboard shortcuts",
+      icon: <Keyboard {...ICON} />,
+      shortcut: "?",
+      keywords: ["help", "keys", "hotkeys"],
+      run: () => shell.setShortcutsOpen(true),
+    },
+    {
+      id: "conflict",
+      label: "Simulate a conflict on the next write",
+      icon: <Zap {...ICON} />,
+      hint: "Prototype",
+      keywords: ["409", "mock", "prototype"],
+      run: () => {
+        const ran = withMockControls((c) => c.conflictNextWrite());
+        if (!ran) return;
+        toast("The next write will conflict", {
+          description: "Move a card or tick a box to see the rollback.",
+        });
+      },
+    },
+    {
+      id: "play-event",
+      label: "Play the next live event",
+      icon: <Play {...ICON} />,
+      hint: "Prototype",
+      keywords: ["live", "sse", "mock", "prototype", "event"],
+      run: () => withMockControls((c) => c.playNextEvent()),
+    },
+  );
+
+  return actions;
+}
+
+// ---------------------------------------------------------------- move page
+
+function MovePage({
+  issue,
+  query,
+  close,
+}: {
+  issue: IssueSummary;
+  query: string;
+  close: () => void;
+}) {
+  const { move } = useMoveIssue();
+  const q = query.trim();
+  const statuses = q
+    ? STATUS_ORDER.filter((s) => defaultFilter(STATUS_LABEL[s], q) > 0)
+    : STATUS_ORDER;
+
+  return (
+    <>
+      <CommandEmpty>No status matches “{q}”.</CommandEmpty>
+      <CommandGroup heading="Status">
+        {statuses.map((status: IssueStatus) => {
+          const current = status === issue.status;
+          const legal = isLegalTransition(issue.status, status);
+          return (
+            <CommandItem
+              key={status}
+              value={`status:${status}`}
+              disabled={current}
+              icon={<StatusIcon status={status} size={14} />}
+              hint={current ? "Current" : legal ? undefined : "Needs Move anyway"}
+              onSelect={() => {
+                close();
+                move(issue, status);
+              }}
+              className={legal || current ? undefined : "text-fg-muted"}
+            >
+              {STATUS_LABEL[status]}
+            </CommandItem>
+          );
+        })}
+      </CommandGroup>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- footer
+
+function PaletteFooter({ page }: { page: Page }) {
+  return (
+    <div className="flex h-9 shrink-0 items-center gap-4 border-border border-t px-3 text-fg-faint text-xs">
+      <span className="flex items-center gap-1">
+        <Kbd>↑</Kbd>
+        <Kbd>↓</Kbd>
+        <span className="ml-0.5">to move</span>
+      </span>
+      <span className="flex items-center gap-1">
+        <Kbd combo="Enter" />
+        <span className="ml-0.5">to select</span>
+      </span>
+      <span className="flex items-center gap-1">
+        <Kbd combo="Escape" />
+        <span className="ml-0.5">{page === "root" ? "to close" : "to go back"}</span>
+      </span>
+    </div>
+  );
+}

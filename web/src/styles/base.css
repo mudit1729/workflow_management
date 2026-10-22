@@ -1,0 +1,149 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./tokens.css";
+
+/* Dark mode follows the data-theme attribute set by the pre-paint script. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Tailwind vocabulary mapped onto wf tokens. Use these classes, never raw hex:
+   bg-bg bg-subtle bg-muted · border-border border-border-strong ·
+   text-fg text-fg-muted text-fg-faint · bg-accent text-accent bg-accent-subtle text-accent-fg ·
+   text-status-<s> bg-status-<s> · text-stale text-danger text-needs-you · bg-hue-1..8 */
+@theme inline {
+  --color-bg: var(--wf-bg);
+  --color-subtle: var(--wf-bg-subtle);
+  --color-muted: var(--wf-bg-muted);
+  --color-border: var(--wf-border);
+  --color-border-strong: var(--wf-border-strong);
+  --color-fg: var(--wf-text);
+  --color-fg-muted: var(--wf-text-muted);
+  --color-fg-faint: var(--wf-text-faint);
+  --color-accent: var(--wf-accent);
+  --color-accent-subtle: var(--wf-accent-subtle);
+  --color-accent-fg: var(--wf-accent-fg);
+  --color-focus: var(--wf-focus);
+
+  --color-status-backlog: var(--wf-status-backlog);
+  --color-status-planned: var(--wf-status-planned);
+  --color-status-in_progress: var(--wf-status-in_progress);
+  --color-status-blocked: var(--wf-status-blocked);
+  --color-status-review: var(--wf-status-review);
+  --color-status-done: var(--wf-status-done);
+  --color-status-cancelled: var(--wf-status-cancelled);
+
+  --color-stale: var(--wf-signal-stale);
+  --color-danger: var(--wf-signal-danger);
+  --color-needs-you: var(--wf-signal-needs-you);
+
+  --color-hue-1: var(--wf-hue-1);
+  --color-hue-2: var(--wf-hue-2);
+  --color-hue-3: var(--wf-hue-3);
+  --color-hue-4: var(--wf-hue-4);
+  --color-hue-5: var(--wf-hue-5);
+  --color-hue-6: var(--wf-hue-6);
+  --color-hue-7: var(--wf-hue-7);
+  --color-hue-8: var(--wf-hue-8);
+
+  --font-sans: var(--wf-font-sans);
+  --font-mono: var(--wf-font-mono);
+
+  --text-xs: var(--wf-text-xs);
+  --text-xs--line-height: var(--wf-leading);
+  --text-sm: var(--wf-text-sm);
+  --text-sm--line-height: var(--wf-leading);
+  --text-base: var(--wf-text-base);
+  --text-base--line-height: var(--wf-leading);
+  --text-md: var(--wf-text-md);
+  --text-md--line-height: var(--wf-leading);
+  --text-lg: var(--wf-text-lg);
+  --text-lg--line-height: var(--wf-leading-tight);
+  --text-xl: var(--wf-text-xl);
+  --text-xl--line-height: var(--wf-leading-tight);
+
+  /* p-1 = --wf-space-1, so density rescales every spacing utility. */
+  --spacing: var(--wf-space-1);
+
+  --radius-sm: var(--wf-radius-sm);
+  --radius-md: var(--wf-radius-md);
+  --radius-lg: var(--wf-radius-lg);
+
+  --shadow-pop: var(--wf-shadow-pop);
+
+  --ease-wf: var(--wf-ease);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  body {
+    margin: 0;
+    background: var(--wf-bg);
+    color: var(--wf-text);
+    font-family: var(--wf-font-sans);
+    font-size: var(--wf-text-base);
+    line-height: var(--wf-leading);
+    font-weight: 400;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--wf-border);
+  }
+
+  ::selection {
+    background: var(--wf-accent-subtle);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--wf-focus);
+    outline-offset: 1px;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--wf-font-mono);
+  }
+
+  /* Quiet scrollbars: only inner regions scroll. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--wf-border-strong) transparent;
+  }
+}
+
+@layer utilities {
+  .hairline {
+    border: var(--wf-hairline);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .small-caps {
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.04em;
+  }
+  /* Live update: a changed card fades its background over 150 ms. */
+  .wf-flash {
+    animation: wf-flash 1200ms var(--wf-ease);
+  }
+  @keyframes wf-flash {
+    0% {
+      background-color: var(--wf-accent-subtle);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-static/
+.wf/
+web/.build/
+web/test-results/
+web/playwright-report/
+.DS_Store
+*.log

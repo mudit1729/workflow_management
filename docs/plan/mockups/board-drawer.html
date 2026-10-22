@@ -1,0 +1,649 @@
+<title>wf Board &amp; Drawer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Layout: a framed desktop canvas [NavRail | Board] with the issue drawer overlaying the board. */
+  :root {
+    --bg:#fff; --subtle:#f7f7f8; --muted:#efeff1; --border:#e5e5e8; --border-strong:#d3d3d8;
+    --text:#18181b; --text-muted:#5f5f6b; --text-faint:#8e8e99;
+    --accent:#5e6ad2; --accent-subtle:#eef0fb; --accent-fg:#fff;
+    --s-backlog:#a1a1aa; --s-planned:#71717a; --s-in_progress:#3b82f6; --s-blocked:#e5484d; --s-review:#8e4ec6; --s-done:#30a46c;
+    --stale:#d99a06; --danger:#e5484d;
+    --h1:#2a78d6; --h2:#eb6834; --h3:#1baf7a; --h4:#eda100; --h5:#e87ba4; --h6:#008300; --h7:#6250d6; --h8:#e34948;
+    --pop: 0 4px 16px rgb(0 0 0/.08), 0 0 0 1px var(--border);
+    --toast-bg:#18181b; --toast-fg:#fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0f0f11; --subtle:#151517; --muted:#1c1c1f; --border:#26262a; --border-strong:#34343a;
+      --text:#ededef; --text-muted:#a1a1aa; --text-faint:#6e6e78;
+      --accent:#7c85e0; --accent-subtle:#1e2040;
+      --s-backlog:#b6b6bd; --s-planned:#85858e; --s-in_progress:#629bf8; --s-blocked:#ea6c70; --s-review:#a26dd0; --s-done:#39c481;
+      --stale:#f5b730; --danger:#ff6369;
+      --h1:#3987e5; --h2:#d95926; --h3:#199e70; --h4:#c98500; --h5:#d55181; --h6:#008300; --h7:#9085e9; --h8:#e66767;
+      --pop: 0 4px 16px rgb(0 0 0/.4), 0 0 0 1px var(--border-strong);
+      --toast-bg:#ededef; --toast-fg:#18181b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f0f11; --subtle:#151517; --muted:#1c1c1f; --border:#26262a; --border-strong:#34343a;
+    --text:#ededef; --text-muted:#a1a1aa; --text-faint:#6e6e78;
+    --accent:#7c85e0; --accent-subtle:#1e2040;
+    --s-backlog:#b6b6bd; --s-planned:#85858e; --s-in_progress:#629bf8; --s-blocked:#ea6c70; --s-review:#a26dd0; --s-done:#39c481;
+    --stale:#f5b730; --danger:#ff6369;
+    --h1:#3987e5; --h2:#d95926; --h3:#199e70; --h4:#c98500; --h5:#d55181; --h6:#008300; --h7:#9085e9; --h8:#e66767;
+    --pop: 0 4px 16px rgb(0 0 0/.4), 0 0 0 1px var(--border-strong);
+    --toast-bg:#ededef; --toast-fg:#18181b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; border-color: var(--border); }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; font-feature-settings: "cv11","ss01"; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .page { height: 100%; display: flex; flex-direction: column; gap: 10px; padding-block: 14px 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .cap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 12px; color: var(--text-faint); }
+  .cap b { color: var(--text); font-weight: 600; font-size: 13px; }
+  .frame { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .faint { color: var(--text-faint); } .muted { color: var(--text-muted); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  :focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; border-radius: 4px; }
+  .app { display: grid; grid-template-columns: 232px 1fr; height: 100%; min-width: 1240px; min-height: 640px; }
+
+  /* NavRail */
+  nav { background: var(--subtle); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 10px 8px; gap: 2px; min-height: 0; }
+  .ws { display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px; }
+  .mark { width: 20px; height: 20px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 10px; font-weight: 600; display: grid; place-items: center; }
+  .ws b { font-weight: 600; flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-faint); margin-bottom: 8px; width: 100%; text-align: left; }
+  .search kbd { margin-left: auto; }
+  kbd { font: 10px ui-monospace, Menlo, monospace; border: 1px solid var(--border); background: var(--subtle); border-radius: 4px; padding: 0 4px; height: 16px; display: inline-grid; place-items: center; color: var(--text-muted); }
+  .item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px; color: var(--text-muted); width: 100%; text-align: left; }
+  .item:hover { background: var(--muted); color: var(--text); }
+  .item.on { background: var(--muted); color: var(--text); font-weight: 500; }
+  .item .n { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .badge { background: var(--accent); color: var(--accent-fg); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 500; line-height: 16px; }
+  .label { font-size: 11px; font-weight: 500; color: var(--text-faint); padding: 14px 8px 4px; }
+  .tree .item { height: 26px; font-weight: 400; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+  .chev { width: 10px; color: var(--text-faint); font-size: 9px; }
+  .mini { width: 28px; height: 3px; border-radius: 2px; overflow: hidden; display: flex; gap: 1px; margin-left: 6px; flex: none; }
+  .mini i { display: block; height: 100%; }
+  .needs { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .navfoot { margin-top: auto; display: flex; align-items: center; gap: 6px; padding: 8px 6px 2px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 12px; }
+  .seg { display: inline-flex; background: var(--muted); padding: 2px; border-radius: 6px; gap: 2px; }
+  .seg button { padding: 2px 8px; border-radius: 4px; font-size: 12px; color: var(--text-muted); }
+  .seg button.on { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 1px rgb(0 0 0/.04); }
+  .seg button .n { color: var(--text-faint); margin-left: 4px; font-variant-numeric: tabular-nums; }
+  .proto { margin-left: auto; font-size: 11px; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 1px 8px; }
+
+  /* Main + board */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
+  .toolbar { height: 44px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; flex: none; }
+  .crumb { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .crumb .sep { color: var(--text-faint); font-weight: 400; }
+  .sum { color: var(--text-faint); font-size: 12px; margin-left: 6px; }
+  .sum b { color: var(--accent); font-weight: 500; }
+  .tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; }
+  .btn:hover { background: var(--subtle); color: var(--text); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .board { flex: 1; min-height: 0; background: var(--subtle); display: flex; gap: 8px; padding: 12px; overflow-x: auto; }
+  .rail { width: 36px; flex: none; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+  .rail:hover { border-color: var(--border-strong); }
+  .rail .v { writing-mode: vertical-rl; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .col { width: 264px; flex: none; display: flex; flex-direction: column; min-height: 0; }
+  .colhead { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 4px; font-weight: 500; }
+  .colhead .n { color: var(--text-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .colhead .fold { margin-left: auto; width: 22px; height: 22px; border-radius: 4px; color: var(--text-faint); display: grid; place-items: center; }
+  .colhead .fold:hover { background: var(--muted); color: var(--text); }
+  .cards { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; padding-bottom: 8px; }
+  .empty { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 14px; text-align: center; color: var(--text-faint); font-size: 12px; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; transition: border-color 100ms; }
+  .card:hover { border-color: var(--border-strong); }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent-subtle) 55%, var(--bg)); }
+  .card .foot { display: none; font-size: 11px; color: var(--text-faint); gap: 6px; align-items: center; border-top: 1px solid var(--border); padding-top: 6px; }
+  .card:hover .foot, .card:focus-visible .foot { display: flex; }
+  .r1 { display: flex; gap: 8px; align-items: flex-start; }
+  .title { font-weight: 500; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .r2 { display: flex; font-size: 11px; color: var(--text-faint); gap: 8px; }
+  .r2 .id { margin-left: auto; }
+  .chips { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .chip { height: 20px; padding: 0 6px; border-radius: 4px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; white-space: nowrap; }
+  .c-acc { background: var(--accent-subtle); color: var(--accent); }
+  .c-dan { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+  .c-stale { background: color-mix(in srgb, var(--stale) 14%, transparent); color: color-mix(in srgb, var(--stale) 80%, var(--text)); }
+  .c-ok { background: color-mix(in srgb, var(--s-done) 14%, transparent); color: color-mix(in srgb, var(--s-done) 85%, var(--text)); }
+  .c-neu { background: var(--muted); color: var(--text-muted); }
+  .c-out { border: 1px solid var(--border); color: var(--text-muted); font-weight: 400; }
+  .stack { margin-left: auto; display: flex; }
+  .av { width: 16px; height: 16px; border-radius: 4px; display: inline-grid; place-items: center; color: #fff; font-size: 8px; font-weight: 600; box-shadow: 0 0 0 1.5px var(--bg); flex: none; }
+  .av.h { border-radius: 50%; }
+  .av.sm { width: 14px; height: 14px; font-size: 7px; }
+  .stack .av + .av { margin-left: -4px; }
+  .lint { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .prio { flex: none; margin-top: 3px; }
+
+  /* Drawer */
+  .scrim { position: absolute; inset: 44px 0 0 0; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 560px; background: var(--bg); box-shadow: var(--pop); display: flex; flex-direction: column; min-height: 0; transition: transform 200ms cubic-bezier(.2,0,0,1); }
+  .drawer[hidden], .scrim[hidden] { display: none !important; }
+  .dh { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+  .dh1 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); }
+  .dh1 .ib { margin-left: auto; display: flex; gap: 2px; }
+  .ib button { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--text-muted); }
+  .ib button:hover { background: var(--muted); color: var(--text); }
+  h1 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+  .props { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .pill { height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .pill b { color: var(--text); font-weight: 500; }
+  .pill.warn { color: color-mix(in srgb, var(--stale) 80%, var(--text)); border-color: color-mix(in srgb, var(--stale) 40%, var(--border)); }
+  .tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border); padding: 0 16px; margin-top: 4px; }
+  .tab { height: 36px; display: flex; align-items: center; gap: 6px; color: var(--text-muted); position: relative; }
+  .tab:hover { color: var(--text); }
+  .tab.on { color: var(--text); font-weight: 500; }
+  .tab.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--text); border-radius: 1px; }
+  .tab .n { font-size: 11px; color: var(--text-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .tab .n.acc { color: var(--accent); font-weight: 500; }
+  .body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+  .hero { font-size: 14px; font-weight: 500; line-height: 1.4; }
+  .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); margin-top: 6px; flex-wrap: wrap; }
+  .sec { font-size: 11px; font-weight: 500; color: var(--text-faint); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+  .sec .r { margin-left: auto; font-weight: 400; }
+  .ask { border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent-subtle) 60%, var(--bg)); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ask.done { border-color: var(--border); background: var(--subtle); }
+  .q { display: flex; gap: 8px; font-weight: 500; }
+  .qmeta, .acts, .answer { padding-left: 22px; }
+  .qmeta { font-size: 12px; color: var(--text-faint); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ref { color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+  .acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .acts .note { font-size: 12px; color: var(--text-faint); margin-left: 4px; }
+  .acts .note:hover { color: var(--text); }
+  textarea { font: inherit; width: 100%; min-height: 56px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: var(--bg); color: var(--text); resize: vertical; }
+  .answer { font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
+  .task { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; max-width: 100%; background: var(--bg); white-space: nowrap; transition: opacity 120ms, border-color 120ms; }
+  .task .tid { color: var(--text-muted); font-size: 11px; }
+  .task .tt { overflow: hidden; text-overflow: ellipsis; }
+  .task.ready { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+  .task.rel { border-color: var(--accent); }
+  .task.dim { opacity: .35; }
+  .rdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+  .prose { color: var(--text-muted); }
+  .prose p { margin: 0 0 8px; }
+  ol.next { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  ol.next li { display: flex; gap: 8px; align-items: baseline; color: var(--text-muted); }
+  ol.next li .k { width: 34px; text-align: right; color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
+  ol.next li.first { color: var(--text); font-weight: 500; }
+  code { font: 12px ui-monospace, Menlo, monospace; background: var(--muted); padding: 0 4px; border-radius: 4px; font-weight: 400; }
+  details.coll { border-top: 1px solid var(--border); }
+  details.coll:last-of-type { border-bottom: 1px solid var(--border); }
+  details.coll summary { height: 32px; display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; cursor: pointer; list-style: none; }
+  details.coll summary::-webkit-details-marker { display: none; }
+  details.coll summary::before { content: "▸"; font-size: 9px; color: var(--text-faint); width: 10px; }
+  details.coll[open] summary::before { content: "▾"; }
+  details.coll summary .n { color: var(--text-faint); }
+  details.coll .in { padding: 0 0 10px 18px; color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .sig { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--danger); }
+
+  /* Goal */
+  .crit { display: flex; flex-direction: column; }
+  .crow { display: grid; grid-template-columns: 16px 36px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); align-items: start; }
+  .crow:last-child { border-bottom: 0; }
+  .cb { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--border-strong); margin-top: 2px; display: grid; place-items: center; }
+  .cb.claimed { border-color: var(--s-done); background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--s-done) 50%, transparent) 0 1.5px, transparent 1.5px 3.5px); }
+  .cb.verified { border-color: var(--s-done); background: var(--s-done); cursor: default; }
+  .sc { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+  .ears { color: var(--text); }
+  .kw { font-variant-caps: all-small-caps; letter-spacing: .04em; color: var(--text-faint); }
+  .cchips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .ring-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
+
+  /* Plan */
+  .lanes { position: relative; display: grid; grid-template-columns: 70px repeat(3, minmax(150px, 1fr)); gap: 8px 10px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
+  .lanes .lh { font-size: 11px; color: var(--text-faint); }
+  .lanes .ln { font-size: 12px; font-weight: 500; color: var(--text-muted); padding-top: 3px; }
+  .lanes .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .lanes svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .phases { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-faint); }
+  .tdetail { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--subtle); }
+  .kv { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; font-size: 12px; }
+  .kv dt { color: var(--text-faint); }
+  .kv dd { margin: 0; color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+  .step { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+
+  /* Log */
+  .daylabel { position: sticky; top: -16px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(4px); font-size: 12px; font-weight: 500; color: var(--text-muted); padding: 6px 0; z-index: 1; }
+  .tl { position: relative; display: flex; flex-direction: column; gap: 12px; padding-left: 20px; }
+  .tl::before { content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 1px; background: var(--border); }
+  .ent { position: relative; display: flex; flex-direction: column; gap: 3px; }
+  .ent .mk { position: absolute; left: -20px; top: 5px; width: 9px; height: 9px; border-radius: 2px; box-shadow: 0 0 0 2px var(--bg); }
+  .ent .mk.h { border-radius: 50%; }
+  .ent .mk.fail { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--danger); }
+  .ent .t1 { display: flex; gap: 6px; align-items: baseline; }
+  .ent .t1 b { font-weight: 500; flex: 1; }
+  .ent .t1 .when { font-size: 11px; color: var(--text-faint); }
+  .ent .t2 { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-faint); }
+  .ent .bd { color: var(--text-muted); font-size: 12px; }
+  .ent.failure .t1 b { color: var(--danger); }
+  .dcard { border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .dcard h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .dcard .dec { border-left: 2px solid var(--accent); padding-left: 10px; color: var(--text); }
+  .dcard .lab { font-size: 11px; color: var(--text-faint); font-weight: 500; }
+  .dcard .old { opacity: .6; }
+  .dcard .old h4 { margin: 0; font-size: 12px; font-weight: 500; text-decoration: line-through; }
+  .lcard { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: grid; grid-template-columns: 24px 1fr; gap: 10px; }
+  .ltile { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; background: var(--muted); }
+  .lcard b { font-weight: 600; display: block; margin-bottom: 4px; }
+  .lcard .ev { font-size: 12px; color: var(--text-muted); }
+  .lcard .ft { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--text-faint); flex-wrap: wrap; }
+  .link { color: var(--accent); font-weight: 500; font-size: 12px; }
+
+  /* Files */
+  .frow { display: flex; align-items: center; gap: 8px; height: 30px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .frow .sz { margin-left: auto; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .frow.missing { color: var(--text-faint); }
+  .lrow { display: grid; grid-template-columns: 14px 42px 1fr auto; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .lrow .rule { font-size: 11px; color: var(--text-muted); }
+  .lrow .line { color: var(--text-faint); font-size: 11px; }
+
+  /* Toast */
+  .toast { position: fixed; right: max(20px, calc(env(safe-area-inset-right, 0px) + 20px)); bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 20px)); background: var(--toast-bg); color: var(--toast-fg); border-radius: 8px; padding: 9px 12px; font-size: 12px; box-shadow: 0 6px 20px rgb(0 0 0/.18); opacity: 0; transform: translateY(6px); transition: opacity 150ms, transform 150ms; pointer-events: none; z-index: 10; max-width: 360px; }
+  .toast.show { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatch" width="2.5" height="2.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.1" height="2.5" fill="var(--s-done)"/></pattern>
+    <symbol id="st-backlog" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-backlog)" stroke-width="1.5" stroke-dasharray="1.6 2"/></symbol>
+    <symbol id="st-planned" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-planned)" stroke-width="1.5"/></symbol>
+    <symbol id="st-in_progress" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-in_progress)" stroke-width="1.5"/><path d="M7 4a3 3 0 0 1 0 6z" fill="var(--s-in_progress)"/></symbol>
+    <symbol id="st-blocked" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-blocked)" stroke-width="1.5"/><rect x="4" y="6.1" width="6" height="1.8" rx=".9" fill="var(--s-blocked)"/></symbol>
+    <symbol id="st-review" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-review)" stroke-width="1.5"/><path d="M7 4a3 3 0 1 1-3 3h3z" fill="var(--s-review)"/></symbol>
+    <symbol id="st-done" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(--s-done)"/><path d="M4.4 7.2l1.8 1.8 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="st-todo" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-planned)" stroke-width="1.5"/></symbol>
+    <symbol id="bot" viewBox="0 0 16 16"><rect x="4" y="5.5" width="8" height="6" rx="1.5" fill="none" stroke="#fff" stroke-width="1.4"/><circle cx="6.5" cy="8.5" r=".9" fill="#fff"/><circle cx="9.5" cy="8.5" r=".9" fill="#fff"/><path d="M8 3.5v2" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="check" viewBox="0 0 14 14"><path d="M3.5 7.3l2.3 2.2 4.7-4.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <div class="cap"><b>wf</b><span>Clickable mockup. Click a card to open it, switch the drawer tabs, tick criteria, answer the request, hover tasks in Plan. The full prototype is being built.</span></div>
+  <div class="frame">
+    <div class="app">
+      <nav data-wf="NavRail" aria-label="Workspace">
+        <div class="ws"><div class="mark">wf</div><b>wf</b><span class="av h" style="background:var(--h1)" title="Acting as @shruti">SJ</span></div>
+        <button class="search" data-toast="The command palette (⌘K) is in the full prototype."><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Search or jump to…<kbd>⌘K</kbd></button>
+        <button class="item on" data-nav="board"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg>Board</button>
+        <button class="item" data-nav="inbox" data-toast="The Inbox view is in the full prototype."><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 9h3.5l1 2h3l1-2H14M3.5 3h9L14 9v4H2V9z"/></svg>Inbox<span class="n"><span class="badge" id="inboxCount">3</span></span></button>
+        <button class="item" data-nav="library" data-toast="The Library view is in the full prototype."><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 2.5v11M6 2.5v11M9.5 3l3 10.5"/></svg>Library<span class="n faint">8</span></button>
+        <button class="item" data-nav="kit" data-toast="The component Kit is in the full prototype."><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="5" r="2.5"/><rect x="9" y="2.5" width="5" height="5" rx="1"/><path d="M5 9l3 5H2zM9 9h5v5H9z"/></svg>Kit</button>
+        <div class="label">Groups</div>
+        <div class="tree" data-wf="GroupTree" role="tree" id="tree"></div>
+        <div class="navfoot"><span class="seg" role="group" aria-label="Theme"><button id="ta" class="on">Auto</button><button id="tl">Light</button><button id="td">Dark</button></span><span class="proto">Mockup</span></div>
+      </nav>
+
+      <main>
+        <div class="toolbar" data-wf="BoardToolbar">
+          <div class="crumb" id="crumb"></div>
+          <span class="sum" id="sum"></span>
+          <div class="tools">
+            <button class="btn" data-toast="Filtering (/) is in the full prototype."><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Filter<kbd>/</kbd></button>
+            <button class="btn" data-toast="The author filter is in the full prototype.">Author</button>
+            <span class="seg"><button data-toast="Swimlanes by child group are in the full prototype.">Groups</button><button class="on">None</button></span>
+            <button class="btn primary" data-toast="New issue (n) is in the full prototype.">+ New issue</button>
+          </div>
+        </div>
+        <div class="board" data-wf="KanbanBoard" id="board"></div>
+        <div class="scrim" id="scrim" hidden></div>
+        <aside class="drawer" data-wf="IssueDrawer" id="drawer" hidden aria-label="Issue"></aside>
+      </main>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  const AUTH = {
+    shruti: { hue: 1, human: true, ini: 'SJ' }, 'claude-opus': { hue: 7 }, codex: { hue: 2 },
+    'claude-sonnet': { hue: 3 }, 'cursor-bot': { hue: 4 }, mudit: { hue: 5, human: true, ini: 'MJ' },
+  };
+  const av = (h, sm) => { const a = AUTH[h] || { hue: 8 }; return `<span class="av ${a.human ? 'h' : ''} ${sm ? 'sm' : ''}" style="background:var(--h${a.hue})" title="@${h}">${a.human ? a.ini : `<svg width="${sm ? 10 : 12}" height="${sm ? 10 : 12}"><use href="#bot"/></svg>`}</span>`; };
+  const st = (s, z = 14) => `<svg width="${z}" height="${z}" aria-label="${s}"><use href="#st-${s}"/></svg>`;
+  const LABEL = { backlog: 'Backlog', planned: 'Planned', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
+  const ring = (v, c, t, z = 14) => {
+    const r = z === 14 ? 5.5 : 11, sw = z === 14 ? 2 : 3, C = 2 * Math.PI * r, cx = z / 2;
+    if (!t) return `<svg width="${z}" height="${z}"><circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--border-strong)" stroke-width="${sw}" stroke-dasharray="2 2"/></svg>`;
+    const a = C * v / t, b = C * c / t;
+    return `<svg width="${z}" height="${z}" role="img" aria-label="${v} verified, ${c} claimed of ${t}"><circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--border-strong)" stroke-width="${sw}"/>` +
+      (a ? `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--s-done)" stroke-width="${sw}" stroke-dasharray="${a} ${C}" transform="rotate(-90 ${cx} ${cx})"/>` : '') +
+      (b ? `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="url(#hatch)" stroke-width="${sw}" stroke-dasharray="0 ${a} ${b} ${C}" transform="rotate(-90 ${cx} ${cx})"/>` : '') + `</svg>`;
+  };
+
+  // ---------------------------------------------------------------- data
+  const ISSUES = [
+    { id: 'wf-k2r9d', title: 'Keyboard map for the board', status: 'backlog', group: 'web', crit: [0, 0, 3] },
+    { id: 'wf-z5p1h', title: 'Compact density toggle', status: 'backlog', group: 'web', crit: [0, 0, 2] },
+    { id: 'wf-m2x7c', title: 'Command palette', status: 'planned', group: 'web', crit: [0, 0, 4], tasks: '0/3 tasks · 1 ready', who: 'claude-sonnet', when: '3h' },
+    { id: 'wf-3k9x2', title: 'Live board updates', status: 'in_progress', group: 'web', prio: 'high', crit: [2, 1, 5], needs: 1, leases: ['claude-opus', 'codex'], tasks: '1/5 tasks · 1 ready', who: 'codex', when: '6m', rich: true },
+    { id: 'wf-f4d3b', title: 'Fade changed cards and show a reconnecting badge', status: 'in_progress', group: 'web', crit: [0, 0, 2], stale: 'Stale 2d', leases: ['claude-sonnet'], tasks: '0/2 tasks', who: 'claude-sonnet', when: '2d' },
+    { id: 'wf-a4c8z', title: 'Stream archify renders in the background', status: 'in_progress', group: 'web', crit: [2, 0, 5], expired: true, lint: 'warn', leases: ['cursor-bot'], tasks: '2/4 tasks', who: 'cursor-bot', when: '1h' },
+    { id: 'wf-q8n5t', title: 'Inline answer box in the inbox', status: 'blocked', group: 'web', crit: [0, 0, 3], blocked: 'Blocked by wf-3k9x2', tasks: '0/2 tasks', who: 'shruti', when: '5h' },
+    { id: 'wf-7yq2m', title: 'Fix tab-title count', status: 'review', group: 'web', crit: [1, 0, 1], lint: 'error', lintNote: 'F001', tasks: 'no plan (size xs)', who: 'codex', when: '40m' },
+    { id: 'wf-d7c4w', title: 'Design tokens', status: 'done', group: 'web', crit: [4, 0, 4], tasks: '3/3 tasks', who: 'shruti', when: '1d' },
+    { id: 'wf-t3n8v', title: 'Pre-paint theme script', status: 'done', group: 'web', crit: [2, 0, 2], tasks: 'no plan (size xs)', who: 'claude-sonnet', when: '1d' },
+  ];
+  const byId = Object.fromEntries(ISSUES.map(i => [i.id, i]));
+  const GROUPS = [
+    { id: 'all', title: 'All issues', n: 27, depth: 0 },
+    { id: 'wf', title: 'wf', hue: 7, n: 19, depth: 0, chev: '▾', mix: [['backlog', 20], ['planned', 15], ['in_progress', 25], ['review', 10], ['done', 30]] },
+    { id: 'core', title: 'core', hue: 2, n: 7, depth: 1, mix: [['planned', 30], ['in_progress', 40], ['done', 30]] },
+    { id: 'web', title: 'web', hue: 1, n: 10, depth: 1, needs: true, mix: [['backlog', 20], ['planned', 10], ['in_progress', 30], ['blocked', 10], ['review', 10], ['done', 20]] },
+    { id: 'skills', title: 'skills', hue: 3, n: 4, depth: 1, mix: [['planned', 50], ['done', 50]] },
+    { id: 'platform', title: 'platform', hue: 4, n: 3, depth: 0, chev: '▸', mix: [['blocked', 33], ['planned', 67]] },
+    { id: 'docs', title: 'docs', n: 5, depth: 0, implicit: true, mix: [['backlog', 60], ['done', 40]] },
+  ];
+  const S = { group: 'web', open: null, tab: 'now', log: 'changes', folded: { backlog: true, done: true }, answered: false, selTask: null,
+    crit: { 'SC-1': 'verified', 'SC-2': 'verified', 'SC-3': 'claimed', 'SC-4': 'open', 'SC-5': 'open' }, steps: { 1: true, 2: false } };
+
+  const CRIT = [
+    { id: 'SC-1', parts: [['When', 1], [' an agent appends to `changes.md`, '], ['the', 1], [' board '], ['shall', 1], [' show the entry within 2 s.']], verify: '`cargo test -p wf-index live_append`', evidence: 'C-7k2q9 verify · pass', tasks: ['T-1', 'T-3', 'T-5'] },
+    { id: 'SC-2', parts: [['If', 1], [' `goal.md` frontmatter is invalid, '], ['then the', 1], [' drawer '], ['shall', 1], [' show a lint finding and the raw file.']], verify: 'manual', evidence: '`evidence/sc2.png`, checked by @shruti', tasks: [] },
+    { id: 'SC-3', parts: [['While', 1], [' the event stream is down, '], ['the', 1], [' board '], ['shall', 1], [' show a reconnecting badge and replay missed events on reconnect.']], verify: '`cargo test -p wf-server sse_replay`', tasks: ['T-3', 'T-5'] },
+    { id: 'SC-4', parts: [['When', 1], [' two tabs are open, '], ['the', 1], [' dashboard '], ['shall', 1], [' hold only one event-stream connection.']], verify: 'manual', tasks: ['T-4'] },
+    { id: 'SC-5', parts: [['The', 1], [' daemon '], ['shall', 1], [' ignore the watcher echo of its own writes.']], verify: '`cargo test -p wf-index echo_suppression`', tasks: ['T-2'] },
+  ];
+  const TASKS = [
+    { id: 'T-1', title: 'Diff snapshots into deltas', status: 'done', lane: 'core', level: 0, deps: [], owns: 'crates/wf-index/src/delta.rs', sat: 'SC-1', who: 'codex' },
+    { id: 'T-2', title: 'Suppress watcher echoes by content hash', status: 'review', lane: 'core', level: 0, deps: [], owns: 'crates/wf-index/src/watch.rs', sat: 'SC-5', who: 'codex' },
+    { id: 'T-3', title: 'Build the SSE delta stream', status: 'in_progress', lane: 'server', level: 1, deps: ['T-1', 'T-2'], owns: 'crates/wf-server/src/sse.rs', sat: 'SC-1, SC-3', who: 'codex', lease: '34m left', verify: '`cargo test -p wf-server sse`',
+      brief: 'Stream `delta` events from the index broadcast. Send `snapshot` on connect.', steps: ['Add the `GET /api/events` route.', 'Answer a lagged client with `resync`.'] },
+    { id: 'T-4', title: 'Elect one leader tab over BroadcastChannel', status: 'todo', lane: 'web', level: 0, deps: [], owns: 'web/src/lib/live/leader.ts', sat: 'SC-4', ready: true },
+    { id: 'T-5', title: 'Fade changed cards and show the reconnecting badge', status: 'todo', lane: 'web', level: 2, deps: ['T-3', 'T-4'], owns: 'web/src/features/board/**', sat: 'SC-1, SC-3' },
+  ];
+  const CHANGES = [
+    { day: 'Today', t: '6m', who: 'codex', kind: '●', title: 'Added the `GET /api/events` route', meta: ['T-3', '9f1e2ab', 'sse.rs'], body: 'The route streams `delta` events from the index broadcast and sends `snapshot` on connect.' },
+    { day: 'Today', t: '25m', who: 'claude-opus', kind: '✎', title: 'Rewrote current_state after the transport decision', meta: [], body: 'Summary now points at resync for lagged clients.' },
+    { day: 'Today', t: '48m', who: 'codex', kind: '✕', title: 'notify 9.0-rc lost rename events on macOS', fail: true, meta: ['T-2', 'fail'], body: 'Saw `Remove(Any)` with no matching create after an atomic save. Reverted to notify 8.2.' },
+    { day: 'Today', t: '1h', who: 'codex', kind: '✓', title: 'Verified SC-1 with the live-append test', ok: true, meta: ['SC-1', 'pass', 'C-7k2q9'], body: '`cargo test -p wf-index live_append` passed in 1.4 s.' },
+    { day: 'Yesterday', t: '1d', who: 'shruti', kind: '↩', title: 'Answered: keep the drawer on the Now tab first', meta: ['Q-8d2kw'], body: 'Q: Should the drawer open on Now or Goal? A: Now. I read the state first.' },
+    { day: 'Yesterday', t: '1d', who: 'claude-sonnet', kind: '⌕', title: 'Measured SSE connection limits across tabs', meta: ['research'], body: 'Chrome holds 6 HTTP/1.1 connections per origin. A seventh tab stalls.' },
+    { day: 'Yesterday', t: '1d', who: 'codex', kind: '●', title: 'Diffed snapshots into deltas', meta: ['T-1', '4c0d9e1', 'delta.rs'], body: 'Deltas carry upserted and removed issues plus the ids whose details changed.' },
+  ];
+
+  // ---------------------------------------------------------------- board
+  function renderTree() {
+    $('#tree').innerHTML = GROUPS.map(g => `<button class="item ${S.group === g.id ? 'on' : ''}" role="treeitem" data-group="${g.id}" style="padding-left:${8 + g.depth * 16}px">
+      <span class="chev">${g.chev || ''}</span>${g.hue ? `<span class="dot" style="background:var(--h${g.hue})"></span>` : g.id === 'all' ? '' : '<span class="dot" style="background:var(--text-faint)"></span>'}
+      ${g.implicit ? `<i class="faint">${g.title}</i>` : g.title}${g.needs ? '<span class="needs" style="margin-left:6px" title="Needs you"></span>' : ''}
+      <span class="n faint">${g.n}</span>${g.mix ? `<span class="mini">${g.mix.map(([s, w]) => `<i style="width:${w}%;background:var(--s-${s})"></i>`).join('')}</span>` : ''}</button>`).join('');
+    const g = GROUPS.find(x => x.id === S.group);
+    const path = g.id === 'all' ? [] : g.depth ? [GROUPS[1], g] : [g];
+    $('#crumb').innerHTML = `<button class="faint" data-group="all" style="font-weight:400">All issues</button>` +
+      path.map(p => `<span class="sep">/</span><button data-group="${p.id}" style="display:inline-flex;gap:6px;align-items:center">${p.hue ? `<span class="dot" style="background:var(--h${p.hue})"></span>` : ''}${p.title}</button>`).join('');
+    const needs = S.answered ? 0 : 1;
+    $('#sum').innerHTML = `${ISSUES.length} issues · ${needs ? `<b>${needs} needs you</b> · ` : ''}1 stale`;
+  }
+
+  function card(i) {
+    const [v, c, t] = i.crit;
+    const sel = S.open === i.id ? 'sel' : '';
+    const needs = i.needs && !S.answered;
+    const chips = [
+      needs ? `<span class="chip c-acc"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 14.5A6.5 6.5 0 1 0 2.3 11L1.5 14.5 5 13.7A6.5 6.5 0 0 0 8 14.5z"/></svg>1 · blocking</span>` : '',
+      i.blocked ? `<span class="chip c-dan">${i.blocked}</span>` : '',
+      i.stale ? `<span class="chip c-stale">◷ ${i.stale}</span>` : '',
+      i.expired ? `<span class="chip c-stale">Lease expired</span>` : '',
+      i.lint ? `<span class="lint" style="background:var(--${i.lint === 'error' ? 'danger' : 'stale'})" title="${i.lint === 'error' ? '1 error: F001 invalid YAML' : '2 warnings'}"></span>${i.lintNote ? `<span class="faint" style="font-size:11px">${i.lintNote}</span>` : ''}` : '',
+      i.leases ? `<span class="stack">${i.leases.map(h => av(h)).join('')}</span>` : '',
+    ].join('');
+    const prio = i.prio === 'high' ? `<svg class="prio" width="12" height="12" viewBox="0 0 12 12" aria-label="High priority"><rect x="1" y="7" width="2.2" height="4" rx=".6" fill="var(--text-muted)"/><rect x="4.9" y="4.5" width="2.2" height="6.5" rx=".6" fill="var(--text-muted)"/><rect x="8.8" y="2" width="2.2" height="9" rx=".6" fill="var(--text-muted)"/></svg>` : '';
+    return `<button class="card ${sel}" data-wf="IssueCard" data-open="${i.id}">
+      <div class="r1">${prio}<span class="title">${esc(i.title)}</span>${ring(v, c, t)}</div>
+      <div class="r2"><span>${i.group}</span><span class="id mono">${i.id}</span></div>
+      ${chips ? `<div class="chips">${chips}</div>` : ''}
+      <div class="foot">${i.tasks || ''}<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center">${i.who ? av(i.who, true) : ''}${i.when || ''}</span></div>
+    </button>`;
+  }
+
+  function renderBoard() {
+    const cols = ['backlog', 'planned', 'in_progress', 'blocked', 'review', 'done'];
+    $('#board').innerHTML = cols.map(s => {
+      const items = ISSUES.filter(i => i.status === s);
+      if (S.folded[s]) return `<button class="rail" data-unfold="${s}" title="${LABEL[s]}: click to unfold">${st(s)}<span class="faint" style="font-size:11px">${items.length}</span><span class="v">${LABEL[s]}</span></button>`;
+      const fold = s === 'backlog' || s === 'done' ? `<button class="fold" data-fold="${s}" aria-label="Fold ${LABEL[s]}" title="Fold to a rail">⇤</button>` : '';
+      return `<div class="col" data-wf="KanbanColumn"><div class="colhead">${st(s)}${LABEL[s]} <span class="n">${items.length}</span>${fold}</div>
+        <div class="cards">${items.length ? items.map(card).join('') : '<div class="empty">No issues</div>'}</div></div>`;
+    }).join('');
+  }
+
+  // ---------------------------------------------------------------- drawer
+  function header(i) {
+    const rich = i.rich;
+    return `<div class="dh" data-wf="IssueHeader">
+      <div class="dh1"><span class="dot" style="background:var(--h1);width:6px;height:6px"></span>wf / ${i.group} / <span class="mono">${i.id}</span>
+        <span class="ib"><button data-toast="Opens the full page with three columns: Now + Goal, Plan, Log." title="Open in new page (o)">↗</button><button data-toast="Link copied." title="Copy link">⧉</button><button data-toast="Copied: wf context ${i.id}" title="Copy the handoff command for an agent" class="mono" style="font-size:11px">&gt;_</button><button data-close title="Close (Esc)">✕</button></span></div>
+      <h1>${esc(i.title)}</h1>
+      <div class="props">
+        <span class="pill">${st(i.status)}<b>${LABEL[i.status]}</b></span>
+        ${rich ? '<span class="pill">High</span><span class="pill">Size M</span>' : '<span class="pill">Size S</span>'}
+        <span class="pill">${av('shruti', true)}@shruti</span>
+        ${rich ? `<span class="pill">${av('claude-opus', true)}@claude-opus · lease 34m left</span><span class="pill"><span class="lint" style="background:var(--stale)"></span>3</span>` : ''}
+        ${i.expired ? `<span class="pill warn">${av('cursor-bot', true)}lease expired 12m ago</span>` : ''}
+        ${i.lint === 'error' ? `<span class="pill" style="color:var(--danger)"><span class="lint" style="background:var(--danger)"></span>1 error</span>` : ''}
+      </div></div>`;
+  }
+
+  function tabs(i) {
+    const [v, , t] = i.crit;
+    const n = { now: i.needs && !S.answered ? 1 : '', goal: `${v}/${t}`, plan: i.rich ? '1/5' : '', log: i.rich ? 16 : 2, files: i.rich ? 2 : 0 };
+    return `<div class="tabs" role="tablist">${['now', 'goal', 'plan', 'log', 'files'].map(k => `<button class="tab ${S.tab === k ? 'on' : ''}" role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${k[0].toUpperCase() + k.slice(1)} ${n[k] !== '' ? `<span class="n ${k === 'now' && n.now ? 'acc' : ''}">${n[k]}</span>` : ''}</button>`).join('')}</div>`;
+  }
+
+  function nowTab(i) {
+    if (!i.rich) return `<div><div class="hero">${i.status === 'done' ? 'Shipped. All criteria verified.' : i.status === 'blocked' ? 'Waiting on live board updates before the answer box can stream.' : 'Work has not started on this issue yet.'}</div>
+      <div class="meta">Updated ${i.when || '1d'} ago by ${av(i.who || 'shruti', true)}@${i.who || 'shruti'}</div></div>
+      <div class="prose">This mockup only fills every tab for <b>Live board updates</b>. Open that card to see the full drawer.</div>`;
+    const ask = S.answered ? `<div class="ask done" data-wf="NeedsYouList"><div class="q">${'✓'} Approve keeping SSE instead of WebSocket for the board?</div>
+        <div class="answer"><span>Answered <b>${esc(S.answered)}</b> by @shruti just now.</span><span class="faint">Waiting for @claude-opus to run <code>wf resolve</code>.</span></div></div>`
+      : `<div class="ask" data-wf="NeedsYouList">
+        <div class="q"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6" style="margin-top:2px;flex:none"><path d="M8 1.8l5 2v4c0 3-2.2 5.3-5 6.4-2.8-1.1-5-3.4-5-6.4v-4z"/><path d="M5.8 8l1.6 1.6 3-3.2"/></svg>Approve keeping SSE instead of WebSocket for the board?</div>
+        <div class="qmeta"><span class="chip c-acc" style="height:18px">● Blocking</span>@claude-opus → @shruti · 14m ago · <span class="mono">Q-4m2pz</span> · <button class="ref" data-tab="log" data-log="decisions">D-7f3k2 Push board updates over SSE</button></div>
+        <div class="acts"><button class="btn primary" data-answer="approve">Approve</button><button class="btn" data-answer="reject">Reject</button><button class="note" data-note>Add a note</button></div>
+        <div class="acts" id="notebox" hidden><textarea id="noteText" placeholder="Add context for the agent (optional)"></textarea></div>
+      </div>`;
+    return `<div><div class="hero">The delta stream runs end to end; lagged-client resync is in flight.</div>
+        <div class="meta">Updated 25m ago by ${av('claude-opus', true)}@claude-opus · <span class="chip c-out" style="height:18px">Live transport</span></div></div>
+      <div><div class="sec">Needs you</div>${ask}</div>
+      <div><div class="sec">In flight</div>${pill(TASKS[2], true)}<div class="prose" style="margin-top:6px">A lagged client still misses events after a laptop sleep. @codex is adding <code>resync</code>.</div></div>
+      <div><div class="sec">Next steps</div><ol class="next">
+        <li class="first"><span class="chip c-acc" style="height:18px">Next</span>Finish <code>resync</code> for lagged clients in T-3.</li>
+        <li><span class="k">2</span>Claim T-4 once T-3 lands.</li><li><span class="k">3</span>Run <code>wf verify wf-3k9x2 SC-3</code>.</li></ol></div>
+      <div>
+        <details class="coll"><summary>Done <span class="n">3</span></summary><div class="in"><span>T-1 Diff snapshots into deltas · C-4c0d9</span><span>SC-1 verified · C-7k2q9</span><span>SC-2 verified by @shruti</span></div></details>
+        <details class="coll"><summary>Handoff notes</summary><div class="in"><span>The ring buffer holds 256 events. A laptop sleep longer than about 20 minutes overflows it, so the client must handle <code>resync</code>.</span></div></details>
+        <details class="coll"><summary>Failed attempts <span class="n">1</span></summary><div class="in"><span>notify 9.0-rc on macOS: <span class="sig">Remove(Any) lost on rename</span>. Reverted to 8.2.</span></div></details>
+      </div>`;
+  }
+
+  function goalTab(i) {
+    if (i.id === 'wf-7yq2m') return `<div style="border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);background:color-mix(in srgb,var(--danger) 7%,var(--bg));border-radius:8px;padding:10px 12px;font-size:12px">
+        <b style="color:var(--danger);font-weight:600">goal.md frontmatter is invalid (F001)</b><div class="muted">Line 4: mapping values are not allowed here. The body below still renders.</div></div>
+      <pre class="mono" style="margin:0;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:8px 0;overflow:auto;background:var(--subtle)">${['---', 'id: wf-7yq2m', 'title: Fix tab-title count', 'status: review: done', 'size: xs', '---', '', '## Context', 'The tab title shows (0) when the inbox is empty.'].map((l, n) => `<div style="padding:0 10px;${n === 3 ? 'background:color-mix(in srgb,var(--danger) 12%,transparent)' : ''}"><span class="faint" style="display:inline-block;width:20px">${n + 1}</span>${esc(l)}</div>`).join('')}</pre>`;
+    if (!i.rich) return `<div class="prose">Open <b>Live board updates</b> to see the full Goal tab.</div>`;
+    const v = Object.values(S.crit).filter(x => x === 'verified').length, c = Object.values(S.crit).filter(x => x === 'claimed').length, o = 5 - v - c;
+    return `<div><div class="sec">Context</div><div class="prose"><p>Agents append to the issue files from their own terminals. Today the board shows their work only after a reload.</p><p>The board must show each new entry within 2 s, without a reload and without losing events when a laptop sleeps.</p></div></div>
+      <div><div class="sec">Success criteria</div>
+        <div class="ring-row" style="margin-bottom:6px">${ring(v, c, 5, 28)}<span><b style="color:var(--text);font-weight:500">${v}/5</b> · <span class="swatch" style="background:var(--s-done)"></span> ${v} verified · <span class="swatch" style="background:repeating-linear-gradient(45deg,var(--s-done) 0 1.5px,transparent 1.5px 3px);border:1px solid var(--s-done)"></span> ${c} claimed · ${o} open</span></div>
+        <div class="crit" data-wf="CriteriaChecklist">${CRIT.map(k => {
+          const s = S.crit[k.id];
+          const text = k.parts.map(([t, kw]) => kw ? `<span class="kw">${t}</span>` : md(t)).join('');
+          return `<div class="crow"><button class="cb ${s}" data-crit="${k.id}" aria-label="${k.id} ${s}" title="${s === 'verified' ? 'Verified: has evidence' : s === 'claimed' ? 'Claimed: ticked without evidence. Click to untick.' : 'Open. Click to tick (claimed).'}">${s === 'verified' ? '<svg width="10" height="10"><use href="#check"/></svg>' : ''}</button>
+            <span class="sc mono">${k.id}</span><div><div class="ears">${text}</div><div class="cchips">
+              <span class="chip c-neu mono" style="font-weight:400">⌘ ${md(k.verify)}</span>
+              ${s === 'verified' && k.evidence ? `<span class="chip c-ok" style="font-weight:400">📎 ${md(k.evidence)}</span>` : ''}
+              ${s === 'claimed' ? '<span class="chip c-stale" style="font-weight:400">No evidence yet (Q010)</span>' : ''}
+              ${k.tasks.map(t => `<span class="chip c-out mono">${t}</span>`).join('')}</div></div></div>`;
+        }).join('')}</div></div>
+      <div><div class="sec">Out of scope</div><div class="prose">Two-way sync. WebSocket transport. More than one workspace.</div></div>`;
+  }
+
+  function pill(t, showWho) {
+    return `<span class="task ${t.ready ? 'ready' : ''}" data-task="${t.id}" data-wf="TaskPill">${st(t.status, 12)}<span class="tid mono">${t.id}</span><span class="tt">${esc(t.title)}</span>${t.ready ? '<span class="rdot" title="Ready"></span>' : ''}${(showWho || true) && t.who ? av(t.who, true) : ''}</span>`;
+  }
+
+  function planTab(i) {
+    if (!i.rich) return `<div class="prose">${i.tasks && i.tasks.startsWith('no plan') ? 'Small issues may skip the plan. Run the <code>write-plan</code> skill if this one grows.' : 'Open <b>Live board updates</b> to see the full Plan tab.'}</div>`;
+    const lanes = ['core', 'server', 'web'];
+    const sel = TASKS.find(t => t.id === S.selTask);
+    return `<div class="faint" style="font-size:12px">Revision 3 · updated 2h ago by @claude-opus</div>
+      <div><div class="sec">Approach</div><div class="prose">Diff snapshots in the index, push deltas over one SSE stream, and let one leader tab relay them to the others.</div></div>
+      <div><div class="sec">Assumptions</div><div class="prose" style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+        <span><span class="mono faint">A1</span> notify 8.2 is enough on macOS if we rescan subtrees. <span class="chip c-ok">Confirmed</span></span>
+        <span><span class="mono faint">A2</span> 256 events of replay cover a laptop sleep. <span class="chip c-stale">Open</span></span></div></div>
+      <div><div class="sec">Tasks <span class="r">1 done · 1 review · 1 in progress · 2 to do · <span style="color:var(--accent)">1 ready</span></span></div>
+        <div class="phases" style="margin-bottom:10px"><span>Index deltas 1/2</span><span>Live transport 0/1</span><span>Board client 0/2</span></div>
+        <div class="lanes" id="lanes" data-wf="PlanLanes"><span></span><span class="lh">Start</span><span class="lh">Then</span><span class="lh">Then</span>
+        ${lanes.map(l => `<span class="ln">${l}</span>${[0, 1, 2].map(lv => `<div class="cell">${TASKS.filter(t => t.lane === l && t.level === lv).map(t => pill(t)).join('')}</div>`).join('')}`).join('')}
+        <svg id="edges"></svg></div>
+        <div class="faint" style="font-size:11px;margin-top:8px">Hover a task to see its dependencies. Click it for details.</div></div>
+      ${sel ? `<div class="tdetail" data-wf="TaskDetail"><div style="display:flex;gap:8px;align-items:center">${st(sel.status)}<b style="font-weight:500">${sel.id} ${esc(sel.title)}</b><button class="faint" style="margin-left:auto" data-task="${sel.id}" aria-label="Close task">✕</button></div>
+        <dl class="kv"><dt>Lane</dt><dd>${sel.lane}</dd><dt>Depends on</dt><dd>${sel.deps.join(', ') || 'none'}</dd><dt>Owns</dt><dd class="mono">${sel.owns}</dd><dt>Satisfies</dt><dd>${sel.sat}</dd>
+        ${sel.who ? `<dt>Claimed by</dt><dd>@${sel.who}${sel.lease ? ` · lease ${sel.lease}` : ''}</dd>` : ''}${sel.verify ? `<dt>Verify</dt><dd>${md(sel.verify)}</dd>` : ''}</dl>
+        ${sel.brief ? `<div class="prose" style="font-size:12px">${md(sel.brief)}</div>` : ''}
+        ${sel.steps ? sel.steps.map((s, n) => `<label class="step"><button class="cb ${S.steps[n + 1] ? 'verified' : ''}" data-step="${n + 1}" aria-label="Step ${n + 1}" style="cursor:pointer">${S.steps[n + 1] ? '<svg width="10" height="10"><use href="#check"/></svg>' : ''}</button>${md(s)}</label>`).join('') : ''}
+      </div>` : ''}`;
+  }
+
+  function logTab(i) {
+    if (!i.rich) return `<div class="prose">Open <b>Live board updates</b> to see the full Log tab.</div>`;
+    const seg = `<span class="seg">${[['changes', 'Changes', 13], ['decisions', 'Decisions', 3], ['learnings', 'Learnings', 3]].map(([k, l, n]) => `<button class="${S.log === k ? 'on' : ''}" data-log="${k}">${l}<span class="n">${n}</span></button>`).join('')}</span>`;
+    let body = '';
+    if (S.log === 'changes') {
+      let last = '';
+      body = `<div data-wf="ChangesTimeline">` + CHANGES.map(c => {
+        const head = c.day !== last ? `<div class="daylabel">${c.day}</div>` : ''; last = c.day;
+        const a = AUTH[c.who];
+        return `${head}<div class="tl" style="margin-bottom:10px"><div class="ent ${c.fail ? 'failure' : ''}"><span class="mk ${a.human ? 'h' : ''} ${c.fail ? 'fail' : ''}" style="background:var(--h${a.hue})"></span>
+          <div class="t1"><span class="faint" style="width:12px">${c.kind}</span><b>${md(c.title)}</b><span class="when">${c.t}</span></div>
+          <div class="t2">@${c.who}${c.meta.map(m => `<span class="chip ${m === 'fail' ? 'c-dan' : m === 'pass' ? 'c-ok' : 'c-out'} mono" style="height:18px">${m}</span>`).join('')}</div>
+          <div class="bd">${md(c.body)}</div></div></div>`;
+      }).join('') + `</div>`;
+    } else if (S.log === 'decisions') {
+      body = `<div class="dcard" data-wf="DecisionCards"><div style="display:flex;gap:6px;align-items:center"><span class="chip c-ok">Accepted</span><span class="chip c-out">live-transport</span><span class="mono faint" style="font-size:11px">D-7f3k2</span><span class="faint" style="margin-left:auto;font-size:11px">1d</span></div>
+          <h3>Push board updates over SSE</h3><div class="dec">Use SSE for board updates.</div>
+          <div><div class="lab">Because</div><div class="muted">Data flows one way. SSE reconnects with <code>Last-Event-ID</code>.</div></div>
+          <div><div class="lab">Revisit when</div><div class="muted">The UI needs to send updates over the live channel.</div></div>
+          <details class="coll"><summary>Rejected options <span class="n">2</span></summary><div class="in"><span>WebSocket: two-way, more code.</span><span>Polling: latency above 2 s.</span></div></details>
+          <details class="coll"><summary>Supersedes D-2ab3c</summary><div class="in old"><h4>Poll the snapshot every 2 s</h4><span>Rejected after measuring 2.4 s median latency.</span></div></details>
+          <div style="display:flex;gap:6px;align-items:center;font-size:12px" class="faint">${av('claude-opus', true)}${av('shruti', true)} decided · affects <span class="chip c-out mono" style="height:18px">SC-1</span><button class="btn" style="margin-left:auto;height:24px" data-toast="The Promote dialog is in the full prototype.">Promote</button></div></div>
+        <div class="dcard"><div style="display:flex;gap:6px;align-items:center"><span class="chip c-out">Proposed</span><span class="chip c-out">multi-tab</span><span class="mono faint" style="font-size:11px">D-5n1qr</span></div>
+          <h3>Elect one leader tab per browser</h3><div class="dec">One tab holds the event stream and relays it over BroadcastChannel.</div>
+          <div class="faint" style="font-size:12px">Accept or reject with <code>wf decide wf-3k9x2 D-5n1qr accept</code>.</div></div>`;
+    } else {
+      body = [
+        ['⚠', 'stale', 'notify 8.2 drops rename events on macOS; rescan the subtree instead.', 'Atomic saves from vim and VS Code arrive as Remove(Any) with no create.', '<a class="link" href="#" data-toast="Opens lib-4tz7c in the Library.">In library ↗</a>'],
+        ['💡', 'neu', 'Keep the SSE ring buffer at 256 events.', 'A 20-minute sleep produced 180 events in the dogfood workspace.', '<button class="btn" style="height:24px" data-toast="The Promote dialog is in the full prototype.">Promote</button>'],
+        ['◇', 'acc', 'Compare files by blake3 hash, never by mtime.', 'FSEvents replays set new mtimes on unchanged files.', ''],
+      ].map(([ic, tone, rule, ev, act]) => `<div class="lcard" data-wf="LearningCards"><span class="ltile" style="${tone === 'stale' ? 'background:color-mix(in srgb,var(--stale) 16%,transparent)' : tone === 'acc' ? 'background:var(--accent-subtle)' : ''}">${ic}</span><div><b>${rule}</b><div class="ev">${ev}</div><div class="ft">${av('codex', true)}@codex · 1d<span style="margin-left:auto">${act}</span></div></div></div>`).join('');
+    }
+    return `<div>${seg}</div><div style="display:flex;flex-direction:column;gap:10px">${body}</div>`;
+  }
+
+  function filesTab(i) {
+    const files = [['goal.md', '2.1 KB'], ['plan.md', '3.4 KB'], ['current_state.md', '1.2 KB'], ['changes.md', '6.8 KB'], ['decisions.md', '2.2 KB'], ['learnings.md', '0.9 KB'], ['notes/research.md', '1.1 KB'], ['evidence/sc2.png', '84 KB']];
+    const lint = i.rich ? [['warn', 'S06', 'Hedge word "probably" in a step.', 'plan.md:31'], ['info', 'Q010', 'SC-3 is ticked without evidence.', 'goal.md:22'], ['warn', 'S01', 'Sentence has 29 words (limit 25).', 'current_state.md:14']]
+      : i.lint === 'error' ? [['error', 'F001', 'Invalid YAML: mapping values are not allowed here.', 'goal.md:4']] : [];
+    const ic = { error: '<span class="lint" style="background:var(--danger)"></span>', warn: '<span class="lint" style="background:var(--stale)"></span>', info: '<span class="lint" style="background:var(--text-faint)"></span>' };
+    return `<div><div class="sec">Files</div>${(i.rich ? files : files.slice(0, 1)).map(([f, s]) => `<div class="frow"><span class="mono">${f}</span><span class="sz">${s}</span></div>`).join('')}
+      ${!i.rich ? '<div class="frow missing"><span class="mono">plan.md</span><span class="sz">missing · run write-plan</span></div>' : ''}</div>
+      <div data-wf="LintPanel"><div class="sec">Lint <span class="r">${lint.length} finding${lint.length === 1 ? '' : 's'}</span></div>
+      ${lint.length ? lint.map(([sv, r, m, at]) => `<div class="lrow">${ic[sv]}<span class="rule mono">${r}</span><span>${m}</span><button class="line mono" data-toast="Copied ${at}">${at}</button></div>`).join('') : '<div class="faint" style="font-size:12px">No lint findings.</div>'}</div>`;
+  }
+
+  function renderDrawer() {
+    const d = $('#drawer'), scrim = $('#scrim');
+    if (!S.open) { d.hidden = true; scrim.hidden = true; return; }
+    const i = byId[S.open];
+    const body = { now: nowTab, goal: goalTab, plan: planTab, log: logTab, files: filesTab }[S.tab](i);
+    d.innerHTML = header(i) + tabs(i) + `<div class="body" data-wf="${S.tab === 'now' ? 'StateSnapshot' : ''}">${body}</div>`;
+    d.hidden = false; scrim.hidden = false;
+    if (S.tab === 'plan') requestAnimationFrame(drawEdges);
+  }
+
+  function drawEdges(hover) {
+    const box = $('#lanes'), svg = $('#edges');
+    if (!box || !svg) return;
+    const focus = hover || S.selTask;
+    const T = Object.fromEntries(TASKS.map(t => [t.id, t]));
+    const related = new Set();
+    if (focus) {
+      related.add(focus);
+      const up = id => T[id].deps.forEach(d => { related.add(d); up(d); });
+      const down = id => TASKS.filter(t => t.deps.includes(id)).forEach(t => { related.add(t.id); down(t.id); });
+      up(focus); down(focus);
+    }
+    box.querySelectorAll('.task').forEach(el => { el.classList.toggle('dim', !!focus && !related.has(el.dataset.task)); el.classList.toggle('rel', el.dataset.task === focus); });
+    const b = box.getBoundingClientRect();
+    const rect = id => box.querySelector(`.task[data-task="${id}"]`).getBoundingClientRect();
+    let paths = '';
+    if (focus) TASKS.forEach(t => t.deps.forEach(d => {
+      if (!related.has(t.id) || !related.has(d)) return;
+      const a = rect(d), z = rect(t.id);
+      const x1 = a.right - b.left + box.scrollLeft, y1 = a.top + a.height / 2 - b.top, x2 = z.left - b.left + box.scrollLeft - 3, y2 = z.top + z.height / 2 - b.top;
+      const mx = (x1 + x2) / 2;
+      paths += `<path d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="var(--accent)" stroke-width="1.25"/><path d="M${x2} ${y2} l-5 -3 v6 z" fill="var(--accent)"/>`;
+    }));
+    svg.innerHTML = paths;
+  }
+
+  // ---------------------------------------------------------------- events
+  let toastTimer;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
+  function render() { renderTree(); renderBoard(); renderDrawer(); $('#inboxCount').textContent = S.answered ? 2 : 3; }
+
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-open],[data-close],[data-tab],[data-log],[data-crit],[data-answer],[data-note],[data-unfold],[data-fold],[data-group],[data-task],[data-step],[data-toast],#scrim');
+    if (!el) return;
+    const d = el.dataset;
+    if (el.id === 'scrim' || 'close' in d) { S.open = null; S.selTask = null; return render(); }
+    if (d.open) { S.open = S.open === d.open && false ? null : d.open; S.tab = 'now'; S.selTask = null; return render(); }
+    if (d.tab) { S.tab = d.tab; if (d.log) S.log = d.log; return renderDrawer(); }
+    if (d.log) { S.log = d.log; return renderDrawer(); }
+    if (d.crit) { const s = S.crit[d.crit]; if (s === 'verified') return toast('Verified criteria have evidence. Untick with wf check --uncheck.'); S.crit[d.crit] = s === 'open' ? 'claimed' : 'open'; if (s === 'open') toast(`${d.crit} claimed. Add evidence with wf check --evidence to verify it.`); return renderDrawer(); }
+    if (d.answer) { const note = $('#noteText')?.value.trim(); S.answered = d.answer === 'approve' ? (note ? `approve: "${note}"` : 'approve') : (note ? `reject: "${note}"` : 'reject'); toast(`Answered Q-4m2pz: ${d.answer}.`); return render(); }
+    if ('note' in d) { const nb = $('#notebox'); nb.hidden = !nb.hidden; if (!nb.hidden) $('#noteText').focus(); return; }
+    if (d.unfold) { S.folded[d.unfold] = false; return renderBoard(); }
+    if (d.fold) { S.folded[d.fold] = true; return renderBoard(); }
+    if (d.group) { S.group = d.group; renderTree(); return; }
+    if (d.task) { S.selTask = S.selTask === d.task ? null : d.task; if (S.tab !== 'plan') S.tab = 'plan'; return renderDrawer(); }
+    if (d.step) { S.steps[d.step] = !S.steps[d.step]; return renderDrawer(); }
+    if (d.toast) { e.preventDefault(); return toast(d.toast); }
+  });
+  document.addEventListener('mouseover', e => { const p = e.target.closest('#lanes .task'); if (p) drawEdges(p.dataset.task); });
+  document.addEventListener('mouseout', e => { const p = e.target.closest('#lanes .task'); if (p && !p.contains(e.relatedTarget)) drawEdges(); });
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('textarea,input')) return;
+    if (e.key === 'Escape' && S.open) { S.open = null; render(); }
+    if (S.open && /^[1-5]$/.test(e.key)) { S.tab = ['now', 'goal', 'plan', 'log', 'files'][e.key - 1]; renderDrawer(); }
+  });
+
+  const root = document.documentElement;
+  const btns = { auto: $('#ta'), light: $('#tl'), dark: $('#td') };
+  for (const [k, b] of Object.entries(btns)) b.addEventListener('click', () => {
+    if (k === 'auto') delete root.dataset.theme; else root.dataset.theme = k;
+    for (const [k2, b2] of Object.entries(btns)) b2.classList.toggle('on', k2 === k);
+  });
+
+  S.open = 'wf-3k9x2';
+  render();
+})();
+</script>

@@ -1,0 +1,256 @@
+// Prototype controls: a small "Prototype" pill that opens a popover for driving
+// the mock server (live events, connection state, conflicts, archify, reset).
+// "." toggles it. In the nav it sits above the footer; when the nav is collapsed
+// or on a phone it floats at the bottom-left of the main area.
+import { ArrowRight, Check, FlaskConical, Play, RotateCcw } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
+import {
+  Button,
+  Chip,
+  Kbd,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Segmented,
+  Switch,
+} from "@/components/ui";
+import { queryClient, useSnapshot } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { useLayoutMode } from "@/lib/hooks";
+import { useLiveStatus } from "@/lib/live";
+import { useGo } from "@/lib/nav";
+import { getMockControls, type MockConnection } from "./mock-controls";
+import { useShell } from "./shell-store";
+
+const STATE_DOT: Record<MockConnection, string> = {
+  live: "bg-status-done",
+  reconnecting: "bg-stale animate-pulse",
+  offline: "bg-danger",
+};
+const STATE_LABEL: Record<MockConnection, string> = {
+  live: "Live",
+  reconnecting: "Reconnecting…",
+  offline: "Offline",
+};
+
+export function DevPanel({ placement }: { placement: "nav" | "floating" }) {
+  const open = useShell((s) => s.devPanelOpen);
+  const setOpen = useShell((s) => s.setDevPanelOpen);
+  const mobile = useLayoutMode() === "mobile";
+  const { state } = useLiveStatus();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <div
+        data-wf="DevPanel"
+        className={cn(placement === "floating" && "fixed bottom-3 z-40")}
+        style={
+          placement === "floating"
+            ? { left: mobile ? 12 : "calc(var(--wf-nav-w-collapsed) + 12px)" }
+            : undefined
+        }
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="Prototype controls"
+            aria-keyshortcuts="."
+            className={cn(
+              "inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-bg px-2.5 font-medium text-fg-muted text-xs",
+              "transition-colors duration-100 ease-wf hover:border-border-strong hover:text-fg data-[state=open]:border-border-strong data-[state=open]:text-fg",
+            )}
+          >
+            <FlaskConical size={12} strokeWidth={1.75} aria-hidden />
+            Prototype
+            {state !== "live" && (
+              <span aria-hidden className={cn("size-1.5 rounded-full", STATE_DOT[state])} />
+            )}
+          </button>
+        </PopoverTrigger>
+      </div>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-80 p-0"
+        aria-label="Prototype controls"
+      >
+        <DevPanelBody onClose={() => setOpen(false)} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DevPanelBody({ onClose }: { onClose: () => void }) {
+  const mock = getMockControls();
+  const live = useLiveStatus();
+  const snapshot = useSnapshot().data;
+  const go = useGo();
+  const [conflictArmed, setConflictArmed] = useState(false);
+  const [archify, setArchify] = useState(snapshot?.config.archify !== "unavailable");
+  const disabled = !mock;
+
+  return (
+    <div className="flex flex-col">
+      <header className="flex flex-col gap-0.5 px-3 pt-3 pb-2.5">
+        <h2 className="font-semibold text-base text-fg">Prototype controls</h2>
+        <p className="text-fg-faint text-xs">
+          {mock
+            ? "Mock data in memory. Nothing here touches your files."
+            : "Unavailable: this build talks to wf serve, not the mock server."}
+        </p>
+      </header>
+
+      <Section title="Live updates">
+        <Row
+          label={
+            <span className="flex items-center gap-2">
+              <span aria-hidden className={cn("size-2 rounded-full", STATE_DOT[live.state])} />
+              <span className="text-fg">{STATE_LABEL[live.state]}</span>
+              {live.rev && (
+                <span className="font-mono text-fg-faint text-xs" title="Workspace rev">
+                  {live.rev.slice(0, 7)}
+                </span>
+              )}
+            </span>
+          }
+        >
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => mock?.playNextEvent()}
+          >
+            <Play size={12} strokeWidth={1.75} aria-hidden />
+            Play next event
+          </Button>
+        </Row>
+        <Row label="Connection">
+          <Segmented<MockConnection>
+            size="sm"
+            aria-label="Connection state"
+            value={live.state}
+            disabled={disabled}
+            onChange={(v) => mock?.setConnection(v)}
+            options={[
+              { value: "live", label: "Live" },
+              { value: "reconnecting", label: "Retrying" },
+              { value: "offline", label: "Offline" },
+            ]}
+          />
+        </Row>
+      </Section>
+
+      <Section title="Writes and rendering">
+        <Row
+          label="Conflict on next write"
+          hint="The next write answers 409 and rolls back. One shot."
+        >
+          {conflictArmed ? (
+            <Chip tone="accent" icon={<Check size={12} strokeWidth={2} />}>
+              Armed
+            </Chip>
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={disabled}
+              onClick={() => {
+                mock?.conflictNextWrite();
+                setConflictArmed(true);
+              }}
+            >
+              Arm
+            </Button>
+          )}
+        </Row>
+        <Row
+          label="Archify available"
+          hint={archify ? "Diagrams render as usual." : "Diagrams show the unavailable state."}
+          htmlFor="wf-dev-archify"
+        >
+          <Switch
+            id="wf-dev-archify"
+            checked={archify}
+            disabled={disabled}
+            onCheckedChange={(on) => {
+              setArchify(on);
+              mock?.setArchifyAvailable(on);
+            }}
+          />
+        </Row>
+      </Section>
+
+      <footer className="flex items-center gap-2 border-border border-t px-3 py-2.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => {
+            mock?.reset();
+            void queryClient.invalidateQueries();
+            setConflictArmed(false);
+            toast.success("Mock data reset", { description: "The workspace is back to its seed." });
+          }}
+        >
+          <RotateCcw size={12} strokeWidth={1.75} aria-hidden />
+          Reset data
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => {
+            onClose();
+            go.kit();
+          }}
+        >
+          Component kit
+          <ArrowRight size={12} strokeWidth={1.75} aria-hidden />
+        </Button>
+      </footer>
+      <p className="flex items-center gap-1 border-border border-t bg-subtle px-3 py-1.5 text-fg-faint text-xs">
+        Press <Kbd combo="." /> to show or hide this panel.
+      </p>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-1 border-border border-t px-3 py-2.5">
+      <h3 className="font-medium text-fg-faint text-xs">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Row({
+  label,
+  hint,
+  htmlFor,
+  children,
+}: {
+  label: ReactNode;
+  hint?: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  const text = htmlFor ? (
+    <label htmlFor={htmlFor} className="text-fg">
+      {label}
+    </label>
+  ) : (
+    <span className="text-fg">{label}</span>
+  );
+  return (
+    <div className="flex min-h-8 items-center gap-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {text}
+        {hint && <span className="text-fg-faint text-xs">{hint}</span>}
+      </div>
+      <div className="flex shrink-0 items-center">{children}</div>
+    </div>
+  );
+}

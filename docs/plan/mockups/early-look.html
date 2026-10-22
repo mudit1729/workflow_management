@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wf · early look</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root, [data-theme="light"] {
+    --bg:#fff; --subtle:#f7f7f8; --muted:#efeff1; --border:#e5e5e8; --border-strong:#d3d3d8;
+    --text:#18181b; --text-muted:#5f5f6b; --text-faint:#8e8e99;
+    --accent:#5e6ad2; --accent-subtle:#eef0fb; --accent-fg:#fff;
+    --s-backlog:#a1a1aa; --s-planned:#71717a; --s-progress:#3b82f6; --s-blocked:#e5484d; --s-review:#8e4ec6; --s-done:#30a46c;
+    --stale:#d99a06; --danger:#e5484d;
+    --h1:#2a78d6; --h2:#eb6834; --h3:#1baf7a; --h4:#eda100; --h5:#e87ba4; --h6:#008300; --h7:#6250d6; --h8:#e34948;
+    --pop: 0 4px 16px rgb(0 0 0/.08), 0 0 0 1px var(--border);
+  }
+  [data-theme="dark"] {
+    --bg:#0f0f11; --subtle:#151517; --muted:#1c1c1f; --border:#26262a; --border-strong:#34343a;
+    --text:#ededef; --text-muted:#a1a1aa; --text-faint:#6e6e78;
+    --accent:#7c85e0; --accent-subtle:#1e2040;
+    --s-backlog:#b6b6bd; --s-planned:#85858e; --s-progress:#629bf8; --s-blocked:#ea6c70; --s-review:#a26dd0; --s-done:#39c481;
+    --stale:#f5b730; --danger:#ff6369;
+    --h1:#3987e5; --h2:#d95926; --h3:#199e70; --h4:#c98500; --h5:#d55181; --h6:#008300; --h7:#9085e9; --h8:#e66767;
+    --pop: 0 4px 16px rgb(0 0 0/.4), 0 0 0 1px var(--border-strong);
+  }
+  * { box-sizing: border-box; border-color: var(--border); }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { font: 13px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; font-feature-settings: "cv11","ss01"; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .faint { color: var(--text-faint); } .muted { color: var(--text-muted); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  .app { display: grid; grid-template-columns: 232px 1fr; height: 100vh; }
+
+  /* NavRail */
+  nav { background: var(--subtle); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 10px 8px; gap: 2px; min-height: 0; }
+  .ws { display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px; }
+  .mark { width: 20px; height: 20px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 10px; font-weight: 600; display: grid; place-items: center; letter-spacing: -.02em; }
+  .ws b { font-weight: 600; font-size: 13px; flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-faint); margin-bottom: 8px; }
+  .search kbd { margin-left: auto; }
+  kbd { font: 10px ui-monospace, Menlo, monospace; border: 1px solid var(--border); background: var(--subtle); border-radius: 4px; padding: 0 4px; height: 16px; display: inline-grid; place-items: center; color: var(--text-muted); }
+  .item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px; color: var(--text-muted); }
+  .item:hover { background: var(--muted); color: var(--text); }
+  .item.on { background: var(--muted); color: var(--text); font-weight: 500; }
+  .item .n { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .badge { background: var(--accent); color: var(--accent-fg); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 500; line-height: 16px; }
+  .label { font-size: 11px; font-weight: 500; color: var(--text-faint); padding: 14px 8px 4px; }
+  .tree .item { height: 26px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .chev { width: 10px; color: var(--text-faint); font-size: 9px; }
+  .mini { width: 28px; height: 3px; border-radius: 2px; overflow: hidden; display: flex; gap: 1px; margin-left: 6px; flex: none; }
+  .mini i { display: block; height: 100%; }
+  .needs { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .navfoot { margin-top: auto; display: flex; align-items: center; gap: 6px; padding: 8px 6px 2px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 12px; }
+  .seg { display: inline-flex; background: var(--muted); padding: 2px; border-radius: 6px; gap: 2px; }
+  .seg span { padding: 2px 8px; border-radius: 4px; font-size: 12px; color: var(--text-muted); }
+  .seg span.on { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 1px rgb(0 0 0/.04); }
+  .proto { margin-left: auto; font-size: 11px; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 1px 8px; }
+
+  /* Main */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+  .toolbar { height: 44px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; flex: none; }
+  .crumb { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .crumb .sep { color: var(--text-faint); font-weight: 400; }
+  .sum { color: var(--text-faint); font-size: 12px; margin-left: 6px; }
+  .sum b { color: var(--accent); font-weight: 500; }
+  .tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+  .board { flex: 1; min-height: 0; background: var(--subtle); display: flex; gap: 8px; padding: 12px; overflow: hidden; }
+  .rail { width: 36px; flex: none; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+  .rail .v { writing-mode: vertical-rl; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .col { width: 264px; flex: none; display: flex; flex-direction: column; min-height: 0; }
+  .colhead { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 4px; font-weight: 500; }
+  .colhead .n { color: var(--text-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .cards { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .card:hover { border-color: var(--border-strong); }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: linear-gradient(var(--accent-subtle), var(--accent-subtle)) padding-box; background: color-mix(in srgb, var(--accent-subtle) 55%, var(--bg)); }
+  .r1 { display: flex; gap: 8px; align-items: flex-start; }
+  .title { font-weight: 500; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .r2 { display: flex; font-size: 11px; color: var(--text-faint); gap: 8px; }
+  .r2 .id { margin-left: auto; }
+  .chips { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .chip { height: 20px; padding: 0 6px; border-radius: 4px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+  .c-acc { background: var(--accent-subtle); color: var(--accent); }
+  .c-dan { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+  .c-stale { background: color-mix(in srgb, var(--stale) 14%, transparent); color: color-mix(in srgb, var(--stale) 80%, var(--text)); }
+  .c-neu { background: var(--muted); color: var(--text-muted); }
+  .c-out { border: 1px solid var(--border); color: var(--text-muted); font-weight: 400; }
+  .stack { margin-left: auto; display: flex; }
+  .av { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 8px; font-weight: 600; box-shadow: 0 0 0 1.5px var(--bg); }
+  .av.h { border-radius: 50%; }
+  .stack .av + .av { margin-left: -4px; }
+  .lint { width: 6px; height: 6px; border-radius: 50%; }
+  .prio { flex: none; margin-top: 3px; }
+
+  /* Drawer (overlay mode at <1600 px) */
+  .scrim { position: absolute; inset: 44px 0 0 0; background: transparent; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 560px; background: var(--bg); box-shadow: var(--pop); display: flex; flex-direction: column; min-height: 0; }
+  .dh { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+  .dh1 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); }
+  .dh1 .ib { margin-left: auto; display: flex; gap: 2px; }
+  .ib button { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--text-muted); }
+  .ib button:hover { background: var(--muted); }
+  h1 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; letter-spacing: -.005em; }
+  .props { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .pill { height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .pill b { color: var(--text); font-weight: 500; }
+  .tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border); padding: 0 16px; margin-top: 4px; }
+  .tab { height: 36px; display: flex; align-items: center; gap: 6px; color: var(--text-muted); position: relative; }
+  .tab.on { color: var(--text); font-weight: 500; }
+  .tab.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--text); border-radius: 1px; }
+  .tab .n { font-size: 11px; color: var(--text-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .tab .n.acc { color: var(--accent); font-weight: 500; }
+  .body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+  .hero { font-size: 14px; font-weight: 500; line-height: 1.4; }
+  .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+  .sec { font-size: 11px; font-weight: 500; color: var(--text-faint); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+  .ask { border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent-subtle) 60%, var(--bg)); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .q { display: flex; gap: 8px; font-weight: 500; }
+  .qmeta { font-size: 12px; color: var(--text-faint); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding-left: 22px; }
+  .ref { color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+  .acts { display: flex; gap: 6px; padding-left: 22px; align-items: center; }
+  .acts .note { font-size: 12px; color: var(--text-faint); margin-left: 4px; }
+  .task { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; max-width: 100%; }
+  .task .tid { color: var(--text-muted); font-size: 11px; }
+  .prose { color: var(--text-muted); margin-top: 6px; }
+  ol.next { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  ol.next li { display: flex; gap: 8px; align-items: baseline; color: var(--text-muted); }
+  ol.next li .k { width: 16px; text-align: right; color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
+  ol.next li.first { color: var(--text); font-weight: 500; }
+  code { font: 12px ui-monospace, Menlo, monospace; background: var(--muted); padding: 0 4px; border-radius: 4px; font-weight: 400; }
+  .coll { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+  .coll div { height: 32px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
+  .coll div .n { color: var(--text-faint); }
+  .themebtn { position: fixed; right: 14px; bottom: 14px; z-index: 5; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <pattern id="hatch" width="2.5" height="2.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.1" height="2.5" fill="var(--s-done)"/></pattern>
+    <symbol id="st-backlog" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-backlog)" stroke-width="1.5" stroke-dasharray="1.6 2"/></symbol>
+    <symbol id="st-planned" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-planned)" stroke-width="1.5"/></symbol>
+    <symbol id="st-progress" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-progress)" stroke-width="1.5"/><path d="M7 4a3 3 0 0 1 0 6z" fill="var(--s-progress)"/></symbol>
+    <symbol id="st-blocked" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-blocked)" stroke-width="1.5"/><rect x="4" y="6.1" width="6" height="1.8" rx=".9" fill="var(--s-blocked)"/></symbol>
+    <symbol id="st-review" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--s-review)" stroke-width="1.5"/><path d="M7 4a3 3 0 1 1-3 3h3z" fill="var(--s-review)"/></symbol>
+    <symbol id="st-done" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(--s-done)"/><path d="M4.4 7.2l1.8 1.8 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="bot" viewBox="0 0 16 16"><rect x="4" y="5.5" width="8" height="6" rx="1.5" fill="none" stroke="#fff" stroke-width="1.4"/><circle cx="6.5" cy="8.5" r=".9" fill="#fff"/><circle cx="9.5" cy="8.5" r=".9" fill="#fff"/><path d="M8 3.5v2" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <nav data-wf="NavRail">
+    <div class="ws"><div class="mark">wf</div><b>wf</b><span class="av h" style="background:var(--h1)" title="Acting as @shruti">SJ</span></div>
+    <div class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Search or jump to…<kbd>⌘K</kbd></div>
+    <div class="item on"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg>Board</div>
+    <div class="item"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 9h3.5l1 2h3l1-2H14M3.5 3h9L14 9v4H2V9z"/></svg>Inbox<span class="n"><span class="badge">3</span></span></div>
+    <div class="item"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 2.5v11M6 2.5v11M9.5 3l3 10.5"/></svg>Library<span class="n faint">8</span></div>
+    <div class="item"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="5" r="2.5"/><rect x="9" y="2.5" width="5" height="5" rx="1"/><path d="M5 9l3 5H2zM9 9h5v5H9z"/></svg>Kit</div>
+
+    <div class="label">Groups</div>
+    <div class="tree" data-wf="GroupTree">
+      <div class="item"><span class="chev"></span>All issues<span class="n faint">27</span></div>
+      <div class="item"><span class="chev">▾</span><span class="dot" style="background:var(--h7)"></span>wf<span class="n faint">19</span><span class="mini"><i style="width:20%;background:var(--s-backlog)"></i><i style="width:15%;background:var(--s-planned)"></i><i style="width:25%;background:var(--s-progress)"></i><i style="width:10%;background:var(--s-review)"></i><i style="width:30%;background:var(--s-done)"></i></span></div>
+      <div class="item" style="padding-left:24px"><span class="chev"></span><span class="dot" style="background:var(--h2)"></span>core<span class="n faint">7</span><span class="mini"><i style="width:30%;background:var(--s-planned)"></i><i style="width:40%;background:var(--s-progress)"></i><i style="width:30%;background:var(--s-done)"></i></span></div>
+      <div class="item on" style="padding-left:24px"><span class="chev"></span><span class="dot" style="background:var(--h1)"></span>web<span class="needs" style="margin-left:6px"></span><span class="n faint">8</span><span class="mini"><i style="width:15%;background:var(--s-backlog)"></i><i style="width:35%;background:var(--s-progress)"></i><i style="width:20%;background:var(--s-review)"></i><i style="width:30%;background:var(--s-done)"></i></span></div>
+      <div class="item" style="padding-left:24px"><span class="chev"></span><span class="dot" style="background:var(--h3)"></span>skills<span class="n faint">4</span><span class="mini"><i style="width:50%;background:var(--s-planned)"></i><i style="width:50%;background:var(--s-done)"></i></span></div>
+      <div class="item"><span class="chev">▸</span><span class="dot" style="background:var(--h4)"></span>platform<span class="n faint">3</span><span class="mini"><i style="width:33%;background:var(--s-blocked)"></i><i style="width:67%;background:var(--s-planned)"></i></span></div>
+      <div class="item"><span class="chev"></span><span class="dot" style="background:var(--text-faint)"></span><i class="faint">docs</i><span class="n faint">5</span><span class="mini"><i style="width:60%;background:var(--s-backlog)"></i><i style="width:40%;background:var(--s-done)"></i></span></div>
+    </div>
+
+    <div class="navfoot"><span class="seg"><span>Auto</span><span class="on" id="tl">Light</span><span id="td">Dark</span></span><span class="proto">Prototype</span></div>
+  </nav>
+
+  <main>
+    <div class="toolbar" data-wf="BoardToolbar">
+      <div class="crumb"><span class="faint" style="font-weight:400">All issues</span><span class="sep">/</span><span class="dot" style="background:var(--h7)"></span>wf<span class="sep">/</span><span class="dot" style="background:var(--h1)"></span>web</div>
+      <span class="sum">8 issues · <b>1 needs you</b> · 1 stale</span>
+      <div class="tools">
+        <span class="btn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Filter<kbd>/</kbd></span>
+        <span class="btn">Author</span>
+        <span class="seg"><span>Groups</span><span class="on">None</span></span>
+        <span class="btn primary">+ New issue</span>
+      </div>
+    </div>
+
+    <div class="board" data-wf="KanbanBoard">
+      <div class="rail" title="Backlog — click to unfold"><svg width="14" height="14"><use href="#st-backlog"/></svg><span class="faint" style="font-size:11px">2</span><span class="v">Backlog</span></div>
+
+      <div class="col" data-wf="KanbanColumn">
+        <div class="colhead"><svg width="14" height="14"><use href="#st-planned"/></svg>Planned <span class="n">1</span></div>
+        <div class="cards">
+          <div class="card" data-wf="IssueCard">
+            <div class="r1"><span class="title">Command palette</span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-strong)" stroke-width="2"/></svg></div>
+            <div class="r2"><span>web</span><span class="id mono">wf-m2x7c</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col" data-wf="KanbanColumn">
+        <div class="colhead"><svg width="14" height="14"><use href="#st-progress"/></svg>In progress <span class="n">3</span></div>
+        <div class="cards">
+          <div class="card sel" data-wf="IssueCard">
+            <div class="r1">
+              <svg class="prio" width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="7" width="2.2" height="4" rx=".6" fill="var(--text-muted)"/><rect x="4.9" y="4.5" width="2.2" height="6.5" rx=".6" fill="var(--text-muted)"/><rect x="8.8" y="2" width="2.2" height="9" rx=".6" fill="var(--text-muted)"/></svg>
+              <span class="title">Live board updates</span>
+              <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-strong)" stroke-width="2"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--s-done)" stroke-width="2" stroke-dasharray="13.8 34.6" transform="rotate(-90 7 7)"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="url(#hatch)" stroke-width="2" stroke-dasharray="0 13.8 6.9 34.6" transform="rotate(-90 7 7)"/></svg>
+            </div>
+            <div class="r2"><span>web</span><span class="id mono">wf-3k9x2</span></div>
+            <div class="chips">
+              <span class="chip c-acc"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 14.5A6.5 6.5 0 1 0 2.3 11L1.5 14.5 5 13.7A6.5 6.5 0 0 0 8 14.5z"/></svg>1 · blocking</span>
+              <span class="stack"><span class="av" style="background:var(--h7)"><svg width="12" height="12"><use href="#bot"/></svg></span><span class="av" style="background:var(--h2)"><svg width="12" height="12"><use href="#bot"/></svg></span></span>
+            </div>
+          </div>
+          <div class="card" data-wf="IssueCard">
+            <div class="r1"><span class="title">Fade changed cards and show a reconnecting badge</span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-strong)" stroke-width="2"/></svg></div>
+            <div class="r2"><span>web</span><span class="id mono">wf-f4d3b</span></div>
+            <div class="chips"><span class="chip c-stale">◷ Stale 2d</span><span class="stack"><span class="av" style="background:var(--h3)"><svg width="12" height="12"><use href="#bot"/></svg></span></span></div>
+          </div>
+          <div class="card" data-wf="IssueCard">
+            <div class="r1"><span class="title">Stream archify renders in the background</span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-strong)" stroke-width="2"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--s-done)" stroke-width="2" stroke-dasharray="11.5 34.6" transform="rotate(-90 7 7)"/></svg></div>
+            <div class="r2"><span>web</span><span class="id mono">wf-a4c8z</span></div>
+            <div class="chips"><span class="chip c-stale">Lease expired</span><span class="lint" style="background:var(--stale)" title="2 warnings"></span><span class="stack"><span class="av" style="background:var(--h4)"><svg width="12" height="12"><use href="#bot"/></svg></span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col" data-wf="KanbanColumn">
+        <div class="colhead"><svg width="14" height="14"><use href="#st-blocked"/></svg>Blocked <span class="n">1</span></div>
+        <div class="cards">
+          <div class="card" data-wf="IssueCard">
+            <div class="r1"><span class="title">Inline answer box in the inbox</span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-strong)" stroke-width="2"/></svg></div>
+            <div class="r2"><span>web</span><span class="id mono">wf-q8n5t</span></div>
+            <div class="chips"><span class="chip c-dan">Blocked by wf-3k9x2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col" data-wf="KanbanColumn">
+        <div class="colhead"><svg width="14" height="14"><use href="#st-review"/></svg>Review <span class="n">1</span></div>
+        <div class="cards">
+          <div class="card" data-wf="IssueCard">
+            <div class="r1"><span class="title">Fix tab-title count</span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--s-done)" stroke-width="2"/></svg></div>
+            <div class="r2"><span>web</span><span class="id mono">wf-7yq2m</span></div>
+            <div class="chips"><span class="lint" style="background:var(--danger)" title="1 error: F001 invalid YAML"></span><span class="faint" style="font-size:11px">F001</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail" title="Done — click to unfold"><svg width="14" height="14"><use href="#st-done"/></svg><span class="faint" style="font-size:11px">2</span><span class="v">Done</span></div>
+    </div>
+
+    <div class="scrim"></div>
+    <aside class="drawer" data-wf="IssueDrawer">
+      <div class="dh" data-wf="IssueHeader">
+        <div class="dh1"><span class="dot" style="background:var(--h7);width:6px;height:6px"></span>wf / web / <span class="mono">wf-3k9x2</span>
+          <span class="ib">
+            <button title="Open in new page (o)">↗</button>
+            <button title="Copy link">⧉</button>
+            <button title="Copy wf context command" class="mono" style="font-size:11px">&gt;_</button>
+            <button title="Close (Esc)">✕</button>
+          </span>
+        </div>
+        <h1>Live board updates</h1>
+        <div class="props">
+          <span class="pill"><svg width="14" height="14"><use href="#st-progress"/></svg><b>In progress</b></span>
+          <span class="pill">High</span>
+          <span class="pill">Size M</span>
+          <span class="pill"><span class="av h" style="background:var(--h1);width:14px;height:14px;font-size:7px">SJ</span>@shruti</span>
+          <span class="pill"><span class="av" style="background:var(--h7);width:14px;height:14px"><svg width="10" height="10"><use href="#bot"/></svg></span>@claude-opus · lease 34m left</span>
+          <span class="pill"><span class="lint" style="background:var(--stale)"></span>3</span>
+        </div>
+      </div>
+      <div class="tabs">
+        <span class="tab on">Now <span class="n acc">1</span></span>
+        <span class="tab">Goal <span class="n">2/5</span></span>
+        <span class="tab">Plan <span class="n">1/5</span></span>
+        <span class="tab">Log <span class="n">16</span></span>
+        <span class="tab">Files <span class="n">2</span></span>
+      </div>
+
+      <div class="body" data-wf="StateSnapshot">
+        <div>
+          <div class="hero">The delta stream runs end to end; lagged-client resync is in flight.</div>
+          <div class="meta">Updated 25m ago by <span class="av" style="background:var(--h7);width:14px;height:14px"><svg width="10" height="10"><use href="#bot"/></svg></span>@claude-opus · <span class="chip c-out" style="height:18px">Live transport</span></div>
+        </div>
+
+        <div>
+          <div class="sec">Needs you</div>
+          <div class="ask" data-wf="NeedsYouList">
+            <div class="q"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6" style="margin-top:2px;flex:none"><path d="M8 1.8l5 2v4c0 3-2.2 5.3-5 6.4-2.8-1.1-5-3.4-5-6.4v-4z"/><path d="M5.8 8l1.6 1.6 3-3.2"/></svg>Approve keeping SSE instead of WebSocket for the board?</div>
+            <div class="qmeta"><span class="chip c-acc" style="height:18px">● Blocking</span>@claude-opus → @shruti · 14m ago · <span class="mono">Q-4m2pz</span> · <span class="ref">D-7f3k2 Push board updates over SSE</span></div>
+            <div class="acts"><span class="btn primary">Approve</span><span class="btn">Reject</span><span class="note">Add a note</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="sec">In flight</div>
+          <span class="task" data-wf="TaskPill"><svg width="12" height="12"><use href="#st-progress"/></svg><span class="tid mono">T-3</span>Build the SSE delta stream<span class="av" style="background:var(--h2);width:14px;height:14px"><svg width="10" height="10"><use href="#bot"/></svg></span></span>
+          <div class="prose">A lagged client still misses events after a laptop sleep. @codex is adding <code>resync</code>.</div>
+        </div>
+
+        <div>
+          <div class="sec">Next steps</div>
+          <ol class="next">
+            <li class="first"><span class="chip c-acc" style="height:18px">Next</span>Finish <code>resync</code> for lagged clients in T-3.</li>
+            <li><span class="k">2</span>Claim T-4 once T-3 lands.</li>
+            <li><span class="k">3</span>Run <code>wf verify wf-3k9x2 SC-3</code>.</li>
+          </ol>
+        </div>
+
+        <div class="coll">
+          <div>▸ Done <span class="n">3</span></div>
+          <div>▸ Handoff notes</div>
+          <div>▸ Failed attempts <span class="n">1</span></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+<script>
+  const set = t => { document.documentElement.dataset.theme = t; tl.classList.toggle('on', t==='light'); td.classList.toggle('on', t==='dark'); };
+  tl.onclick = () => set('light'); td.onclick = () => set('dark');
+  tl.style.cursor = td.style.cursor = 'pointer';
+</script>
+</body>
+</html>

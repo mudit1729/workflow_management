@@ -1,0 +1,300 @@
+// Render sources back to the exact file text an agent or `wf` would write
+// (contract 1.4–1.5). The text gives realistic line numbers, revs, word counts,
+// raw views and the `wf context` bundle.
+import { DIAGRAMS } from "@mock/diagrams";
+import type {
+  ChangeSrc,
+  CriterionSrc,
+  DecisionSrc,
+  IssueSrc,
+  LearningSrc,
+  LibrarySrc,
+  PlanSrc,
+  RequestSrc,
+  StateSrc,
+  TaskSrc,
+} from "./source";
+
+const at = (h: string) => `@${h}`;
+const quoted = (h: string) => `"@${h}"`;
+const tick = (s: string) => `\`${s}\``;
+const flow = (xs: string[]) => `[${xs.join(", ")}]`;
+
+/** YAML-safe scalar: quote when the value holds `: `, `#`, a leading `@` or `[`. */
+function scalar(v: string): string {
+  return /: |#|^[@[{*&!|>'"%]|;/.test(v) ? JSON.stringify(v) : v;
+}
+
+const DIAGRAM_FENCE = /```wf-diagram\n([\w-]+)\n```/g;
+
+/** Diagram IDs referenced by a markdown fragment, in order. */
+export function diagramIds(md: string | undefined): string[] {
+  if (!md) return [];
+  return [...md.matchAll(DIAGRAM_FENCE)].map((m) => m[1]);
+}
+
+/** Replace ```wf-diagram fences (API form) with the archify blocks the file holds. */
+export function expandDiagrams(md: string): string {
+  return md.replace(DIAGRAM_FENCE, (whole, id: string) => {
+    const d = DIAGRAMS[id];
+    if (!d) return whole;
+    return `\`\`\`archify ${d.type} id=${id}\n${d.source.trim()}\n\`\`\``;
+  });
+}
+
+/** Replace ```wf-diagram fences with the `wf context` stub. `file` is the file that holds it. */
+export function stubDiagrams(md: string, file: string, text: string): string {
+  return md.replace(DIAGRAM_FENCE, (whole, id: string) => {
+    const d = DIAGRAMS[id];
+    if (!d) return whole;
+    const lineNo = text.split("\n").findIndex((l) => l.startsWith("```archify") && l.includes(`id=${id}`)) + 1;
+    return `[diagram ${d.type} "${d.title}" · ${d.nodes} nodes · ${file}:${lineNo}]`;
+  });
+}
+
+function meta(lines: string[], key: string, value: string | undefined, indent = "") {
+  if (value === undefined || value === "") return;
+  lines.push(`${indent}- ${key}: ${value}`);
+}
+
+// ---------------------------------------------------------------- goal.md
+
+function criterionLines(c: CriterionSrc, n: number): string[] {
+  const out = [`- [${c.checked ? "x" : " "}] SC-${n}: ${c.text}`];
+  meta(out, "verify", c.verify, "  ");
+  meta(out, "evidence", c.evidence, "  ");
+  meta(out, "verified_by", c.verified_by && at(c.verified_by), "  ");
+  meta(out, "scenario", c.scenario, "  ");
+  return out;
+}
+
+export function renderGoal(src: IssueSrc): string {
+  const g = src.goal;
+  const handle = (key: "owner" | "claimed_by", h: string) =>
+    src.yaml_error?.key === key ? at(h) : quoted(h);
+  const fm = ["---", `id: ${g.id}`, `title: ${scalar(g.title)}`, `status: ${g.status}`];
+  fm.push(`priority: ${g.priority}`, `size: ${g.size}`);
+  if (g.owner) fm.push(`owner: ${handle("owner", g.owner)}`);
+  fm.push(`labels: ${flow(g.labels)}`);
+  if (g.claimed_by) fm.push(`claimed_by: ${handle("claimed_by", g.claimed_by)}`);
+  if (g.lease_until) fm.push(`lease_until: ${g.lease_until}`);
+  fm.push(`blocked_by: ${flow(g.blocked_by)}`);
+  if (g.due) fm.push(`due: ${g.due}`);
+  fm.push(`created: ${g.created}`);
+  for (const [k, v] of Object.entries(g.extra ?? {})) fm.push(`${k}: ${scalar(v)}`);
+  fm.push("---");
+
+  const body = ["", "## Context", "", expandDiagrams(src.context.trim()), ""];
+  body.push(`## ${src.criteria_heading ?? "Success criteria"}`, "");
+  src.criteria.forEach((c, i) => {
+    body.push(...criterionLines(c, i + 1));
+  });
+  if (src.out_of_scope) body.push("", "## Out of scope", "", src.out_of_scope.trim());
+  if (src.links) body.push("", "## Links", "", src.links.trim());
+  return `${[...fm, ...body].join("\n")}\n`;
+}
+
+// ---------------------------------------------------------------- plan.md
+
+export function taskLines(t: TaskSrc): string[] {
+  const out = [`### ${t.id}: ${t.title}`];
+  meta(out, "status", t.status);
+  meta(out, "lane", t.lane);
+  meta(out, "depends_on", t.depends_on?.join(", "));
+  meta(out, "owns", t.owns?.map(tick).join(", "));
+  meta(out, "satisfies", t.satisfies?.join(", "));
+  meta(out, "assignee", t.assignee && (t.assignee.startsWith("role:") ? t.assignee : at(t.assignee)));
+  meta(out, "claimed_by", t.claimed_by && at(t.claimed_by));
+  meta(out, "lease_until", t.lease_until);
+  meta(out, "verify", t.verify);
+  if (t.brief || t.steps?.length) out.push("");
+  if (t.brief) out.push(t.brief.trim());
+  for (const s of t.steps ?? []) out.push(`- [${s.done ? "x" : " "}] ${s.text}`);
+  return out;
+}
+
+export function renderPlan(p: PlanSrc): string {
+  const out = [
+    "---",
+    `updated_at: ${p.updated_at}`,
+    `updated_by: ${quoted(p.updated_by)}`,
+    `revision: ${p.revision}`,
+    "---",
+    "",
+    "## Approach",
+    "",
+    expandDiagrams(p.approach.trim()),
+  ];
+  if (p.assumptions.length) {
+    out.push("", "## Assumptions", "");
+    for (const a of p.assumptions) out.push(`- ${a.id}: ${a.text} [${a.state}]`);
+  }
+  if (p.prior_art.length) {
+    out.push("", "## Prior art", "");
+    for (const r of p.prior_art) out.push(`- [[${r.ref}]]: ${r.why}`);
+  }
+  for (const ph of p.phases) {
+    out.push("", ph.index === 0 ? "## Unphased" : `## Phase ${ph.index}: ${ph.name}`);
+    for (const t of ph.tasks) out.push("", ...taskLines(t));
+  }
+  return `${out.join("\n")}\n`;
+}
+
+// ---------------------------------------------------------------- current_state.md
+
+export function requestLines(r: RequestSrc): string[] {
+  const out = [`- [${r.answered ? "x" : " "}] ${r.id}: ${r.question}`];
+  meta(out, "from", at(r.from), "  ");
+  meta(out, "to", at(r.to), "  ");
+  meta(out, "kind", r.kind, "  ");
+  meta(out, "urgency", r.urgency, "  ");
+  meta(out, "asked", r.asked, "  ");
+  meta(out, "options", r.options?.join(", "), "  ");
+  meta(out, "ref", r.ref, "  ");
+  out.push(`  - answer:${r.answer ? ` ${r.answer}` : ""}`);
+  meta(out, "answered_by", r.answered_by && at(r.answered_by), "  ");
+  meta(out, "answered_at", r.answered_at, "  ");
+  return out;
+}
+
+export function renderState(s: StateSrc): string {
+  const fm = [
+    "---",
+    `summary: ${JSON.stringify(s.summary)}`,
+    `updated_at: ${s.updated_at}`,
+    `updated_by: ${quoted(s.updated_by)}`,
+  ];
+  if (s.phase) fm.push(`phase: ${scalar(s.phase)}`);
+  if (s.library_refs?.length) fm.push(`library_refs: ${flow(s.library_refs)}`);
+  if (s.session) fm.push(`session: ${s.session}`);
+  fm.push("---");
+  const out = [...fm];
+  const section = (title: string, lines: string[] | undefined) => {
+    if (!lines?.length) return;
+    out.push("", `## ${title}`, ...lines);
+  };
+  section(
+    "Done",
+    s.done?.map((l) => `- ${l}`),
+  );
+  section(
+    "In flight",
+    s.in_flight?.map((l) => `- ${l}`),
+  );
+  section(
+    "Blocked",
+    s.blocked?.map((l) => `- ${l}`),
+  );
+  section("Needs you", s.needs_you.flatMap(requestLines));
+  section(
+    "Failed attempts",
+    s.failed_attempts?.map((l) => `- ${l}`),
+  );
+  section(
+    "Handoff notes",
+    s.handoff?.map((l) => `- ${l}`),
+  );
+  section(
+    "Next steps",
+    s.next_steps.map((l, i) => `${i + 1}. ${l}`),
+  );
+  return `${out.join("\n")}\n`;
+}
+
+/** The body of current_state.md without frontmatter (for word counts and context). */
+export function stateBody(text: string): string {
+  return text.replace(/^---\n[\s\S]*?\n---\n/, "");
+}
+
+// ---------------------------------------------------------------- logs
+
+function heading(ts: string, author: string, title: string, id: string): string {
+  return `## ${ts} @${author} — ${title} {#${id}}`;
+}
+
+export function changeLines(c: ChangeSrc): string[] {
+  const out = [heading(c.ts, c.author, c.title, c.id)];
+  meta(out, "kind", c.kind);
+  meta(out, "task", c.task);
+  meta(out, "criteria", c.criteria?.join(", "));
+  meta(out, "result", c.result);
+  meta(out, "evidence", c.evidence);
+  meta(out, "commit", c.commit);
+  meta(out, "pr", c.pr);
+  meta(out, "files", c.files?.map(tick).join(", "));
+  meta(out, "session", c.session);
+  meta(out, "model", c.model);
+  for (const [k, v] of Object.entries(c.extra ?? {})) meta(out, k, v);
+  out.push("", c.body.trim());
+  return out;
+}
+
+export function decisionLines(d: DecisionSrc): string[] {
+  const out = [heading(d.ts, d.author, d.title, d.id)];
+  meta(out, "status", d.status);
+  meta(out, "topic", d.topic);
+  meta(out, "supersedes", d.supersedes);
+  meta(out, "affects", d.affects?.join(", "));
+  meta(out, "decided_by", d.decided_by?.map(at).join(", "));
+  out.push("", `**Decision:** ${d.decision}`, `**Because:** ${d.because}`);
+  if (d.rejected) out.push(`**Rejected:** ${d.rejected}`);
+  if (d.consequences) out.push(`**Consequences:** ${d.consequences}`);
+  if (d.revisit) out.push(`**Revisit when:** ${d.revisit}`);
+  return out;
+}
+
+export function learningLines(l: LearningSrc): string[] {
+  const out = [heading(l.ts, l.author, l.title, l.id)];
+  meta(out, "kind", l.kind);
+  meta(out, "tags", l.tags?.join(", "));
+  meta(
+    out,
+    "applies_to",
+    l.applies_to?.map((a) => (/[/*.]/.test(a) ? tick(a) : a)).join(", "),
+  );
+  meta(out, "promote", l.promote);
+  out.push("", l.rule.trim());
+  if (l.evidence) out.push("", `Evidence: ${l.evidence.trim()}`);
+  return out;
+}
+
+function renderLog<T>(title: string, entries: T[], lines: (e: T) => string[]): string {
+  const out = [`# ${title}`];
+  for (const e of entries) out.push("", ...lines(e));
+  return `${out.join("\n")}\n`;
+}
+
+export const renderChanges = (xs: ChangeSrc[]) => renderLog("Changes", xs, changeLines);
+export const renderDecisions = (xs: DecisionSrc[]) => renderLog("Decisions", xs, decisionLines);
+export const renderLearnings = (xs: LearningSrc[]) => renderLog("Learnings", xs, learningLines);
+
+// ---------------------------------------------------------------- library
+
+export function renderLibraryItem(l: LibrarySrc): string {
+  const fm = [
+    "---",
+    `id: ${l.id}`,
+    `title: ${scalar(l.title)}`,
+    `kind: ${l.kind}`,
+    `description: ${scalar(l.description)}`,
+    `status: ${l.status}`,
+    `tags: ${flow(l.tags)}`,
+    `applies_to: ${flow(l.applies_to.map((a) => JSON.stringify(a)))}`,
+    "source:",
+    ...l.source.map((s) => `  - "${s}"`),
+    `authors: ${flow(l.authors.map(quoted))}`,
+  ];
+  if (l.reviewed_by) fm.push(`reviewed_by: ${quoted(l.reviewed_by)}`);
+  fm.push(`created: ${l.created}`);
+  if (l.last_reviewed) fm.push(`last_reviewed: ${l.last_reviewed}`);
+  if (l.review_after) fm.push(`review_after: ${l.review_after}`);
+  if (l.superseded_by) fm.push(`superseded_by: ${l.superseded_by}`);
+  fm.push("---");
+  const body = l.sections.flatMap((s) => ["", `## ${s.heading}`, s.body_md.trim()]);
+  return `${[...fm, ...body].join("\n")}\n`;
+}
+
+/** Workspace-relative path of a library item. */
+export function libraryPath(l: Pick<LibrarySrc, "kind" | "slug">): string {
+  return `library/${l.kind}s/${l.slug}.md`;
+}
