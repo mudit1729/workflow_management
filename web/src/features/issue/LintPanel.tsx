@@ -2,9 +2,9 @@
 import { CircleCheck, CircleX, FileText, Info, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { EmptyState } from "@/components/common";
+import { copyText, EmptyState } from "@/components/common";
 import { Segmented, Tooltip } from "@/components/ui";
-import type { Diagnostic, Severity } from "@/gen/types";
+import type { Diagnostic, LintCounts, Severity } from "@/gen/types";
 import { cn } from "@/lib/cn";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -83,12 +83,8 @@ export function LintPanel({ diagnostics, basePath }: LintPanelProps) {
 function LintRow({ d, rel }: { d: Diagnostic; rel: string }) {
   const location = `${rel}:${d.line}`;
   const copyLocation = async () => {
-    try {
-      await navigator.clipboard.writeText(location);
-      toast(`Copied ${location}`);
-    } catch {
-      toast.error("Could not copy to the clipboard");
-    }
+    if (await copyText(location)) toast(`Copied ${location}`);
+    else toast.error("Could not copy to the clipboard");
   };
 
   return (
@@ -104,8 +100,14 @@ function LintRow({ d, rel }: { d: Diagnostic; rel: string }) {
         </span>
       </Tooltip>
       <div className="min-w-0">
-        <p className="text-base text-fg">{d.message}</p>
-        {d.fix && <p className="mt-0.5 text-fg-faint text-sm">Fix: {d.fix}</p>}
+        <p className="text-base text-fg">
+          <CodeSpans text={d.message} />
+        </p>
+        {d.fix && (
+          <p className="mt-0.5 text-fg-faint text-sm">
+            Fix: <CodeSpans text={d.fix} />
+          </p>
+        )}
       </div>
       <Tooltip content={`Copy ${location}`}>
         <button
@@ -118,6 +120,29 @@ function LintRow({ d, rel }: { d: Diagnostic; rel: string }) {
         </button>
       </Tooltip>
     </li>
+  );
+}
+
+/** Messages quote names and commands in backticks. Show those spans as inline code. */
+export function CodeSpans({ text }: { text: string }) {
+  const parts = text.split("`");
+  // An odd number of backticks leaves the last span open: show it as plain text.
+  const balanced = parts.length % 2 === 1;
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 && (balanced || i < parts.length - 1) ? (
+          <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-[0.9em] text-fg">
+            {part}
+          </code>
+        ) : (
+          <span key={i}>
+            {i % 2 === 1 ? "`" : ""}
+            {part}
+          </span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -177,13 +202,14 @@ function groupByFile(diagnostics: Diagnostic[], basePath?: string) {
     .sort((a, b) => rank(a.rel) - rank(b.rel) || a.rel.localeCompare(b.rel));
 }
 
-function countBySeverity(diagnostics: Diagnostic[]): Record<Severity, number> {
-  const counts: Record<Severity, number> = { error: 0, warn: 0, info: 0 };
+/** Findings per severity, in the shape `LintBadge` takes. */
+export function countBySeverity(diagnostics: Diagnostic[]): LintCounts {
+  const counts: LintCounts = { error: 0, warn: 0, info: 0 };
   for (const d of diagnostics) counts[d.severity] += 1;
   return counts;
 }
 
-function severitySummary(c: Record<Severity, number>): string {
+function severitySummary(c: LintCounts): string {
   const parts: string[] = [];
   if (c.error) parts.push(`${c.error} ${c.error === 1 ? "error" : "errors"}`);
   if (c.warn) parts.push(`${c.warn} ${c.warn === 1 ? "warning" : "warnings"}`);

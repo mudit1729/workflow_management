@@ -2,7 +2,7 @@
 import { ArrowLeft, ExternalLink, File, FileImage, FileText, ImageOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState, MarkdownProse } from "@/components/common";
-import { Button, Dialog, DialogContent, IconButton, Skeleton } from "@/components/ui";
+import { Dialog, DialogContent, IconButton, Skeleton } from "@/components/ui";
 import type { Diagram, DocFile, IssueId } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
@@ -20,20 +20,28 @@ interface DocViewProps {
 }
 
 export function DocView({ doc, onBack, diagrams, issueId }: DocViewProps) {
-  const backRef = useRef<HTMLButtonElement>(null);
-  useHotkey("Escape", () => onBack?.(), { enabled: onBack != null });
+  const rootRef = useRef<HTMLElement>(null);
+  const hasBack = onBack != null;
+  useHotkey("Escape", () => onBack?.(), { enabled: hasBack });
 
-  // Opening a doc moves focus to Back, so the keyboard path continues from here.
+  // Opening a doc replaces the row that was clicked. Move focus to the view itself, so the
+  // keyboard path continues from here (Tab reaches Back first) without a tooltip popping open.
   useEffect(() => {
-    backRef.current?.focus({ preventScroll: true });
-  }, []);
+    if (hasBack) rootRef.current?.focus({ preventScroll: true });
+  }, [hasBack]);
 
   return (
-    <article data-wf="DocView" data-kind={doc.kind} className="flex min-w-0 flex-col gap-3">
+    <article
+      ref={rootRef}
+      tabIndex={-1}
+      aria-label={doc.path}
+      data-wf="DocView"
+      data-kind={doc.kind}
+      className="flex min-w-0 flex-col gap-3 outline-none"
+    >
       <div className="flex h-7 min-w-0 items-center gap-2">
         {onBack && (
           <IconButton
-            ref={backRef}
             size="sm"
             label="Back to files"
             shortcut="Escape"
@@ -61,7 +69,7 @@ export function DocView({ doc, onBack, diagrams, issueId }: DocViewProps) {
           className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
         >
           Open raw
-          <ExternalLink size={12} strokeWidth={1.75} aria-hidden />
+          <ExternalLink {...ICON} aria-hidden />
         </a>
       </div>
 
@@ -76,10 +84,9 @@ export function DocView({ doc, onBack, diagrams, issueId }: DocViewProps) {
       ) : (
         <div className="rounded-md border border-border border-dashed py-6">
           <EmptyState
-            icon={<File size={20} strokeWidth={1.75} />}
+            icon={<File {...ICON} />}
             title="No preview for this file"
-            hint={`${extensionOf(doc.path)} · ${formatBytes(doc.size)}. Open the raw file to see it.`}
-            action={<RawLink href={doc.url} />}
+            hint={`${extensionOf(doc.path)} · ${formatBytes(doc.size)}. Use Open raw to see it.`}
           />
         </div>
       )}
@@ -96,10 +103,9 @@ function ImagePreview({ doc }: { doc: DocFile }) {
     return (
       <div className="rounded-md border border-border border-dashed py-6">
         <EmptyState
-          icon={<ImageOff size={20} strokeWidth={1.75} />}
+          icon={<ImageOff {...ICON} />}
           title="Could not load this image"
-          hint="The file may have moved, or the server cannot read it."
-          action={<RawLink href={doc.url} />}
+          hint="The file may have moved, or the server cannot read it. Try Open raw."
         />
       </div>
     );
@@ -134,17 +140,6 @@ function ImagePreview({ doc }: { doc: DocFile }) {
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function RawLink({ href }: { href: string }) {
-  return (
-    <Button asChild variant="secondary">
-      <a href={href} target="_blank" rel="noreferrer">
-        Open raw
-        <ExternalLink size={12} strokeWidth={1.75} aria-hidden />
-      </a>
-    </Button>
   );
 }
 

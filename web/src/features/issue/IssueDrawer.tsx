@@ -43,7 +43,7 @@ export function IssueDrawer({ id }: { id: IssueId }) {
       <aside
         data-wf="IssueDrawer"
         data-mode="mobile"
-        aria-label="Issue"
+        aria-label={`Issue ${id}`}
         className="absolute inset-0 z-30 flex min-h-0 flex-col bg-bg"
       >
         <IssueView id={id} variant="drawer" />
@@ -68,7 +68,7 @@ export function IssueDrawer({ id }: { id: IssueId }) {
       <aside
         data-wf="IssueDrawer"
         data-mode="docked"
-        aria-label="Issue"
+        aria-label={`Issue ${id}`}
         className="relative flex h-full min-h-0 shrink-0 flex-col border-border border-l bg-bg"
         style={{ width }}
       >
@@ -87,7 +87,7 @@ export function IssueDrawer({ id }: { id: IssueId }) {
         tabIndex={-1}
         data-wf="IssueDrawer"
         data-mode="overlay"
-        aria-label="Issue"
+        aria-label={`Issue ${id}`}
         className={cn(
           "absolute inset-y-0 right-0 z-30 flex min-h-0 flex-col bg-bg shadow-pop outline-none",
           "motion-safe:slide-in-from-right motion-safe:animate-in",

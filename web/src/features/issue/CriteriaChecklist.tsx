@@ -19,7 +19,14 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AuthorChip, CopyButton, EmptyState, ProgressRing, RefLink } from "@/components/common";
+import {
+  AuthorChip,
+  CopyButton,
+  copyText,
+  EmptyState,
+  ProgressRing,
+  RefLink,
+} from "@/components/common";
 import {
   Button,
   Checkbox,
@@ -182,6 +189,9 @@ export function InlineText({ text, keywords, issueId, codeClassName, className }
 
 // ---------------------------------------------------------------- checklist
 
+/** Amber used for text: darkened toward the text color so it stays readable (as Chip does). */
+export const STALE_TEXT = "text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]";
+
 export interface CriteriaChecklistProps {
   criteria: Criterion[];
   issueId: string;
@@ -311,7 +321,10 @@ export function CriteriaChecklist({ criteria, issueId }: CriteriaChecklistProps)
           size={28}
           label
         />
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+        <p
+          data-wf="CriteriaLegend"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted"
+        >
           <LegendItem count={verified} label="verified">
             <span aria-hidden className="size-2 rounded-[2px] bg-status-done" />
           </LegendItem>
@@ -515,6 +528,7 @@ function CriterionChips({
       {verify &&
         (manual ? (
           <Chip
+            data-wf="ManualCheckChip"
             size="sm"
             tone="neutral"
             icon={<Hand size={12} strokeWidth={1.75} />}
@@ -527,12 +541,13 @@ function CriterionChips({
         ))}
       {c.evidence && <EvidenceChip evidence={c.evidence} docs={docs} issueId={issueId} />}
       {showVerifiedBy && c.verified_by && (
-        <span className="inline-flex items-center gap-1 text-xs text-fg-faint">
+        <span data-wf="VerifiedBy" className="inline-flex items-center gap-1 text-xs text-fg-faint">
           Verified by <AuthorChip handle={c.verified_by} size="xs" />
         </span>
       )}
       {freeform && (
         <Chip
+          data-wf="NotEarsChip"
           size="sm"
           tone="outline"
           className="font-normal text-fg-faint"
@@ -543,6 +558,7 @@ function CriterionChips({
       )}
       {notMeasurable && (
         <Chip
+          data-wf="NotMeasurableChip"
           size="sm"
           tone="outline"
           className="font-normal text-fg-faint"
@@ -566,18 +582,16 @@ function VerifyCommand({ command }: { command: string }) {
     return () => clearTimeout(t);
   }, [copied]);
 
-  const copy = () => {
-    navigator.clipboard
-      ?.writeText(command)
-      .then(() => setCopied(true))
-      .catch(() => undefined);
+  const copy = async () => {
+    if (await copyText(command)) setCopied(true);
   };
 
   return (
     <Tooltip content={copied ? "Copied" : "Copy the verify command"}>
       <button
         type="button"
-        onClick={copy}
+        data-wf="VerifyChip"
+        onClick={() => void copy()}
         aria-label={`Copy verify command: ${command}`}
         className={cn(CHIP_BUTTON, "max-w-[min(100%,320px)] font-mono")}
       >
@@ -607,6 +621,7 @@ function EvidenceChip({
   const doc = docs.find((d) => evidence.includes(d.path));
   return (
     <span
+      data-wf="EvidenceChip"
       title={`Evidence: ${evidence.replace(/`|\[\[|\]\]/g, "")}`}
       className="inline-flex h-5 max-w-[min(100%,360px)] items-center gap-1 rounded-sm border border-border px-1.5 text-xs text-fg-muted"
     >
@@ -667,7 +682,7 @@ function CriterionDetail({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-stale">No task covers this (Q006).</p>
+          <p className={cn("text-sm", STALE_TEXT)}>No task covers this (Q006).</p>
         )}
       </div>
       <p className="flex items-center gap-1.5 font-mono text-xs text-fg-faint">

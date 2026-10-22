@@ -1,14 +1,14 @@
 // Goal tab: goal.md. Why the issue exists, how we know it is done, and what it
 // leaves out. A file with broken frontmatter still shows: the finding, the raw
 // file with the bad line marked, and whatever body the tolerant reader salvaged.
-import { FileText, Info, OctagonAlert, Target } from "lucide-react";
+import { FileText, OctagonAlert, Target } from "lucide-react";
 import { Fragment, type ReactNode, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { CopyButton, EmptyState, MarkdownProse } from "@/components/common";
-import { Tooltip } from "@/components/ui";
 import type { Diagnostic, IssueDetail } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { CoverageStrip } from "../CoverageStrip";
 import { CriteriaChecklist } from "../CriteriaChecklist";
+import { CodeSpans } from "../LintPanel";
 
 export interface GoalTabProps {
   detail: IssueDetail;
@@ -35,9 +35,8 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
         <EmptyState
           icon={<Target strokeWidth={1.75} />}
           title="No goal yet"
-          hint="An agent fills this with the write-goal skill: context, then testable success criteria."
+          hint="Context says why the issue matters. Success criteria say how we know it is done."
           skill="write-goal"
-          command={`wf context ${summary.id}`}
         />
       )}
 
@@ -84,16 +83,10 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
           title="Other fields"
           wf="GoalExtraFields"
           meta={
-            <Tooltip content="goal.md has keys that wf does not know. wf keeps them as written (F006).">
-              <button
-                type="button"
-                aria-label="About other fields (F006)"
-                className="inline-flex items-center gap-1 rounded-sm font-mono text-fg-faint hover:text-fg-muted"
-              >
-                <Info size={12} strokeWidth={1.75} aria-hidden />
-                F006
-              </button>
-            </Tooltip>
+            <span className="inline-flex items-center gap-1.5">
+              wf keeps keys it does not know, as written
+              <span className="font-mono">F006</span>
+            </span>
           }
         >
           <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1 font-mono text-xs">
@@ -161,7 +154,7 @@ function FrontmatterError({
     >
       <div className="flex gap-2.5 rounded-md border border-danger/30 bg-danger/5 px-3 py-2.5">
         <OctagonAlert
-          size={16}
+          size={14}
           strokeWidth={1.75}
           aria-hidden
           className="mt-0.5 shrink-0 text-danger"
@@ -172,7 +165,11 @@ function FrontmatterError({
             <span className="font-mono text-sm font-normal text-danger">(F001)</span>
           </p>
           <p className="mt-0.5 text-sm text-fg-muted">
-            {finding?.message ?? "The YAML between the --- lines could not be parsed."}
+            {finding ? (
+              <CodeSpans text={finding.message} />
+            ) : (
+              "The YAML between the --- lines could not be parsed."
+            )}
           </p>
           {finding && (
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 font-mono text-xs text-fg-faint">
@@ -185,7 +182,11 @@ function FrontmatterError({
               </span>
             </p>
           )}
-          {finding?.fix && <p className="mt-1.5 text-sm text-fg-muted">{finding.fix}</p>}
+          {finding?.fix && (
+            <p className="mt-1.5 text-sm text-fg-muted">
+              <CodeSpans text={finding.fix} />
+            </p>
+          )}
         </div>
       </div>
 
@@ -227,7 +228,7 @@ function RawFile({
   return (
     <figure data-wf="RawFile" className="overflow-hidden rounded-md border border-border bg-subtle">
       <figcaption className="flex h-8 items-center gap-1.5 border-b border-border pr-1.5 pl-3 text-xs text-fg-faint">
-        <FileText size={12} strokeWidth={1.75} aria-hidden />
+        <FileText size={14} strokeWidth={1.75} aria-hidden />
         <span className="font-mono text-fg-muted">{fileName}</span>
         <span>raw</span>
         {errorLine !== undefined && (

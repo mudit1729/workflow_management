@@ -14,13 +14,22 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AuthorChip, CopyButton, GroupPath, LintBadge, StatusSelect } from "@/components/common";
+import {
+  AuthorChip,
+  CopyButton,
+  copyText,
+  GroupPath,
+  LintBadge,
+  StatusSelect,
+  useNow,
+} from "@/components/common";
 import { Button, Chip, IconButton, Tooltip } from "@/components/ui";
-import type { Diagnostic, IssueDetail, Lease, LintCounts, Priority } from "@/gen/types";
+import type { IssueDetail, Lease, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs } from "@/lib/format";
 import { useHotkey } from "@/lib/hooks";
 import { hrefFor, useCloseIssue, useGo, useOpenIssue } from "@/lib/nav";
+import { countBySeverity } from "./LintPanel";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -39,15 +48,15 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
   const closeIssue = useCloseIssue();
   const close = onClose ?? closeIssue;
   const drawer = variant === "drawer";
-  const lint = countLint(detail.diagnostics);
+  const lint = countBySeverity(detail.diagnostics);
   const lintTotal = lint.error + lint.warn + lint.info;
 
   const openPage = () => void go.issuePage(s.id);
   useHotkey("o", openPage, { enabled: drawer });
 
   const copyLink = () =>
-    copyText(new URL(hrefFor(`/i/${s.id}`), window.location.href).href, "Link copied");
-  const copyContext = () => copyText(`wf context ${s.id}`, `Copied wf context ${s.id}`);
+    copyWithToast(new URL(hrefFor(`/i/${s.id}`), window.location.href).href, "Link copied");
+  const copyContext = () => copyWithToast(`wf context ${s.id}`, `Copied wf context ${s.id}`);
 
   const actions = (
     <>
@@ -67,7 +76,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
       data-variant={variant}
       className={cn(
         "flex shrink-0 flex-col",
-        drawer ? "px-4 pt-2 pb-3" : "border-border border-b px-6 pt-5 pb-4",
+        drawer ? "px-4 pt-2 pb-3" : "border-border border-b px-5 pt-5 pb-4",
       )}
     >
       {drawer && (
@@ -86,7 +95,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
               <CopyButton text={s.id} label="Copy issue id" />
             </span>
           </div>
-          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <div data-wf="IssueActions" className="ml-auto flex shrink-0 items-center gap-0.5">
             <HeaderAction
               label="Open in new page"
               shortcut="o"
@@ -110,15 +119,17 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
           {s.title}
         </h1>
         {!drawer && (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button variant="secondary" size="sm" onClick={onOpenFiles}>
-              <FileText {...ICON} />
-              Files
-              {detail.docs.length > 0 && (
-                <span className="text-fg-faint tabular">{detail.docs.length}</span>
-              )}
-              {lintTotal > 0 && <LintBadge counts={lint} variant="dot" />}
-            </Button>
+          <div data-wf="IssueActions" className="flex shrink-0 items-center gap-1">
+            {onOpenFiles && (
+              <Button variant="secondary" size="sm" onClick={onOpenFiles}>
+                <FileText {...ICON} />
+                Files
+                {detail.docs.length > 0 && (
+                  <span className="text-fg-faint tabular">{detail.docs.length}</span>
+                )}
+                {lintTotal > 0 && <LintBadge counts={lint} variant="dot" />}
+              </Button>
+            )}
             {actions}
           </div>
         )}
@@ -130,14 +141,16 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
       >
         <StatusSelect issue={s} size="sm" variant="pill" />
         {s.priority !== "none" && (
-          <Pill tip="Priority">
+          <Pill wf="PriorityPill" tip="Priority">
             <PriorityGlyph priority={s.priority} />
             {PRIORITY_LABEL[s.priority]}
           </Pill>
         )}
-        <Pill tip="Size">Size {s.size.toUpperCase()}</Pill>
+        <Pill wf="SizePill" tip="Size">
+          Size {s.size.toUpperCase()}
+        </Pill>
         {s.owner && (
-          <Pill tip="Owner">
+          <Pill wf="OwnerPill" tip="Owner">
             <AuthorChip handle={s.owner} size="xs" variant="avatar" />
             <span>@{s.owner}</span>
           </Pill>
@@ -148,6 +161,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
         {s.labels.map((label) => (
           <Chip
             key={label}
+            data-wf="LabelChip"
             tone="outline"
             size="sm"
             className="h-6 rounded-md px-2 font-normal text-sm"
@@ -210,30 +224,30 @@ function HeaderAction({
   );
 }
 
-async function copyText(text: string, message: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast(message);
-    return true;
-  } catch {
-    toast.error("Could not copy to the clipboard");
-    return false;
-  }
+async function copyWithToast(text: string, message: string): Promise<boolean> {
+  const ok = await copyText(text);
+  if (ok) toast(message);
+  else toast.error("Could not copy to the clipboard");
+  return ok;
 }
 
 // ---------------------------------------------------------------- property pills
 
 function Pill({
+  wf,
   children,
   tip,
   tone = "neutral",
 }: {
+  /** The element name the user gives feedback on, e.g. "PriorityPill". */
+  wf: string;
   children: ReactNode;
   tip?: ReactNode;
   tone?: "neutral" | "danger" | "stale";
 }) {
   const pill = (
     <span
+      data-wf={wf}
       className={cn(
         "inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 text-sm",
         tone === "neutral" && "text-fg-muted",
@@ -304,7 +318,7 @@ function LeasePill({ lease }: { lease: Lease }) {
       : `Coordinator lease until ${absolute(lease.until)}`;
 
   return (
-    <Pill tip={tip} tone={expired ? "stale" : "neutral"}>
+    <Pill wf="LeasePill" tip={tip} tone={expired ? "stale" : "neutral"}>
       <Timer {...ICON} className={expired ? "text-stale" : "text-fg-faint"} />
       <AuthorChip handle={lease.holder} size="xs" variant="avatar" />
       <span className="text-fg-muted">@{lease.holder}</span>
@@ -323,7 +337,7 @@ function DuePill({ due, done }: { due: string; done: boolean }) {
       ? "Due today"
       : `Due ${due}`;
   return (
-    <Pill tip={tip} tone={overdue ? "danger" : "neutral"}>
+    <Pill wf="DuePill" tip={tip} tone={overdue ? "danger" : "neutral"}>
       <Calendar {...ICON} className={overdue ? "text-danger" : "text-fg-faint"} />
       <span className="tabular">{label}</span>
     </Pill>
@@ -333,7 +347,10 @@ function DuePill({ due, done }: { due: string; done: boolean }) {
 function BlockedByPill({ ids }: { ids: string[] }) {
   const openIssue = useOpenIssue();
   return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-sm">
+    <span
+      data-wf="BlockedByPill"
+      className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-sm"
+    >
       <Ban {...ICON} className="text-danger" />
       <span className="text-fg-muted">Blocked by</span>
       {ids.map((id, i) => (
@@ -467,22 +484,6 @@ function changesSinceState(detail: IssueDetail): number {
 }
 
 // ---------------------------------------------------------------- helpers
-
-function countLint(diagnostics: Diagnostic[]): LintCounts {
-  const counts: LintCounts = { error: 0, warn: 0, info: 0 };
-  for (const d of diagnostics) counts[d.severity] += 1;
-  return counts;
-}
-
-/** Re-renders every 30 s so lease and due labels stay current. */
-function useNow(intervalMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(t);
-  }, [intervalMs]);
-  return now;
-}
 
 /** "34m", "2h", "3d" */
 function shortDuration(ms: number): string {

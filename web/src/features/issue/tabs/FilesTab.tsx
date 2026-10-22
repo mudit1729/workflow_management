@@ -19,8 +19,8 @@ const FILE_TARGET: Record<IssueFileName, { tab: IssueTab; log?: LogView }> = {
 interface FilesTabProps {
   detail: IssueDetail;
   variant: "drawer" | "page";
-  /** Called after jumping to an issue file's section (the page closes its Files sheet). */
-  onNavigate?: () => void;
+  /** Called after jumping to an issue file's section (the page closes its Files sheet and scrolls there). */
+  onNavigate?: (tab: IssueTab) => void;
 }
 
 export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
@@ -49,7 +49,7 @@ export function FilesTab({ detail, variant, onNavigate }: FilesTabProps) {
     const target = FILE_TARGET[name];
     if (target.log) void setLog(target.log);
     else void setTab(target.tab);
-    onNavigate?.();
+    onNavigate?.(target.tab);
   };
 
   return (

@@ -1,5 +1,6 @@
 // Loading placeholder that matches the issue frame's layout, so nothing jumps on load.
 import { Skeleton } from "@/components/ui";
+import { useMediaQuery } from "@/lib/hooks";
 
 export function IssueSkeleton({ variant }: { variant: "drawer" | "page" }) {
   return (
@@ -48,9 +49,13 @@ function DrawerSkeleton() {
 }
 
 function PageSkeleton() {
+  // Same breakpoints as the page frame: one column below 768 px, two below 1100 px, else three.
+  const narrow = useMediaQuery("(max-width: 767px)");
+  const wide = useMediaQuery("(min-width: 1100px)");
+  const columns = narrow ? 1 : wide ? 3 : 2;
   return (
     <>
-      <div className="flex flex-col border-border border-b px-6 pt-5 pb-4">
+      <div className="flex flex-col border-border border-b px-5 pt-5 pb-4">
         <Skeleton className="h-5 w-1/2" />
         <div className="mt-3.5 flex gap-1.5">
           <Skeleton className="h-6 w-24 rounded-md" />
@@ -59,14 +64,13 @@ function PageSkeleton() {
           <Skeleton className="h-6 w-28 rounded-md" />
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 divide-x divide-border md:grid-cols-2 min-[1100px]:grid-cols-3">
-        <BodyLines />
-        <div className="hidden md:block">
-          <BodyLines />
-        </div>
-        <div className="hidden min-[1100px]:block">
-          <BodyLines />
-        </div>
+      <div
+        className="grid min-h-0 flex-1 divide-x divide-border overflow-hidden"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: columns }, (_, i) => (
+          <BodyLines key={i} />
+        ))}
       </div>
     </>
   );

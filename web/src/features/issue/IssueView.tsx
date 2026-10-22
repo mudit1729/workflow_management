@@ -1,9 +1,10 @@
 // The issue frame: header plus tabs (drawer, narrow page) or columns (page).
-import { CircleAlert, FileX } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { CircleAlert, FileX, X } from "lucide-react";
+import { type ReactNode, useRef, useState } from "react";
 import { EmptyState, LintBadge } from "@/components/common";
 import {
   Button,
+  IconButton,
   Segmented,
   Sheet,
   Tabs,
@@ -11,18 +12,21 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui";
-import type { Diagnostic, IssueDetail, IssueId, LintCounts } from "@/gen/types";
+import type { IssueDetail, IssueId, LintCounts } from "@/gen/types";
 import { useIssue, useIssueSummary, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useHotkey, useMediaQuery } from "@/lib/hooks";
 import { ISSUE_TABS, type IssueTab, useCloseIssue, useGo, useIssueTab } from "@/lib/nav";
 import { IssueHeader } from "./IssueHeader";
 import { IssueSkeleton } from "./IssueSkeleton";
+import { countBySeverity } from "./LintPanel";
 import { FilesTab } from "./tabs/FilesTab";
 import { GoalTab } from "./tabs/GoalTab";
 import { LogTab } from "./tabs/LogTab";
 import { NowTab } from "./tabs/NowTab";
 import { PlanTab } from "./tabs/PlanTab";
+
+const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 export type IssueVariant = "drawer" | "page";
 
@@ -78,7 +82,9 @@ function IssueTabs({ detail, variant }: { detail: IssueDetail; variant: IssueVar
     if (next) setTab(next);
   });
 
-  const panel = "min-h-0 flex-1 overflow-y-auto p-4 outline-none";
+  // `relative` keeps absolutely positioned descendants (sr-only text) inside the scroll region,
+  // so they never extend the page's scrollable area.
+  const panel = "relative min-h-0 flex-1 overflow-y-auto p-4 outline-none";
 
   return (
     <Tabs
@@ -160,14 +166,26 @@ function IssueTabs({ detail, variant }: { detail: IssueDetail; variant: IssueVar
 // ---------------------------------------------------------------- page
 
 function PageFrame({ detail }: { detail: IssueDetail }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const { setTab } = useIssueTab();
   const narrow = useMediaQuery("(max-width: 767px)");
   const wide = useMediaQuery("(min-width: 1100px)");
   const counts = tabCounts(detail);
 
+  // A file picked in the Files sheet: close the sheet and bring its section into view.
+  const showSection = (tab: IssueTab) => {
+    setFilesOpen(false);
+    window.requestAnimationFrame(() => scrollToSection(rootRef.current, tab));
+  };
+
   return (
-    <div data-wf="IssueView" data-variant="page" className="flex h-full min-h-0 flex-col">
+    <div
+      ref={rootRef}
+      data-wf="IssueView"
+      data-variant="page"
+      className="flex h-full min-h-0 flex-col"
+    >
       <IssueHeader
         detail={detail}
         variant="page"
@@ -181,12 +199,13 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
             <NowGoalSections detail={detail} counts={counts} />
           </Column>
           <Column label="Plan">
-            <ColumnSection title="Plan" meta={<PlanCount counts={counts} />}>
+            <ColumnSection section="plan" title="Plan" meta={<PlanCount counts={counts} />}>
               <PlanTab detail={detail} variant="page" />
             </ColumnSection>
           </Column>
           <Column label="Log">
             <ColumnSection
+              section="log"
               title="Log"
               meta={
                 counts.log > 0 && <TabCount label={`${counts.log} entries`}>{counts.log}</TabCount>
@@ -206,7 +225,7 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
       )}
       <Sheet open={filesOpen} onOpenChange={setFilesOpen} side="right" width={560} title="Files">
         <div className="px-4 pb-4">
-          <FilesTab detail={detail} variant="page" onNavigate={() => setFilesOpen(false)} />
+          <FilesTab detail={detail} variant="page" onNavigate={showSection} />
         </div>
       </Sheet>
     </div>
@@ -217,6 +236,7 @@ function NowGoalSections({ detail, counts }: { detail: IssueDetail; counts: TabC
   return (
     <>
       <ColumnSection
+        section="now"
         title="Now"
         meta={
           counts.needsYou > 0 && (
@@ -229,6 +249,7 @@ function NowGoalSections({ detail, counts }: { detail: IssueDetail; counts: TabC
         <NowTab detail={detail} variant="page" />
       </ColumnSection>
       <ColumnSection
+        section="goal"
         title="Goal"
         className="border-t border-border"
         meta={
@@ -294,7 +315,7 @@ function Column({ label, children }: { label: string; children: ReactNode }) {
     <section
       aria-label={label}
       data-wf="IssueColumn"
-      className="min-h-0 min-w-0 overflow-y-auto overscroll-contain"
+      className="relative min-h-0 min-w-0 overflow-y-auto overscroll-contain"
     >
       {children}
     </section>
@@ -303,18 +324,20 @@ function Column({ label, children }: { label: string; children: ReactNode }) {
 
 /** A column section with a sticky title; the next section's title pushes it away. */
 function ColumnSection({
+  section,
   title,
   meta,
   className,
   children,
 }: {
+  section: IssueTab;
   title: string;
   meta?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={className}>
+    <div data-section={section} className={className}>
       <h2 className="sticky top-0 z-10 flex h-10 items-center gap-2 bg-bg px-5 font-medium text-fg-faint text-sm">
         {title}
         {meta}
@@ -322,6 +345,16 @@ function ColumnSection({
       <div className="px-5 pt-1 pb-8">{children}</div>
     </div>
   );
+}
+
+/** Scrolls the column that holds `tab`'s section so the section starts at the top. */
+function scrollToSection(root: HTMLElement | null, tab: IssueTab) {
+  const section = root?.querySelector<HTMLElement>(`[data-section="${tab}"]`);
+  const column = section?.closest<HTMLElement>('[data-wf="IssueColumn"]');
+  if (!section || !column) return;
+  const top =
+    section.getBoundingClientRect().top - column.getBoundingClientRect().top + column.scrollTop;
+  column.scrollTo({ top, behavior: "smooth" });
 }
 
 function PlanCount({ counts }: { counts: TabCounts }) {
@@ -348,7 +381,7 @@ interface TabCounts {
 function tabCounts(detail: IssueDetail): TabCounts {
   const tasks = detail.plan?.phases.flatMap((p) => p.tasks) ?? [];
   const openRequests = detail.state?.needs_you.filter((n) => !n.answered).length;
-  const lint = lintCounts(detail.diagnostics);
+  const lint = countBySeverity(detail.diagnostics);
   return {
     needsYou: openRequests ?? detail.summary.signals.needs_you,
     criteria: {
@@ -361,12 +394,6 @@ function tabCounts(detail: IssueDetail): TabCounts {
     lint,
     lintTotal: lint.error + lint.warn + lint.info,
   };
-}
-
-function lintCounts(diagnostics: Diagnostic[]): LintCounts {
-  const counts: LintCounts = { error: 0, warn: 0, info: 0 };
-  for (const d of diagnostics) counts[d.severity] += 1;
-  return counts;
 }
 
 /** Count after a column title; matches the TabsTrigger count style. Accent only for needs-you. */
@@ -420,11 +447,22 @@ function IssueUnavailable({
       data-wf="IssueView"
       data-variant={variant}
       data-state={notFound ? "not-found" : "error"}
-      className="flex h-full min-h-0 items-center justify-center p-6"
+      className="relative flex h-full min-h-0 items-center justify-center p-6"
     >
+      {variant === "drawer" && (
+        <div className="absolute top-2 right-3">
+          <IconButton
+            size="sm"
+            label="Close"
+            shortcut="Escape"
+            icon={<X {...ICON} />}
+            onClick={() => void close()}
+          />
+        </div>
+      )}
       {notFound ? (
         <EmptyState
-          icon={<FileX size={20} strokeWidth={1.75} />}
+          icon={<FileX {...ICON} />}
           title={`Issue ${id} not found`}
           hint="Check the id. The issue folder may have moved or been deleted."
           action={
@@ -435,7 +473,7 @@ function IssueUnavailable({
         />
       ) : (
         <EmptyState
-          icon={<CircleAlert size={20} strokeWidth={1.75} />}
+          icon={<CircleAlert {...ICON} />}
           title={`Could not load ${id}`}
           hint={errorMessage(error)}
           command="wf doctor"

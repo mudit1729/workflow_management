@@ -19,24 +19,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { AuthorChip, RefLink } from "@/components/common";
+import { AuthorChip, RefLink, useNow } from "@/components/common";
 import { Button, Chip, Kbd, Textarea, Tooltip } from "@/components/ui";
 import type { NeedsYouItem, RequestKind, Ts } from "@/gen/types";
 import { useAnswerRequest, useMe } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs, relativeShort } from "@/lib/format";
-import { InlineText } from "./CriteriaChecklist";
+import { InlineText, STALE_TEXT } from "./CriteriaChecklist";
 
 // ---------------------------------------------------------------- time
-
-function useNow(intervalMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(t);
-  }, [intervalMs]);
-  return now;
-}
 
 /** "just now", "12m ago", "3h ago", "on Oct 9", "in 5m". */
 function agoLabel(ts: Ts, now = Date.now()): string {
@@ -91,6 +82,14 @@ export function NeedsYouList({ items, issueId, compact = false }: NeedsYouListPr
       ),
     [items],
   );
+
+  if (items.length === 0) {
+    return (
+      <p data-wf="NeedsYouList" data-empty className="px-3 py-2 text-fg-faint text-sm">
+        Nothing needs you here. Agents add requests to current_state.md under Needs you.
+      </p>
+    );
+  }
 
   return (
     <ul data-wf="NeedsYouList" aria-label="Needs you" className="flex flex-col">
@@ -214,6 +213,7 @@ function NeedsYouRow({
             <span className="shrink-0">
               {blocking ? (
                 <Chip
+                  data-wf="UrgencyChip"
                   tone="accent"
                   size="sm"
                   icon={<span aria-hidden className="size-1.5 rounded-full bg-accent" />}
@@ -222,7 +222,12 @@ function NeedsYouRow({
                   Blocking
                 </Chip>
               ) : (
-                <Chip tone="neutral" size="sm" title="For your information; work continues">
+                <Chip
+                  data-wf="UrgencyChip"
+                  tone="neutral"
+                  size="sm"
+                  title="For your information; work continues"
+                >
                   FYI
                 </Chip>
               )}
@@ -236,7 +241,7 @@ function NeedsYouRow({
           <span className="sr-only">to</span>
           <AuthorChip handle={item.to} size="xs" variant="text" />
           <Sep />
-          <span className={cn(overdue && "text-stale")}>
+          <span className={cn(overdue && STALE_TEXT)}>
             asked <TimeAgo ts={item.asked} />
           </span>
           {!compact && (
@@ -249,7 +254,7 @@ function NeedsYouRow({
             <>
               <Sep />
               <span className="inline-flex min-w-0 items-center gap-1">
-                <Link2 size={12} strokeWidth={1.75} aria-hidden className="shrink-0" />
+                <Link2 size={14} strokeWidth={1.75} aria-hidden className="shrink-0" />
                 <span className="sr-only">Related:</span>
                 <RefLink target={refTarget} issueId={issueId} />
               </span>

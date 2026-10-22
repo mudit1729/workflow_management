@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import type { Criterion, Task, TaskStatus } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { statusColor, TASK_STATUS_LABEL } from "@/lib/status";
+import { STALE_TEXT } from "./CriteriaChecklist";
 import { TaskPill } from "./TaskPill";
 
 export interface CoverageStripProps {
@@ -61,7 +62,7 @@ export function CoverageStrip({ criteria, tasks }: CoverageStripProps) {
             className="text-fg-faint transition-transform duration-150 ease-wf group-data-[state=open]:rotate-90"
           />
           <span className="font-medium text-fg-muted group-hover:text-fg">Coverage</span>
-          <span className={cn("truncate", uncovered > 0 ? "text-stale" : "text-fg-faint")}>
+          <span className={cn("truncate", uncovered > 0 ? STALE_TEXT : "text-fg-faint")}>
             {summary}
           </span>
           {!open && <OverviewBar rows={rows} />}
@@ -82,8 +83,10 @@ export function CoverageStrip({ criteria, tasks }: CoverageStripProps) {
                     ))}
                   </div>
                 ) : (
-                  <span className="inline-flex min-w-0 items-center gap-1 text-xs text-stale">
-                    <CircleDashed size={12} strokeWidth={1.75} aria-hidden className="shrink-0" />
+                  <span
+                    className={cn("inline-flex min-w-0 items-center gap-1 text-xs", STALE_TEXT)}
+                  >
+                    <CircleDashed size={14} strokeWidth={1.75} aria-hidden className="shrink-0" />
                     <span className="truncate">No task covers this (Q006)</span>
                   </span>
                 )}

@@ -1,8 +1,8 @@
 // current_state.md, read in reader order (not file order): what needs me, what
 // moves, what is stuck, what comes next. Then the history, folded away.
 import { ChevronRight, CircleX, Clock, Library, TriangleAlert } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { AuthorChip, MarkdownProse, RefLink } from "@/components/common";
+import { type ReactNode, useMemo, useState } from "react";
+import { AuthorChip, MarkdownProse, RefLink, useNow } from "@/components/common";
 import {
   Chip,
   Collapsible,
@@ -15,7 +15,7 @@ import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { hoursSince, parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
-import { InlineText } from "./CriteriaChecklist";
+import { InlineText, STALE_TEXT } from "./CriteriaChecklist";
 import { NeedsYouList, TimeAgo } from "./NeedsYouList";
 import { TaskPill } from "./TaskPill";
 
@@ -26,15 +26,6 @@ const DEFAULT_ISSUE_HOURS = 24;
 export interface StateSnapshotProps {
   state: CurrentState;
   detail: IssueDetail;
-}
-
-function useNow(intervalMs = 60_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(t);
-  }, [intervalMs]);
-  return now;
 }
 
 function countListItems(md: string | undefined): number {
@@ -134,10 +125,10 @@ export function StateSnapshot({ state, detail }: StateSnapshotProps) {
                 {state.failed_attempts.map((line, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm leading-5">
                     <CircleX
-                      size={12}
+                      size={14}
                       strokeWidth={1.75}
                       aria-hidden
-                      className="mt-1 shrink-0 text-danger/70"
+                      className="mt-[3px] shrink-0 text-danger/70"
                     />
                     <FailedAttempt line={line} issueId={issueId} />
                   </li>
@@ -154,7 +145,7 @@ export function StateSnapshot({ state, detail }: StateSnapshotProps) {
           className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-faint"
         >
           <span className="inline-flex items-center gap-1">
-            <Library size={12} strokeWidth={1.75} aria-hidden />
+            <Library size={14} strokeWidth={1.75} aria-hidden />
             Consulted
           </span>
           {state.library_refs.map((id) => (
@@ -191,13 +182,13 @@ function StateMeta({ state, detail }: StateSnapshotProps) {
       data-wf="StateMeta"
       className={cn(
         "mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm",
-        tinted ? "text-stale" : "text-fg-faint",
+        tinted ? STALE_TEXT : "text-fg-faint",
       )}
     >
       {tinted && (
         <Tooltip content={staleNote}>
           <span className="inline-flex" role="img" aria-label={staleNote}>
-            <Clock size={12} strokeWidth={1.75} />
+            <Clock size={14} strokeWidth={1.75} />
           </span>
         </Tooltip>
       )}
@@ -291,7 +282,7 @@ function NextSteps({ steps, issueId }: { steps: string[]; issueId: string }) {
     <div data-wf="NextSteps">
       <SectionLabel>Next steps</SectionLabel>
       {steps.length === 0 ? (
-        <p className="text-sm text-stale">
+        <p className={cn("text-sm", STALE_TEXT)}>
           No next step written (Q008). The next agent has no lead.
         </p>
       ) : (
