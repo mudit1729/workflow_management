@@ -93,11 +93,11 @@ export function seedLibrary(): LibrarySrc[] {
       tags: ["yaml", "write-back", "frontmatter"],
       applies_to: ["crates/wf-edit/**"],
       source: ["[[wf-9tq4e#D-3qv8n]]"],
-      authors: ["mudit"],
+      authors: ["codex", "mudit"],
       reviewed_by: "mudit",
-      created: dateIn(-200),
-      last_reviewed: dateIn(-195),
-      review_after: dateIn(-15),
+      created: dateIn(-75),
+      last_reviewed: dateIn(-74),
+      review_after: dateIn(-5),
       sections: [
         {
           heading: "Rule",
@@ -152,7 +152,8 @@ export function seedLibrary(): LibrarySrc[] {
         },
         {
           heading: "Forbidden",
-          body_md: "- Reading every file of the issue folder.\n- Editing a file that another live lease owns.",
+          body_md:
+            "- Reading every file of the issue folder.\n- Editing a file that another live lease owns.",
         },
       ],
     },
@@ -161,11 +162,12 @@ export function seedLibrary(): LibrarySrc[] {
       slug: "quote-handles-in-yaml",
       title: "Quote handles in YAML frontmatter",
       kind: "gotcha",
-      description: "Use when you write `owner`, `claimed_by` or `authors` in frontmatter. A bare `@handle` breaks the YAML.",
+      description:
+        "Use when you write `owner`, `claimed_by` or `authors` in frontmatter. A bare `@handle` breaks the YAML.",
       status: "reviewed",
       tags: ["yaml", "frontmatter", "authors"],
       applies_to: ["goal.md", "plan.md", "current_state.md"],
-      source: ["[[wf-m3q8r#L-4dz9w]]"],
+      source: ["[[wf-m3tq8#L-4dz9w]]"],
       authors: ["codex"],
       reviewed_by: "shruti",
       created: dateIn(-9),
@@ -174,16 +176,17 @@ export function seedLibrary(): LibrarySrc[] {
       sections: [
         {
           heading: "Symptom",
-          body_md: "`wf lint` reports F001 on `owner: @shruti`. The board shows the issue with a red lint dot.",
+          body_md:
+            "`wf lint` reports F001 on `owner: @shruti`. The board shows the issue with a red lint dot.",
         },
         {
           heading: "Cause",
           body_md: "`@` is a reserved indicator in YAML. A plain scalar cannot start with it.",
         },
-        { heading: "Fix", body_md: "Quote the handle: `owner: \"@shruti\"`." },
+        { heading: "Fix", body_md: 'Quote the handle: `owner: "@shruti"`.' },
         {
           heading: "Evidence",
-          body_md: "- [[wf-m3q8r#L-4dz9w]]: three goal.md files broke the same way in one day.",
+          body_md: "- [[wf-m3tq8#L-4dz9w]]: three goal.md files broke the same way in one day.",
         },
       ],
     },
@@ -204,14 +207,18 @@ export function seedLibrary(): LibrarySrc[] {
       last_reviewed: dateIn(-1),
       review_after: dateIn(179),
       sections: [
-        { heading: "Decision", body_md: "Push live updates over SSE. Send every write through `POST /api/ops`." },
+        {
+          heading: "Decision",
+          body_md: "Push live updates over SSE. Send every write through `POST /api/ops`.",
+        },
         {
           heading: "Because",
           body_md: "Data flows one way. SSE reconnects and replays with `Last-Event-ID`.",
         },
         {
           heading: "Rejected",
-          body_md: "- WebSocket: two-way, more code.\n- Polling every 2 s: misses a 2 s latency target.",
+          body_md:
+            "- WebSocket: two-way, more code.\n- Polling every 2 s: misses a 2 s latency target.",
         },
         { heading: "Revisit when", body_md: "The UI needs to send updates over the live channel." },
       ],
@@ -228,14 +235,20 @@ export function seedLibrary(): LibrarySrc[] {
       source: ["[[wf-3k9x2#D-2ab3c]]"],
       authors: ["claude-opus"],
       reviewed_by: "shruti",
-      created: dateIn(-40),
+      created: dateIn(-1),
       last_reviewed: dateIn(-1),
       superseded_by: "lib-3fz8t",
       sections: [
         { heading: "Decision", body_md: "Poll `GET /api/snapshot` every 2 s from each open tab." },
         { heading: "Because", body_md: "Polling needs no new server code." },
-        { heading: "Rejected", body_md: "- SSE: one more route.\n- WebSocket: two-way, more code." },
-        { heading: "Revisit when", body_md: "A test shows latency above 2 s. It did: see [[lib-3fz8t]]." },
+        {
+          heading: "Rejected",
+          body_md: "- SSE: one more route.\n- WebSocket: two-way, more code.",
+        },
+        {
+          heading: "Revisit when",
+          body_md: "A test shows latency above 2 s. It did: see [[lib-3fz8t]].",
+        },
       ],
     },
     {
@@ -248,8 +261,8 @@ export function seedLibrary(): LibrarySrc[] {
       status: "draft",
       tags: ["library", "review", "promote"],
       applies_to: ["promote-to-library", "curate-library"],
-      source: ["[[wf-r6t2y#L-8rk5m]]"],
-      authors: ["claude-opus"],
+      source: ["[[wf-x5hd3#L-8rk5m]]"],
+      authors: ["claude-sonnet"],
       created: dateIn(0),
       review_after: dateIn(180),
       sections: [
@@ -265,11 +278,11 @@ export function seedLibrary(): LibrarySrc[] {
         {
           heading: "Example",
           body_md:
-            "`wf promote wf-r6t2y#L-8rk5m --kind pattern` creates this draft and asks @shruti to review it.",
+            "`wf promote wf-x5hd3#L-8rk5m --kind pattern` creates this draft and asks @shruti to review it.",
         },
         {
           heading: "Evidence",
-          body_md: "- [[wf-r6t2y#L-8rk5m]]: an unreviewed gotcha sent two agents down a dead end.",
+          body_md: "- [[wf-x5hd3#L-8rk5m]]: an unreviewed gotcha sent two agents down a dead end.",
         },
       ],
     },
@@ -282,8 +295,8 @@ export function seedLibrary(): LibrarySrc[] {
       status: "draft",
       tags: ["ears", "criteria", "writing"],
       applies_to: ["goal.md", "write-goal"],
-      source: ["[[wf-w8k3m#L-2pn6j]]"],
-      authors: ["claude-sonnet"],
+      source: ["[[wf-b1d7v#L-2pn6j]]"],
+      authors: ["claude-opus"],
       created: dateIn(-2),
       review_after: dateIn(178),
       sections: [
@@ -297,7 +310,46 @@ export function seedLibrary(): LibrarySrc[] {
             "1. Start with the trigger: `When`, `While`, `If` or `Where`.\n2. Name the system, then write `shall`.\n3. Put a number with a unit or a backticked literal in the response.\n4. Add `verify:` with a command, or `manual`.",
         },
         { heading: "Done when", body_md: "`wf lint goal.md` reports no S07 and no S08." },
-        { heading: "Forbidden", body_md: "- `should`, `fast`, `reliable` and other words that a test cannot check." },
+        {
+          heading: "Forbidden",
+          body_md: "- `should`, `fast`, `reliable` and other words that a test cannot check.",
+        },
+      ],
+    },
+    {
+      id: "lib-7nq3d",
+      slug: "match-synonyms-on-word-boundaries",
+      title: "Match glossary synonyms on whole words",
+      kind: "pattern",
+      description:
+        "Use when a lint rule or a search matches words from a list. Anchor each word with `\\b` and ignore case, so that `story` does not match `history`.",
+      status: "draft",
+      tags: ["lint", "glossary", "regex"],
+      applies_to: ["crates/wf-lint/**"],
+      source: ["[[wf-9gr4k#L-3nz8w]]"],
+      authors: ["claude-sonnet"],
+      created: dateIn(0),
+      review_after: dateIn(180),
+      sections: [
+        {
+          heading: "Rule",
+          body_md:
+            "Match each avoided word with `\\b` anchors and ignore case. Mask code spans, fenced blocks and link targets before the match.",
+        },
+        {
+          heading: "When to use",
+          body_md: "Any rule that flags words from a list, such as S06 and S09.",
+        },
+        {
+          heading: "Example",
+          body_md:
+            "S09 flags `story` in `a user story` and skips it in `history`. It skips `ticket` inside the code span `fix/ticket-links`.",
+        },
+        {
+          heading: "Evidence",
+          body_md:
+            "- [[wf-9gr4k#L-3nz8w]]: the first version matched `story` inside `history` on the dogfood workspace.",
+        },
       ],
     },
   ];

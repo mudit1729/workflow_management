@@ -91,6 +91,7 @@ live-board-architecture
 - More than one workspace per daemon.`,
     links: `- [[wf-7p4dn]]: index scan and snapshot.
 - [[lib-4tz7c]]: rescan subtrees instead of trusting notify on macOS.
+- [[lib-3fz8t]]: push one-way live updates over SSE.
 - \`spec/api.md\`: the SSE event types.`,
     plan: {
       updated_at: ago(4 * 60 + 10),
@@ -130,7 +131,10 @@ sse-delivery-flow
               brief:
                 "Compare two snapshots by file hash. Emit one `Delta` with the upserted and removed issues and the changed details.",
               steps: [
-                { text: "Add `Delta` with `rev`, the upsert lists and the remove lists.", done: true },
+                {
+                  text: "Add `Delta` with `rev`, the upsert lists and the remove lists.",
+                  done: true,
+                },
                 { text: "Diff the per-file blake3 hashes of two snapshots.", done: true },
                 { text: "List the changed issue IDs in `details_changed`.", done: true },
               ],
@@ -146,7 +150,7 @@ sse-delivery-flow
               claimed_by: "codex",
               verify: "`cargo test -p wf-index echo_suppression`",
               brief:
-                "Record the hash of each file the daemon writes. Drop a watcher event when the file on disk still has that hash.",
+                "Record the hash of each file the daemon writes, as [[lib-8w3fd]] describes. Drop a watcher event when the file on disk still has that hash.",
               steps: [
                 { text: "Store the hash of each write in the index.", done: true },
                 { text: "Skip events whose file hash matches the stored hash.", done: true },
@@ -364,7 +368,7 @@ sse-delivery-flow
         result: "pass",
         evidence: "screenshot `evidence/sc2.png`",
         files: ["evidence/sc2.png"],
-        body: "Broke the YAML of `wf-7yq2m` by hand. The drawer showed F001 at line 6 and the raw file with the line highlighted.",
+        body: "Broke the YAML of `wf-7yq2m` by hand. The drawer showed F001 at line 7 and the raw file with the line highlighted.",
       },
       {
         id: "C-q3h9a",
@@ -404,7 +408,7 @@ sse-delivery-flow
         ts: ago(46 * 60 + 30),
         author: "claude-opus",
         title: "Poll the snapshot every 2 s",
-        status: "rejected",
+        status: "accepted",
         topic: "live-transport",
         affects: ["SC-1"],
         decided_by: ["claude-opus"],
@@ -425,7 +429,8 @@ sse-delivery-flow
         affects: ["SC-1", "SC-3"],
         decided_by: ["claude-opus", "shruti"],
         decision: "Use SSE for board updates.",
-        because: "Data flows one way. SSE reconnects with `Last-Event-ID`. Polling every 2 s misses the latency target.",
+        because:
+          "Data flows one way. SSE reconnects with `Last-Event-ID`. Polling every 2 s misses the latency target.",
         rejected: "WebSocket (two-way, more code); polling (latency up to 2 s).",
         consequences:
           "The board needs one leader tab per browser, because browsers allow 6 HTTP/1.1 connections per origin.",
@@ -442,7 +447,8 @@ sse-delivery-flow
         decided_by: ["claude-opus"],
         decision:
           "Elect one leader tab with the Web Locks API. The leader holds the `EventSource` and relays events over `BroadcastChannel`.",
-        because: "Each open tab would hold one of the 6 connections that a browser allows per origin.",
+        because:
+          "Each open tab would hold one of the 6 connections that a browser allows per origin.",
         rejected: "A `SharedWorker` (harder to debug; a crash ends the stream for every tab).",
         consequences: "A new leader must take over within 2 s when the leader tab closes.",
         revisit: "The daemon serves HTTP/2, which removes the connection limit.",
@@ -489,7 +495,7 @@ sse-delivery-flow
     ],
     docs: [
       { path: "notes/research.md", title: "Delivering board updates", body: RESEARCH_NOTE },
-      { path: "evidence/sc2.png", bytes: 0 },
+      { path: "evidence/sc2.png", bytes: 95362 },
     ],
     findings: [
       {

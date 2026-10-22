@@ -29,7 +29,7 @@ export function seedAuthors(): Author[] {
       model: "gpt-5-codex",
       color: 2,
       lanes: ["server", "core"],
-      max_leases: 3,
+      max_leases: 5,
     },
     {
       handle: "claude-sonnet",
