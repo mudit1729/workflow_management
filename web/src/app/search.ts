@@ -66,7 +66,16 @@ export function validateLibrarySearch(raw: Raw): LibrarySearch {
   };
 }
 
+/** /glossary keeps only the filter text; `/lib?tab=glossary` redirects here with its `q`. */
+export function validateGlossarySearch(raw: Raw): { q?: string } {
+  return { q: text(raw.q) };
+}
+
 export function validateFilesSearch(raw: Raw): FilesSearch {
-  // A path is kept exactly as typed: no trimming, no case change.
-  return { path: text(raw.path) };
+  // A path is kept exactly as typed: no trimming, no case change. A line is a whole number >= 1.
+  const line = typeof raw.line === "string" ? Number(raw.line) : raw.line;
+  return {
+    path: text(raw.path),
+    line: typeof line === "number" && Number.isInteger(line) && line >= 1 ? line : undefined,
+  };
 }

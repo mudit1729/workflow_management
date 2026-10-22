@@ -1,9 +1,10 @@
-// The 44 px board toolbar. Left: the scope breadcrumb and a faint count summary.
-// Right: text filter, author filter, swimlanes, cancelled, and New issue.
+// The 44 px board toolbar, the one top bar of the Board. Left: the Workflow view tabs, then the
+// scope breadcrumb and a faint count summary. Right: text filter, author filter, swimlanes,
+// cancelled, and New issue.
 import { CircleX, Plus, Rows3, UsersRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { openNewIssue } from "@/app/shell-store";
-import { AuthorChip, AuthorStack } from "@/components/common";
+import { AuthorChip, AuthorStack, ViewTabs } from "@/components/common";
 import {
   Button,
   DropdownMenu,
@@ -81,8 +82,11 @@ export function BoardToolbar({
   return (
     <header
       data-wf="BoardToolbar"
-      className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-3 border-border border-b bg-bg px-3"
+      className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 border-border border-b bg-bg px-3 @md/board:gap-3"
     >
+      <h1 className="sr-only">Workflow · Board</h1>
+      <ViewTabs view="workflow" />
+      <span aria-hidden className="hidden h-4 w-px shrink-0 bg-border @md/board:block" />
       <GroupCrumbs chain={chain} onGroup={(group) => setSearch({ group })} />
       <SummaryLine summary={summary} scopedTotal={scopedTotal} filtered={filtered} />
 
@@ -94,7 +98,7 @@ export function BoardToolbar({
           placeholder="Filter issues"
           aria-label="Filter issues by id, title or label"
           shortcut="/"
-          className="w-24 @xl/board:w-40 @4xl/board:w-52"
+          className="w-24 @xl/board:w-40 @6xl/board:w-52"
         />
 
         <AuthorFilter
@@ -149,6 +153,11 @@ function GroupDot({ color }: { color: number }) {
   );
 }
 
+/**
+ * The scope breadcrumb. Where the board has the room (1152 px and up) it shows the whole chain;
+ * narrower, it shows only the current scope so it never fights the filters for space. The full
+ * path stays in the tooltip.
+ */
 function GroupCrumbs({
   chain,
   onGroup,
@@ -160,11 +169,18 @@ function GroupCrumbs({
   const crumb =
     "flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-fg-muted transition-colors duration-100 ease-wf hover:bg-muted hover:text-fg";
   const current = "flex h-6 min-w-0 items-center gap-1.5 px-1.5 font-medium text-fg";
+  const path = groups.length > 0 ? ["All issues", ...groups.map((g) => g.title)].join(" / ") : "";
 
   return (
-    <nav data-wf="GroupCrumbs" aria-label="Board scope" className="min-w-0 shrink">
+    // Padding and a matching negative margin keep the focus rings of the buttons inside the clip.
+    <nav
+      data-wf="GroupCrumbs"
+      aria-label="Board scope"
+      title={path || undefined}
+      className="-m-1 min-w-0 shrink overflow-hidden p-1"
+    >
       <ol className="flex min-w-0 items-center gap-0.5 text-base">
-        <li className="shrink-0">
+        <li className={cn("shrink-0", groups.length > 0 && "hidden @6xl/board:block")}>
           {groups.length === 0 ? (
             <span aria-current="page" className={current}>
               All issues
@@ -178,8 +194,14 @@ function GroupCrumbs({
         {groups.map((g, i) => {
           const last = i === groups.length - 1;
           return (
-            <li key={g.id} className={cn("flex min-w-0 items-center gap-0.5", !last && "shrink-0")}>
-              <span aria-hidden className="text-fg-faint">
+            <li
+              key={g.id}
+              className={cn(
+                "items-center gap-0.5",
+                last ? "flex min-w-0" : "hidden shrink-0 @6xl/board:flex",
+              )}
+            >
+              <span aria-hidden className="hidden text-fg-faint @6xl/board:inline">
                 /
               </span>
               {last ? (
@@ -222,7 +244,7 @@ function SummaryLine({
     <span
       data-wf="BoardSummary"
       aria-live="polite"
-      className="hidden min-w-0 truncate text-fg-faint text-sm tabular @3xl/board:block"
+      className="hidden min-w-0 truncate text-fg-faint text-sm tabular @7xl/board:block"
     >
       {parts.join(" · ")}
     </span>
@@ -349,8 +371,9 @@ export function BoardToolbarSkeleton() {
       aria-hidden
       className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-3 border-border border-b bg-bg px-3"
     >
-      <Skeleton className="h-3.5 w-28" />
-      <Skeleton className="hidden h-3 w-40 @3xl/board:block" />
+      <ViewTabs view="workflow" />
+      <Skeleton className="hidden h-3.5 w-24 @md/board:block" />
+      <Skeleton className="hidden h-3 w-40 @7xl/board:block" />
       <div className="ml-auto flex items-center gap-1.5">
         <Skeleton className="h-6 w-44" />
         <Skeleton className="h-6 w-20" />

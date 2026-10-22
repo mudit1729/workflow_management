@@ -48,7 +48,8 @@ export interface KitEntry {
 export const GROUPS = [
   "Foundations",
   "Shell",
-  "Board",
+  "Workflow · Board",
+  "Workflow · Inbox",
   "Issue · Header",
   "Issue · Now",
   "Issue · Goal",
@@ -56,8 +57,7 @@ export const GROUPS = [
   "Issue · Log",
   "Issue · Files",
   "Diagrams",
-  "Library",
-  "Inbox",
+  "Workdatabase",
   "Shared",
   "Primitives",
 ] as const;

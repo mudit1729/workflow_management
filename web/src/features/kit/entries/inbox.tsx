@@ -66,21 +66,21 @@ function NotifyBannerBody() {
 
 export const inboxEntries: KitEntry[] = [
   entry(
-    "Inbox",
+    "Workflow · Inbox",
     "InboxView",
     `${SRC}/InboxView.tsx`,
-    "Agents stop and ask across the whole workspace; the inbox is the one place to see everything waiting on you, blocking first, and to answer without opening each issue.",
+    "Agents stop and ask across the whole workspace; the Workflow inbox is the one place to see everything waiting on you, blocking first, and to answer without opening each issue.",
     InboxViewBody,
   ),
   entry(
-    "Inbox",
+    "Workflow · Inbox",
     "InboxRow",
     `${SRC}/InboxRow.tsx`,
     "A row has the question, who asked, which issue and how to answer, so most requests are one click or one sentence.",
     InboxRowBody,
   ),
   entry(
-    "Inbox",
+    "Workflow · Inbox",
     "NotifyBanner",
     `${SRC}/NotifyBanner.tsx`,
     "Blocking requests are worth a browser notification, but only if you ask for them; the banner asks once and then gets out of the way.",

@@ -7,12 +7,37 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { GroupPath, type GroupPathProps } from "./GroupPath";
 export { KIND_ICON, KIND_LABEL, type Kind, KindIcon, type KindIconProps } from "./KindIcon";
 export { LintBadge, type LintBadgeProps, lintSummary } from "./LintBadge";
-export { MarkdownProse, type MarkdownProseProps } from "./MarkdownProse";
+export {
+  MarkdownProse,
+  type MarkdownProseProps,
+  type MarkdownSource,
+  type ProseDocument,
+} from "./MarkdownProse";
 export { MoveGateDialog } from "./MoveGateDialog";
 export { ProgressRing, type ProgressRingProps, progressText } from "./ProgressRing";
 export { RefLink, type RefLinkProps } from "./RefLink";
 export { RelativeTime, type RelativeTimeProps, useNow } from "./RelativeTime";
 export { AUTHOR_PROTOCOL, type ParsedRef, parseRef, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";
+export {
+  markerText,
+  SourceLineMarker,
+  type SourceLineMarkerProps,
+  useOpenInFiles,
+} from "./SourceLineMarker";
 export { StatusIcon, type StatusIconProps } from "./StatusIcon";
 export { StatusSelect, type StatusSelectProps } from "./StatusSelect";
 export { Toaster } from "./Toaster";
+export {
+  SUBVIEWS,
+  type SubViewDef,
+  subViewForPath,
+  useActiveSubView,
+  useViewCounts,
+  VIEWS,
+  type ViewCounts,
+  type ViewDef,
+  ViewTabs,
+  type ViewTabsProps,
+  type WfSubView,
+  type WfView,
+} from "./ViewTabs";

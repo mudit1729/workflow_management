@@ -1,8 +1,9 @@
-// /files: the workspace as the files it is. A top bar, a tree of every file at the left and the
+// /files: the workspace as the files it is, a Workdatabase view. A top bar (the Workdatabase tabs,
+// a one-line explanation, the Prototype chip, New file), a tree of every file at the left and the
 // open file at the right. Below 768 px the tree and the file are separate screens.
 import { FilePlus, FlaskConical, FolderTree } from "lucide-react";
 import { useMemo, useState } from "react";
-import { EmptyState } from "@/components/common";
+import { EmptyState, ViewTabs } from "@/components/common";
 import { Button, Chip, Tooltip } from "@/components/ui";
 import { useSnapshot } from "@/lib/api";
 import { useMediaQuery } from "@/lib/hooks";
@@ -13,7 +14,8 @@ import { SourceView } from "./SourceView";
 import { useFilesNav } from "./useFilesNav";
 import { WorkspaceTree } from "./WorkspaceTree";
 
-const EXPLAIN = "These files are the source of truth. Edit one and the board changes.";
+const EXPLAIN =
+  "The Workdatabase is these markdown files. Edit one and the Workflow board changes.";
 const PROTOTYPE_NOTE =
   "In this prototype, edits stay in this browser tab until you reset the data. On the dev server, saving a file on disk also updates the board.";
 
@@ -34,24 +36,32 @@ export function WorkspaceView({ path }: WorkspaceViewProps) {
   return (
     <div data-wf="WorkspaceView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4">
-        <h1 className="shrink-0 font-semibold text-fg text-md">Workspace files</h1>
-        <p className="hidden min-w-0 flex-1 truncate text-fg-faint text-sm md:block">{EXPLAIN}</p>
-        <span className="flex-1 md:hidden" />
+        <h1 className="sr-only">Workdatabase · Files</h1>
+        <ViewTabs view="workdatabase" />
+        <p className="hidden min-w-0 flex-1 truncate text-fg-faint text-sm min-[1360px]:block">
+          {EXPLAIN}
+        </p>
+        <span className="flex-1 min-[1360px]:hidden" />
         <Tooltip content={PROTOTYPE_NOTE} side="bottom">
           {/* A button is the trigger (focusable): Chip turns into a button itself when it gets an onClick. */}
           <button
             type="button"
             data-wf="PrototypeChip"
-            className="inline-flex shrink-0 cursor-default rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="inline-flex shrink-0 cursor-default rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus max-[520px]:hidden"
           >
             <Chip tone="outline" icon={<FlaskConical aria-hidden />}>
               Prototype
             </Chip>
           </button>
         </Tooltip>
-        <Button variant="secondary" onClick={newFile}>
+        <Button
+          variant="secondary"
+          onClick={newFile}
+          aria-label="New file"
+          className="max-sm:w-7 max-sm:px-0"
+        >
           <FilePlus aria-hidden />
-          New file
+          <span className="max-sm:sr-only">New file</span>
         </Button>
       </header>
 

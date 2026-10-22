@@ -201,7 +201,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
 
       <Section title="Source of truth">
         <p className="text-fg-faint text-xs">
-          The board is read from markdown files. Edit one and the board changes.
+          The Workdatabase is a folder of markdown files. Edit one and the Workflow board changes.
         </p>
         <Button
           size="sm"
@@ -213,7 +213,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
           }}
         >
           <FolderTree size={12} strokeWidth={1.75} aria-hidden />
-          Open workspace files
+          Open Workdatabase · Files
         </Button>
       </Section>
 
@@ -241,7 +241,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
             go.kit();
           }}
         >
-          Component kit
+          Kit
           <ArrowRight size={12} strokeWidth={1.75} aria-hidden />
         </Button>
       </footer>

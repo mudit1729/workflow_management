@@ -1,10 +1,12 @@
 // ⌘K — search issues, groups and library items, and run actions. Filters the
 // snapshot on the client (cmdk's scorer, capped per section). "Move … to…" opens
 // a second page listing statuses; Esc or Backspace on an empty field goes back.
+import { useNavigate } from "@tanstack/react-router";
 import { defaultFilter } from "cmdk";
 import {
   ArrowRight,
   ArrowUpRight,
+  BookText,
   Component,
   FilePenLine,
   FolderPlus,
@@ -374,6 +376,7 @@ function RootPage({
 
 function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => void): Action[] {
   const go = useGo();
+  const navigate = useNavigate();
   const files = useFilesNav();
   const theme = usePrefs((s) => s.theme);
   const setTheme = usePrefs((s) => s.setTheme);
@@ -440,41 +443,59 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   actions.push(
     {
       id: "go-board",
-      label: "Go to Board",
+      label: "Workflow · Board",
       icon: <LayoutGrid {...ICON} />,
       shortcut: "g w",
+      keywords: ["go to board", "go to workflow", "open board", "kanban", "issues"],
       run: () => go.board(),
     },
     {
       id: "go-inbox",
-      label: "Go to Inbox",
+      label: "Workflow · Inbox",
       icon: <Inbox {...ICON} />,
       shortcut: "g i",
-      keywords: ["needs you", "requests"],
+      keywords: ["go to inbox", "needs you", "requests"],
       run: () => go.inbox(),
     },
     {
       id: "go-library",
-      label: "Go to Library",
+      label: "Workdatabase · Library",
       icon: <Library {...ICON} />,
       shortcut: "g l",
-      keywords: ["glossary", "patterns"],
+      keywords: ["go to library", "go to workdatabase", "patterns", "playbooks", "gotchas"],
       run: () => go.library(),
     },
     {
+      id: "go-glossary",
+      label: "Workdatabase · Glossary",
+      icon: <BookText {...ICON} />,
+      shortcut: "g g",
+      keywords: ["go to glossary", "terms", "words", "vocabulary"],
+      run: () => void navigate({ to: "/glossary" }),
+    },
+    {
       id: "open-files",
-      label: "Open workspace files",
+      label: "Workdatabase · Files",
       icon: <FolderTree {...ICON} />,
       shortcut: "g f",
-      keywords: ["source", "markdown", "files", "edit", "goal.md", "plan.md", "tree"],
+      keywords: [
+        "go to files",
+        "open workspace files",
+        "source",
+        "markdown",
+        "edit",
+        "goal.md",
+        "plan.md",
+        "tree",
+      ],
       run: () => void files.open(),
     },
     {
       id: "go-kit",
-      label: "Go to Component kit",
+      label: "Kit (prototype tools)",
       icon: <Component {...ICON} />,
       shortcut: "g k",
-      keywords: ["gallery", "components"],
+      keywords: ["go to kit", "component kit", "gallery", "components", "prototype tools"],
       run: () => go.kit(),
     },
     {

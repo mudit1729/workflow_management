@@ -1,8 +1,10 @@
 // The needs-you inbox for the whole workspace: what agents ask, what they wait on, what you answered.
+// A Workflow view: the Workflow tabs sit at the left of the top bar, Mine | All | Answered is the
+// page's own filter at the right.
 import { CircleCheck, Inbox, MessageSquareReply, TriangleAlert, Users } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { EmptyState } from "@/components/common";
-import { Button, Chip, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui";
+import { EmptyState, ViewTabs } from "@/components/common";
+import { Button, Segmented, Skeleton } from "@/components/ui";
 import type { NeedsYouItem } from "@/gen/types";
 import { useInbox, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -35,34 +37,26 @@ export function InboxView() {
   const failed = snapshot.isError && !snapshot.data;
 
   return (
-    <Tabs
-      data-wf="InboxView"
-      value={tab}
-      onValueChange={(v: string) => setTab(v as InboxTab)}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-bg"
-    >
+    <div data-wf="InboxView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4">
-        <h1 className="font-semibold text-fg text-md">Inbox</h1>
-        {!loading && inbox.count > 0 && (
-          <Chip tone="accent" title={`${inbox.count} waiting on you`}>
-            <span className="tabular">{inbox.count}</span>
-          </Chip>
-        )}
-        <TabsList aria-label="Inbox views" className="ml-3 h-full gap-4 border-b-0">
-          <TabsTrigger
-            value="mine"
-            count={loading ? undefined : lists.mine.length}
-            countTone={lists.mine.length > 0 ? "accent" : "faint"}
-          >
-            Mine
-          </TabsTrigger>
-          <TabsTrigger value="all" count={loading ? undefined : lists.all.length}>
-            All
-          </TabsTrigger>
-          <TabsTrigger value="answered" count={loading ? undefined : lists.answered.length}>
-            Answered
-          </TabsTrigger>
-        </TabsList>
+        <h1 className="sr-only">Workflow · Inbox</h1>
+        <ViewTabs view="workflow" />
+        <span className="flex-1" />
+        <Segmented<InboxTab>
+          size="sm"
+          aria-label="Show requests"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "mine", label: "Mine", count: loading ? undefined : lists.mine.length },
+            { value: "all", label: "All", count: loading ? undefined : lists.all.length },
+            {
+              value: "answered",
+              label: "Answered",
+              count: loading ? undefined : lists.answered.length,
+            },
+          ]}
+        />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -84,7 +78,7 @@ export function InboxView() {
             />
           ) : (
             <>
-              <TabsContent value="mine">
+              {tab === "mine" && (
                 <RequestList
                   items={lists.mine}
                   empty={
@@ -107,8 +101,8 @@ export function InboxView() {
                     />
                   }
                 />
-              </TabsContent>
-              <TabsContent value="all">
+              )}
+              {tab === "all" && (
                 <RequestList
                   items={lists.all}
                   empty={
@@ -119,8 +113,8 @@ export function InboxView() {
                     />
                   }
                 />
-              </TabsContent>
-              <TabsContent value="answered">
+              )}
+              {tab === "answered" && (
                 <RequestList
                   items={lists.answered}
                   grouped={false}
@@ -132,12 +126,12 @@ export function InboxView() {
                     />
                   }
                 />
-              </TabsContent>
+              )}
             </>
           )}
         </div>
       </div>
-    </Tabs>
+    </div>
   );
 }
 

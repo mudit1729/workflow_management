@@ -117,7 +117,7 @@ export function SourceEditor({
       // The hook has already explained any other failure with a toast.
       if (!res) return;
       toast.success(`${creating ? "Created" : "Saved"} ${basename(path)} · the board re-read it`, {
-        action: { label: "Open board", onClick: () => void go.board() },
+        action: { label: "Open Workflow", onClick: () => void go.board() },
       });
       onSaved({ rev: res.rev, before: initialText, after: draft });
     } catch (err) {

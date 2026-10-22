@@ -1,5 +1,6 @@
 // Every element in the kit, in index order. A group's entries keep the order of their file.
 import { boardEntries } from "./entries/board";
+import { contextEntries } from "./entries/context";
 import { diagramEntries } from "./entries/diagrams";
 import { filesEntries } from "./entries/files";
 import { foundationEntries } from "./entries/foundations";
@@ -11,14 +12,17 @@ import { issueLogEntries } from "./entries/issue-log";
 import { issueNowEntries } from "./entries/issue-now";
 import { issuePlanEntries } from "./entries/issue-plan";
 import { libraryEntries } from "./entries/library";
+import { libraryViewerEntries } from "./entries/library-viewer";
 import { primitiveEntries } from "./entries/primitives";
 import { sharedEntries } from "./entries/shared";
 import { shellEntries } from "./entries/shell";
+import { viewsEntries } from "./entries/views";
 import { GROUPS, type KitEntry } from "./kit-ui";
 
 const ALL: KitEntry[] = [
   ...foundationEntries,
   ...shellEntries,
+  ...viewsEntries,
   ...boardEntries,
   ...issueHeaderEntries,
   ...issueNowEntries,
@@ -26,9 +30,11 @@ const ALL: KitEntry[] = [
   ...issuePlanEntries,
   ...issueLogEntries,
   ...issueFilesEntries,
-  ...filesEntries,
   ...diagramEntries,
   ...libraryEntries,
+  ...libraryViewerEntries,
+  ...contextEntries,
+  ...filesEntries,
   ...inboxEntries,
   ...sharedEntries,
   ...primitiveEntries,

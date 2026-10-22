@@ -43,4 +43,12 @@ describe("search validators", () => {
     expect(validateFilesSearch({}).path).toBeUndefined();
     expect(validateFilesSearch({ path: 42 }).path).toBe("42");
   });
+
+  it("keeps the files line only when it is a whole number from 1", () => {
+    expect(validateFilesSearch({ path: "a.md", line: 14 }).line).toBe(14);
+    expect(validateFilesSearch({ path: "a.md", line: "14" }).line).toBe(14);
+    for (const bad of [0, -3, 2.5, "x", "", null, undefined]) {
+      expect(validateFilesSearch({ path: "a.md", line: bad }).line).toBeUndefined();
+    }
+  });
 });

@@ -1,15 +1,13 @@
-// The left navigation: workspace, search, views, the group tree and the
-// display controls. 232 px, or a 52 px icon rail when collapsed (⌘B or [).
+// The left navigation. Workspace "wf" holds two views: Workflow (work in motion: Board, Inbox) and
+// Workdatabase (everything stored: Library, Glossary, Files). Below them the Groups tree, which
+// filters the Workflow board, then Kit (prototype tools) and the display controls. 232 px, or a
+// 52 px icon rail when collapsed (⌘B or [): one icon per view, tooltips list the sub-views.
 // Below 768 px AppShell shows it inside a sheet (variant "sheet").
 import { Link } from "@tanstack/react-router";
 import {
   Bell,
   BellOff,
   Component,
-  FolderTree,
-  Inbox,
-  LayoutGrid,
-  Library,
   Monitor,
   Moon,
   PanelLeftClose,
@@ -22,9 +20,18 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { AuthorChip } from "@/components/common";
+import {
+  AuthorChip,
+  SUBVIEWS,
+  useActiveSubView,
+  useViewCounts,
+  VIEWS,
+  type ViewCounts,
+  type WfSubView,
+  type WfView,
+} from "@/components/common";
 import { Button, Chip, Kbd, Segmented, Tooltip } from "@/components/ui";
-import { useInbox, useMe, useSnapshot } from "@/lib/api";
+import { useMe, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLiveStatus } from "@/lib/live";
 import { usePathname } from "@/lib/nav";
@@ -108,7 +115,9 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
         {isCollapsed ? (
           <span aria-hidden className="h-px w-4 bg-border" />
         ) : (
-          <span className="font-medium text-fg-faint text-xs">Groups</span>
+          <Tooltip content="Pick a group to filter the Workflow board" side="right">
+            <span className="font-medium text-fg-faint text-xs">Groups</span>
+          </Tooltip>
         )}
       </div>
 
@@ -116,11 +125,15 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
         <GroupTree collapsed={isCollapsed} onSelect={onNavigate} />
       </div>
 
-      {variant === "rail" && !isCollapsed && (
-        <div className="px-3 pb-2">
-          <DevPanel placement="nav" />
-        </div>
-      )}
+      <div
+        className={cn(
+          "flex shrink-0 items-center pb-2",
+          isCollapsed ? "justify-center px-2" : "justify-between gap-2 px-2",
+        )}
+      >
+        <KitLink collapsed={isCollapsed} onNavigate={onNavigate} />
+        {variant === "rail" && !isCollapsed && <DevPanel placement="nav" />}
+      </div>
 
       <NavFooter collapsed={isCollapsed} showCollapse={variant === "rail"} />
     </nav>
@@ -157,9 +170,17 @@ function NavHeader({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <div className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 pr-3 pl-4">
+    <div
+      data-wf="WorkspaceHeader"
+      className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 pr-3 pl-4"
+    >
       <WorkspaceMark />
-      <span className="min-w-0 truncate font-medium text-base text-fg">{name ?? "wf"}</span>
+      <div className="flex min-w-0 flex-col">
+        <span className="text-fg-faint text-xs leading-[14px]">Workspace</span>
+        <span className="truncate font-medium text-base text-fg leading-[16px]">
+          {name ?? "wf"}
+        </span>
+      </div>
       <LiveBadge />
       {me && (
         <Tooltip content={`Acting as @${me}`} side="bottom">
@@ -222,133 +243,243 @@ export function LiveBadge({ compact = false }: { compact?: boolean }) {
 
 // ---------------------------------------------------------------- items
 
-type NavTo = "/w" | "/inbox" | "/lib" | "/files" | "/kit";
+const VIEW_ORDER: WfView[] = ["workflow", "workdatabase"];
 
 function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
-  const path = usePathname();
-  const snapshot = useSnapshot().data;
-  const { count: inboxCount } = useInbox();
-
-  const openIssues =
-    snapshot?.issues.filter((i) => i.status !== "done" && i.status !== "cancelled").length ?? 0;
-  const libraryItems = snapshot?.library.filter((l) => l.status !== "retired").length ?? 0;
-
-  const items: {
-    to: NavTo;
-    label: string;
-    icon: ReactNode;
-    shortcut: string;
-    active: boolean;
-    count?: number;
-    countLabel?: string;
-    accent?: boolean;
-  }[] = [
-    {
-      to: "/w",
-      label: "Board",
-      icon: <LayoutGrid {...ICON} />,
-      shortcut: "g w",
-      active: path.startsWith("/w") || path.startsWith("/i/"),
-      count: snapshot ? openIssues : undefined,
-      countLabel: "open issues",
-    },
-    {
-      to: "/inbox",
-      label: "Inbox",
-      icon: <Inbox {...ICON} />,
-      shortcut: "g i",
-      active: path.startsWith("/inbox"),
-      count: inboxCount > 0 ? inboxCount : undefined,
-      countLabel: "need you",
-      accent: true,
-    },
-    {
-      to: "/lib",
-      label: "Library",
-      icon: <Library {...ICON} />,
-      shortcut: "g l",
-      active: path.startsWith("/lib"),
-      count: snapshot ? libraryItems : undefined,
-      countLabel: "items",
-    },
-    {
-      to: "/files",
-      label: "Files",
-      icon: <FolderTree {...ICON} />,
-      shortcut: "g f",
-      active: path.startsWith("/files"),
-    },
-    {
-      to: "/kit",
-      label: "Kit",
-      icon: <Component {...ICON} />,
-      shortcut: "g k",
-      active: path.startsWith("/kit"),
-    },
-  ];
+  const active = useActiveSubView();
+  const counts = useViewCounts();
+  const activeView = active ? SUBVIEWS[active].view : undefined;
 
   return (
-    <ul className={cn("flex flex-col gap-px", collapsed ? "items-center px-2" : "px-2")}>
-      {items.map((item) => (
-        <li key={item.to}>
+    <ul
+      aria-label="Views"
+      className={cn("flex flex-col gap-px", collapsed ? "items-center px-2" : "px-2")}
+    >
+      {VIEW_ORDER.map((view) => (
+        <li key={view} data-wf="NavView" data-view={view}>
           {collapsed ? (
-            <Tooltip
-              side="right"
-              shortcut={item.shortcut}
-              content={item.count !== undefined ? `${item.label} · ${item.count}` : item.label}
-            >
-              <Link
-                to={item.to}
-                onClick={onNavigate}
-                aria-label={item.label}
-                aria-current={item.active ? "page" : undefined}
-                className={cn(
-                  "relative flex size-7 items-center justify-center rounded-md transition-colors duration-100 ease-wf",
-                  item.active
-                    ? "bg-muted text-fg"
-                    : "text-fg-muted hover:bg-muted/70 hover:text-fg",
-                )}
-              >
-                {item.icon}
-                {item.accent && item.count !== undefined && (
-                  <span
-                    aria-hidden
-                    className="absolute top-1 right-1 size-1.5 rounded-full bg-accent ring-2 ring-subtle"
-                  />
-                )}
-              </Link>
-            </Tooltip>
+            <CollapsedView
+              view={view}
+              current={activeView === view}
+              active={active}
+              counts={counts}
+              onNavigate={onNavigate}
+            />
           ) : (
-            <Link
-              to={item.to}
-              onClick={onNavigate}
-              aria-current={item.active ? "page" : undefined}
-              className={cn(
-                "flex h-7 items-center gap-2 rounded-md px-2 text-base transition-colors duration-100 ease-wf",
-                item.active ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
-              )}
-            >
-              <span className={cn("flex shrink-0", item.active ? "text-fg" : "text-fg-faint")}>
-                {item.icon}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.count !== undefined &&
-                (item.accent ? (
-                  <span className="tabular flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-medium text-accent-fg text-xs leading-none">
-                    {item.count}
-                    <span className="sr-only"> {item.countLabel}</span>
-                  </span>
-                ) : (
-                  <span className="tabular text-fg-faint text-xs">
-                    {item.count}
-                    <span className="sr-only"> {item.countLabel}</span>
-                  </span>
-                ))}
-            </Link>
+            <ExpandedView
+              view={view}
+              current={activeView === view}
+              active={active}
+              counts={counts}
+              onNavigate={onNavigate}
+            />
           )}
         </li>
       ))}
     </ul>
+  );
+}
+
+/** What a sub-view shows after its name: the Inbox count, an item count, or nothing. */
+function subCount(sub: WfSubView, counts: ViewCounts): number | undefined {
+  switch (sub) {
+    case "inbox":
+      return counts.inbox > 0 ? counts.inbox : undefined;
+    case "library":
+      return counts.library;
+    case "glossary":
+      return counts.glossary;
+    case "files":
+      return counts.files;
+    default:
+      return undefined;
+  }
+}
+
+const SUB_COUNT_LABEL: Partial<Record<WfSubView, string>> = {
+  inbox: "need you",
+  library: "items",
+  glossary: "terms",
+  files: "files",
+};
+
+function ExpandedView({
+  view,
+  current,
+  active,
+  counts,
+  onNavigate,
+}: {
+  view: WfView;
+  /** The route is inside this view. */
+  current: boolean;
+  active: WfSubView | undefined;
+  counts: ViewCounts;
+  onNavigate?: () => void;
+}) {
+  const def = VIEWS[view];
+  const Icon = def.icon;
+  const home = SUBVIEWS[def.home];
+  const needsYou = view === "workflow" ? counts.inbox : 0;
+
+  return (
+    <>
+      <Link
+        to={home.to}
+        onClick={onNavigate}
+        className="flex h-7 items-center gap-2 rounded-md px-2 font-medium text-base text-fg transition-colors duration-100 ease-wf hover:bg-muted/70"
+      >
+        <Icon
+          size={14}
+          strokeWidth={1.75}
+          aria-hidden
+          className={cn("shrink-0", current ? "text-fg" : "text-fg-faint")}
+        />
+        <span className="min-w-0 flex-1 truncate">{def.label}</span>
+        {needsYou > 0 && (
+          <span className="tabular flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-medium text-accent-fg text-xs leading-none">
+            {needsYou}
+            <span className="sr-only"> need you</span>
+          </span>
+        )}
+      </Link>
+      <ul
+        aria-label={`${def.label} views`}
+        className="mt-px mb-1 ml-[15px] flex flex-col gap-px border-border border-l pl-1"
+      >
+        {def.subs.map((sub) => {
+          const subDef = SUBVIEWS[sub];
+          const n = subCount(sub, counts);
+          const here = active === sub;
+          return (
+            <li key={sub}>
+              <Link
+                to={subDef.to}
+                onClick={onNavigate}
+                aria-current={here ? "page" : undefined}
+                className={cn(
+                  "flex h-7 items-center gap-2 rounded-md pr-2 pl-[11px] text-base transition-colors duration-100 ease-wf",
+                  here ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{subDef.label}</span>
+                {n !== undefined && (
+                  <span className="tabular text-fg-faint text-xs">
+                    {n}
+                    <span className="sr-only"> {SUB_COUNT_LABEL[sub]}</span>
+                  </span>
+                )}
+                {sub === "files" && counts.fileErrors > 0 && (
+                  <span aria-hidden className="size-[6px] shrink-0 rounded-full bg-danger" />
+                )}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+function CollapsedView({
+  view,
+  current,
+  active,
+  counts,
+  onNavigate,
+}: {
+  view: WfView;
+  current: boolean;
+  active: WfSubView | undefined;
+  counts: ViewCounts;
+  onNavigate?: () => void;
+}) {
+  const def = VIEWS[view];
+  const Icon = def.icon;
+  const home = SUBVIEWS[def.home];
+  const needsYou = view === "workflow" && counts.inbox > 0;
+
+  return (
+    <Tooltip
+      side="right"
+      shortcut={def.shortcut}
+      content={
+        <span className="flex flex-col gap-0.5">
+          <span className="font-semibold">{def.label}</span>
+          <span>
+            {def.subs
+              .map((sub) => {
+                const n = subCount(sub, counts);
+                return n !== undefined && sub === "inbox"
+                  ? `${SUBVIEWS[sub].label} ${n}`
+                  : SUBVIEWS[sub].label;
+              })
+              .join(" · ")}
+          </span>
+        </span>
+      }
+    >
+      <Link
+        to={home.to}
+        onClick={onNavigate}
+        aria-label={needsYou ? `${def.label}, ${counts.inbox} need you` : def.label}
+        aria-current={active === def.home ? "page" : undefined}
+        className={cn(
+          "relative flex size-7 items-center justify-center rounded-md transition-colors duration-100 ease-wf",
+          current ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
+        )}
+      >
+        <Icon size={14} strokeWidth={1.75} aria-hidden />
+        {needsYou && (
+          <span
+            aria-hidden
+            className="absolute top-1 right-1 size-1.5 rounded-full bg-accent ring-2 ring-subtle"
+          />
+        )}
+      </Link>
+    </Tooltip>
+  );
+}
+
+// ---------------------------------------------------------------- Kit
+
+/** Kit holds the prototype's own tools: the component gallery. It sits above the footer. */
+function KitLink({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  const here = usePathname().startsWith("/kit");
+  const link = collapsed ? (
+    <Tooltip side="right" shortcut="g k" content="Kit · prototype tools">
+      <Link
+        to="/kit"
+        onClick={onNavigate}
+        aria-label="Kit, prototype tools"
+        aria-current={here ? "page" : undefined}
+        className={cn(
+          "flex size-7 items-center justify-center rounded-md transition-colors duration-100 ease-wf",
+          here ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
+        )}
+      >
+        <Component {...ICON} aria-hidden />
+      </Link>
+    </Tooltip>
+  ) : (
+    <Link
+      to="/kit"
+      onClick={onNavigate}
+      aria-current={here ? "page" : undefined}
+      title="Prototype tools: every component, by name"
+      className={cn(
+        "flex h-7 items-center gap-2 rounded-md px-2 text-base transition-colors duration-100 ease-wf",
+        here ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
+      )}
+    >
+      <Component {...ICON} aria-hidden className={here ? "text-fg" : "text-fg-faint"} />
+      Kit
+    </Link>
+  );
+  return (
+    <div data-wf="NavKit" className={cn(collapsed && "flex justify-center")}>
+      {link}
+    </div>
   );
 }
 

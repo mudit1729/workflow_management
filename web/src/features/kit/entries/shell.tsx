@@ -30,24 +30,42 @@ function NavRailBody() {
   return (
     <>
       <V
-        label="expanded · 232 px"
-        note="The Prototype pill is hidden in these frames; see DevPanel."
+        label="expanded · 232 px · on Workflow · Board"
+        note="The Prototype pill is hidden in these frames; see DevPanel. Links stay in the kit."
         width={232}
         height={640}
       >
-        <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
-          <NavRail />
-        </div>
+        <Sandbox path="/w">
+          <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
+            <NavRail />
+          </div>
+        </Sandbox>
       </V>
-      <V label="collapsed · 52 px" width={52} height={640}>
-        <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
-          <NavRail collapsed />
-        </div>
+      <V label="expanded · on Workdatabase · Files" width={232} height={640}>
+        <Sandbox path="/files">
+          <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
+            <NavRail />
+          </div>
+        </Sandbox>
       </V>
-      <V label="sheet (phone overlay)" width={280} height={640}>
-        <div className={`flex min-h-0 flex-1 [&>nav]:flex-1 ${HIDE_DEV_PANEL}`}>
-          <NavRail variant="sheet" />
-        </div>
+      <V
+        label="collapsed · 52 px · one icon per view"
+        note="Hover an icon: the tooltip lists the view's sub-views."
+        width={52}
+        height={640}
+      >
+        <Sandbox path="/inbox">
+          <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
+            <NavRail collapsed />
+          </div>
+        </Sandbox>
+      </V>
+      <V label="sheet (phone overlay) · on Workdatabase · Library" width={280} height={640}>
+        <Sandbox path="/lib">
+          <div className={`flex min-h-0 flex-1 [&>nav]:flex-1 ${HIDE_DEV_PANEL}`}>
+            <NavRail variant="sheet" />
+          </div>
+        </Sandbox>
       </V>
     </>
   );
@@ -349,7 +367,7 @@ export const shellEntries: KitEntry[] = [
     "Shell",
     "NavRail",
     `${SRC}/NavRail.tsx`,
-    "One rail holds where you are (board, inbox, library), what needs you (the inbox count) and the group tree, and it folds to 52 px when the board needs the room.",
+    "One rail holds the workspace and its two views (Workflow: Board and Inbox; Workdatabase: Library, Glossary and Files), what needs you (the Inbox count), the Groups tree that filters the board, and Kit; it folds to one icon per view at 52 px when the board needs the room.",
     NavRailBody,
   ),
   entry(

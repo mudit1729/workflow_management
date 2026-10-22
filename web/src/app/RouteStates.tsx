@@ -97,7 +97,7 @@ export function RouteNotFound() {
           </p>
         </div>
         <Button variant="secondary" onClick={() => go.board()}>
-          Go to the board
+          Go to Workflow
         </Button>
       </div>
     </div>

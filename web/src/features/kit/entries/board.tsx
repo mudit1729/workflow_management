@@ -30,7 +30,7 @@ import { Swimlane } from "@/features/board/Swimlane";
 import type { GroupNode, IssueStatus, IssueSummary, WorkspaceSnapshot } from "@/gen/types";
 import { issuesInGroup } from "@/lib/api";
 import { BOARD_COLUMNS } from "@/lib/status";
-import { entry, type KitEntry, V, WithSnapshot, WithSummary } from "../kit-ui";
+import { entry, type KitEntry, Sandbox, V, WithSnapshot, WithSummary } from "../kit-ui";
 import { ISSUE, LONG_TITLE } from "./data";
 
 const SRC = "src/features/board";
@@ -250,17 +250,19 @@ function ToolbarDemo({
             .sort((a, b) => b.count - a.count);
           return (
             <div className="@container/board overflow-hidden rounded-md border border-border">
-              <BoardToolbar
-                chain={chain}
-                summary={summarize(visible)}
-                scopedTotal={open.length}
-                filtered={Boolean(filtered)}
-                authors={authors}
-                me={snap.config.author}
-                canSwim={chain[chain.length - 1].children.length > 0}
-                swim={swim}
-                cancelledCount={scope.length - open.length}
-              />
+              <Sandbox path="/w">
+                <BoardToolbar
+                  chain={chain}
+                  summary={summarize(visible)}
+                  scopedTotal={open.length}
+                  filtered={Boolean(filtered)}
+                  authors={authors}
+                  me={snap.config.author}
+                  canSwim={chain[chain.length - 1].children.length > 0}
+                  swim={swim}
+                  cancelledCount={scope.length - open.length}
+                />
+              </Sandbox>
             </div>
           );
         }}
@@ -425,7 +427,9 @@ function KanbanBoardBody() {
       </V>
       <V label="loading · toolbar and board skeletons" fill height={360}>
         <div className="@container/board flex min-h-0 flex-1 flex-col">
-          <BoardToolbarSkeleton />
+          <Sandbox path="/w" quiet>
+            <BoardToolbarSkeleton />
+          </Sandbox>
           <div className="relative min-h-0 flex-1 bg-subtle">
             <BoardSkeleton />
           </div>
@@ -450,63 +454,63 @@ function BoardPageBody() {
 
 export const boardEntries: KitEntry[] = [
   entry(
-    "Board",
+    "Workflow · Board",
     "IssueCard",
     `${SRC}/IssueCard.tsx`,
     "It is the board's unit of attention: calm by default, and every signal (needs you, blocked, stale, lease, unmet criteria, lint) appears only when it is true, so a glance down a column shows what needs a human.",
     IssueCardBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "IssueCardPreview",
     `${SRC}/IssueCard.tsx`,
     "The drag image has to be light enough to carry across a crowded board, so it keeps only status, title and id.",
     IssueCardPreviewBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "IssueCardMenu",
     `${SRC}/IssueCardMenu.tsx`,
     "Moving, opening in a page and copying a link must work from the keyboard and the right-click, without turning the card into a button row.",
     IssueCardMenuBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "KanbanColumn",
     `${SRC}/KanbanColumn.tsx`,
     "A column is both a status filter and a drop target; it scrolls on its own so one long column never pushes the others off screen.",
     KanbanColumnBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "BoardToolbar",
     `${SRC}/BoardToolbar.tsx`,
-    "Scope, filters and New issue sit in one 44 px bar that adapts to the width of the board, so the drawer can dock beside it without crowding it.",
+    "The Workflow tabs, scope, filters and New issue sit in one 44 px bar that adapts to the width of the board, so the drawer can dock beside it without crowding it.",
     BoardToolbarBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "Swimlane",
     `${SRC}/Swimlane.tsx`,
     "Bands per child group let a coordinator see every lane of work in one board while the rule that cards never cross lanes keeps ownership clear.",
     SwimlaneBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "MiniStatusBar",
     `${SRC}/Swimlane.tsx`,
     "A 32 px segmented bar answers 'how far along is this group' without opening it, and keeps the colors tied to status.",
     MiniStatusBarBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "KanbanBoard",
     `${SRC}/KanbanBoard.tsx`,
     "The board region joins columns, swimlanes, drag and the keyboard model, so the whole workspace is one scannable surface.",
     KanbanBoardBody,
   ),
   entry(
-    "Board",
+    "Workflow · Board",
     "BoardPage",
     `${SRC}/BoardPage.tsx`,
     "The route that turns the snapshot and the URL filters into one view model, so the toolbar, the board and the keyboard always agree.",

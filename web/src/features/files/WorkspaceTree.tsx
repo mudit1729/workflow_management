@@ -190,7 +190,7 @@ export function WorkspaceTree({
         ) : (
           <div
             role="tree"
-            aria-label="Workspace files"
+            aria-label="Workdatabase files"
             onKeyDown={onKeyDown}
             className="flex flex-col gap-px"
           >

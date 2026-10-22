@@ -1,5 +1,6 @@
-// Ids of the mock world that the variants pick (web/mock/data). Variants read the live
-// objects through the data hooks and override fields where a state does not exist in the seed.
+// Ids of the mock world that the variants pick: the markdown files under web/mock/workspace/.
+// Variants read the live objects through the data hooks and override fields where a state does
+// not exist in the files.
 
 export const ISSUE = {
   /** In progress, high priority, blocking approval, rich logs, two diagrams, docs. */

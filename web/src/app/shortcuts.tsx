@@ -1,7 +1,11 @@
 // Global hotkeys (contract §6 Keyboard). Board and drawer keys (j/k, h/l, Enter,
 // o, s, /, 1–5, Esc) are registered by those features; this file owns the rest.
 // SHORTCUTS is also the source for the ShortcutsDialog.
+//
+// Go to: `g w` Workflow (its Board), `g i` Inbox, `g d` Workdatabase (its Library), `g l` Library,
+// `g g` Glossary, `g f` Files, `g k` Kit.
 
+import { useNavigate } from "@tanstack/react-router";
 import { useFilesNav } from "@/features/files";
 import { useHotkey, useLayoutMode } from "@/lib/hooks";
 import { useGo } from "@/lib/nav";
@@ -35,15 +39,17 @@ export const SHORTCUTS: ShortcutSection[] = [
   {
     title: "Go to",
     items: [
-      { combos: ["g w"], label: "Board" },
-      { combos: ["g i"], label: "Inbox" },
-      { combos: ["g l"], label: "Library" },
-      { combos: ["g f"], label: "Workspace files" },
-      { combos: ["g k"], label: "Component kit" },
+      { combos: ["g w"], label: "Workflow (Board)" },
+      { combos: ["g i"], label: "Workflow · Inbox" },
+      { combos: ["g d"], label: "Workdatabase (Library)" },
+      { combos: ["g l"], label: "Workdatabase · Library" },
+      { combos: ["g g"], label: "Workdatabase · Glossary" },
+      { combos: ["g f"], label: "Workdatabase · Files" },
+      { combos: ["g k"], label: "Kit" },
     ],
   },
   {
-    title: "Board",
+    title: "Workflow · Board",
     items: [
       { combos: ["j", "k"], label: "Next or previous card" },
       { combos: ["h", "l"], label: "Previous or next column" },
@@ -62,7 +68,7 @@ export const SHORTCUTS: ShortcutSection[] = [
     ],
   },
   {
-    title: "Workspace files",
+    title: "Workdatabase · Files",
     items: [
       { combos: ["/"], label: "Filter the file tree" },
       { combos: ["mod+s", "mod+Enter"], label: "Save the file you are editing" },
@@ -74,6 +80,7 @@ export const SHORTCUTS: ShortcutSection[] = [
 /** Registers the shell's global hotkeys. Render once, inside the router. */
 export function GlobalShortcuts() {
   const go = useGo();
+  const navigate = useNavigate();
   const files = useFilesNav();
   const mobile = useLayoutMode() === "mobile";
   const toggleNav = usePrefs((s) => s.toggleNav);
@@ -89,7 +96,8 @@ export function GlobalShortcuts() {
   });
   useHotkey("g w", () => go.board());
   useHotkey("g i", () => go.inbox());
-  useHotkey("g l", () => go.library());
+  useHotkey(["g d", "g l"], () => go.library());
+  useHotkey("g g", () => void navigate({ to: "/glossary" }));
   useHotkey("g f", () => files.open());
   useHotkey("g k", () => go.kit());
   useHotkey("n", () => shell.setNewIssueOpen(true));

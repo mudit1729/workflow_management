@@ -12,13 +12,14 @@ import { WorkspaceView } from "@/features/files";
 import { InboxView } from "@/features/inbox";
 import { IssueDrawer, IssuePage } from "@/features/issue";
 import { KitPage } from "@/features/kit";
-import { LibraryView } from "@/features/library";
+import { GlossaryPage, LibraryView } from "@/features/library";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
 import { RouteError, RouteNotFound, RoutePending } from "./RouteStates";
 import {
   validateBoardSearch,
   validateFilesSearch,
+  validateGlossarySearch,
   validateIssueSearch,
   validateLibrarySearch,
 } from "./search";
@@ -81,14 +82,29 @@ const libraryRoute = createRoute({
   },
 });
 
+// `/lib?tab=glossary` was the old address of the glossary; it lives at /glossary now.
 const libraryIndexRoute = createRoute({
   getParentRoute: () => libraryRoute,
   path: "/",
+  beforeLoad: ({ search }) => {
+    if (search.tab === "glossary") {
+      throw redirect({ to: "/glossary", search: { q: search.q }, replace: true });
+    }
+  },
 });
 
 const libraryItemRoute = createRoute({
   getParentRoute: () => libraryRoute,
   path: "$id",
+});
+
+// /glossary — one term, one meaning. A Workdatabase sub-view beside the Library and Files;
+// GlossaryPage renders its own top bar with the Workdatabase tabs.
+const glossaryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "glossary",
+  validateSearch: validateGlossarySearch,
+  component: GlossaryPage,
 });
 
 const inboxRoute = createRoute({
@@ -119,6 +135,7 @@ const routeTree = rootRoute.addChildren([
   boardRoute.addChildren([boardIndexRoute, drawerRoute]),
   issueRoute,
   libraryRoute.addChildren([libraryIndexRoute, libraryItemRoute]),
+  glossaryRoute,
   inboxRoute,
   filesRoute,
   kitRoute,

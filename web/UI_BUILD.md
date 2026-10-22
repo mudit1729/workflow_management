@@ -19,8 +19,34 @@ Linear-like. It is also the real `web/` codebase, so write production-quality co
 
 **The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
 markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
-what the board shows, edit a file there, or open **Workspace files** in the UI. Never add a
+what the board shows, edit a file there, or open **Workdatabase · Files** in the UI. Never add a
 TypeScript object that holds content.
+
+## Naming: workspace, workflow, workdatabase
+
+The words below are the product's vocabulary. Use them in UI copy, code comments, the Kit and
+feedback; the user quotes them.
+
+```
+Workspace: wf            the container: workspace name, groups, workflow.toml
+├─ Workflow              work in motion         sub-views: Board · Inbox
+└─ Workdatabase          everything stored      sub-views: Library · Glossary · Files
+```
+
+- A **view** is Workflow or Workdatabase; a **sub-view** is one page of it (Board, Inbox, Library,
+  Glossary, Files). Say "Workflow · Board", "Workdatabase · Files". "Workspace files" is now
+  "Workdatabase · Files" (the nav and the top bar say just "Files").
+- **One top bar per page.** Each sub-view page starts its 44 px top bar with `ViewTabs`
+  (`@/components/common`): the view's name and icon, a faint separator, then the sub-views as
+  real links (underline tabs; under 900 px the name gives way to the icon, under 420 px the icon goes too; counts: Inbox = my open requests, accent when above zero; Library =
+  items; Glossary = terms; Files = files, with a red lint dot when any file has errors). The
+  page's own controls follow (filters, search, actions) and stay visually secondary. The Board,
+  its drawer (`/w/i/$id`) and the full issue page (`/i/$id`) all count as Board.
+- The **Groups** tree in the nav rail filters the Workflow board; it belongs to neither view.
+- **Kit** (`/kit`, `g k`) is the prototype's own tooling, not a view. It sits near the footer of
+  the nav.
+- Page and tab titles: `(3) Workflow · wf`, `Workflow · Inbox · wf`, `Workdatabase · wf` (Library),
+  `Workdatabase · Glossary · wf`, `Workdatabase · Files · wf`, `Kit · wf`; 3 = my open inbox count.
 
 ## Ground rules
 
@@ -74,14 +100,19 @@ TypeScript object that holds content.
 | `/w` | `BoardLayout` → `BoardPage` | `group, swim, author, q, show` |
 | `/w/i/$id` | `BoardLayout` → `BoardPage` + `IssueDrawer id` | board search + `tab, log` |
 | `/i/$id` | `IssuePage id` | `tab, log` |
-| `/lib` | `LibraryView` | `tab (items\|glossary), kind, q` |
-| `/lib/$id` | `LibraryView` with `LibraryItemView id` open | |
-| `/inbox` | `InboxView` | |
-| `/files` | `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed) |
+| `/inbox` | Workflow · Inbox: `InboxView` | |
+| `/lib` | Workdatabase · Library: `LibraryView` | `kind, q` (`?tab=glossary` redirects to `/glossary`, keeping `q`) |
+| `/lib/$id` | `LibraryView` with `LibraryItemView id` open | `kind, q` |
+| `/glossary` | Workdatabase · Glossary: `GlossaryPage` from `@/features/library` (renders its own top bar with `ViewTabs`) | `q` |
+| `/files` | Workdatabase · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed) |
 | `/kit` | `KitPage` (component gallery) | |
 
+Every route renders inside the one `AppShell`. `subViewForPath(pathname)` (`@/components/common`) is
+the single place that says which sub-view a path belongs to (`/w`, `/w/…` and `/i/…` → Board);
+`ViewTabs`, the `NavRail` and the tab title all use it.
+
 Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`,
-`useIssueTab`, `useGo` from `@/lib/nav`; the Workspace files feature has `useFilesNav` and
+`useIssueTab`, `useGo` from `@/lib/nav` (`/glossary` has no `useGo` helper: use a `Link` or `useNavigate`); the Files feature has `useFilesNav` and
 `filesHref` (`@/features/files`). Hash routing is used when `VITE_HASH_ROUTER=1`
 (`/#/files?path=…`, as in the static build).
 
@@ -133,6 +164,10 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - `RefLink({ target: string, issueId?: string })` — `[[wf-3k9x2]]`, `[[wf-3k9x2#D-7f3k2]]`, `[[#T-4]]`, `[[lib-4tz7c]]`;
   resolves titles from the snapshot; dangling → dashed underline + F009 tooltip.
 - `GroupPath({ path: string[], className? })` — faint "wf / web".
+- `ViewTabs({ view: "workflow" | "workdatabase", className? })` — the sub-view tabs of a view as real links (`Link`,
+  `aria-current="page"` on the active one), after the view's name and icon. Workflow: Board · Inbox (accent count above
+  zero); Workdatabase: Library · Glossary · Files (counts, lint dot when a file has errors). Also exports `VIEWS`,
+  `SUBVIEWS` (label, route, shortcut per sub-view), `subViewForPath(path)`, `useActiveSubView()`, `useViewCounts()`.
 - `CopyButton({ text, label })`
 - `MoveGateDialog()` — rendered once by the shell. Reads `useMoveGate()` from `@/lib/api`. Two modes:
   illegal move ("backlog → done is not an allowed move…" + "Move anyway") and done gate (lists `gaps`,
@@ -239,7 +274,7 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   the text moves by `now − RECORDED_AT` (rounded to whole minutes, offset and precision kept) and every date-only value of
   `due`, `created`, `last_reviewed`, `review_after` moves by the matching number of local days. "12m ago" stays "12m ago",
   a lease 40 min ahead stays 40 min ahead, on any day. The files on disk never change by this. A time typed by hand into a
-  file on disk is shifted like the rest (write it relative to `RECORDED_AT`); a time typed in the Workspace files editor
+  file on disk is shifted like the rest (write it relative to `RECORDED_AT`); a time typed in the Files editor
   is taken as is, because the editor shows the working copy. `time.ts` has the formatters (`toTs`, `toDate`, `nowTs`, `dateIn`).
 - **Diagrams.** The loader finds the archify blocks, validates them (valid, or `invalid` with JSON-path errors, F011) and
   returns a `Diagram` per block. A valid one is `ready` with a `url` only when the Prototype panel's archify switch is on
@@ -262,35 +297,44 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - `main.tsx` imports `@fontsource-variable/inter` and `./styles/base.css`, renders `<App/>`.
 - `app/App.tsx` — QueryClientProvider, TooltipProvider, RouterProvider, `<Toaster/>`, `<MoveGateDialog/>`,
   theme + density sync (`usePrefs` → `document.documentElement.dataset`), `startLive` once, tab title
-  `"(3) wf"` where 3 = my open inbox count.
+  `"(3) Workflow · wf"` (see Naming) where 3 = my open inbox count; `tabTitle(path, workspace, count)` lives in `app/tab-title.ts`.
 - `app/router.tsx` — TanStack Router, code-based route tree per the table above; `validateSearch` for each route;
   `createHashHistory()` when `VITE_HASH_ROUTER === "1"`; register the router type.
 - `app/AppShell.tsx` — grid `[NavRail | Main]`, viewport-locked. Main hosts the route outlet.
 - `app/BoardLayout.tsx` — `/w` layout: root `<div className="relative flex h-full min-h-0 min-w-0">` holding
   `<div className="min-w-0 flex-1"><BoardPage/></div>` and the drawer `<Outlet/>`. The drawer route renders
   `IssueDrawer`, which is a flex item when docked and `absolute inset-y-0 right-0` when overlaid.
-- `app/NavRail.tsx` — collapsible (232 ↔ 52 px; ⌘B or `[`): workspace name + acting author at top; nav items
-  Board (`g w`), Inbox with count (`g i`), Library (`g l`), Files (`g f`, Workspace files), Kit; the `GroupTree`; footer with theme (system/light/dark),
-  density, notifications toggle, ⌘K hint, `?` hint.
+- `app/NavRail.tsx` — collapsible (232 ↔ 52 px; ⌘B or `[`): a faint "Workspace" label above the workspace name
+  ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid icon, the
+  accent Inbox count on it) with indented sub-items Board (`g w`) and Inbox (`g i`, count), **Workdatabase** (Database icon;
+  `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`), each with a faint count; then the **Groups** tree (it
+  filters the Workflow board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme
+  (system/light/dark), density, notifications toggle, ⌘K hint, `?` hint. Collapsed: one icon per view, tooltips list
+  the sub-views. The mobile sheet mirrors the expanded rail. Active states follow the route (`useActiveSubView`).
 - `app/GroupTree.tsx` — `role="tree"`; nested groups from `useGroupTree()`; each node: color dot (group hue), title,
   roll-up count, 32 px mini progress bar (status-colored segments), needs-you dot; selecting sets board `group`.
   Implicit groups show in italic. Collapsible nodes, keyboard arrows.
 - `app/CommandPalette.tsx` — ⌘K. Groups: Issues (search), Groups, Library, Actions (move open issue to…, new issue,
-  new group, toggle theme, density, go to inbox/board/library/files/kit, "Edit goal.md of <open issue>", simulate conflict,
+  new group, toggle theme, density, "Workflow · Board", "Workflow · Inbox", "Workdatabase · Library",
+  "Workdatabase · Glossary", "Workdatabase · Files", "Kit", "Edit goal.md of <open issue>", simulate conflict,
   play live event).
-- `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from contract §6 with `Kbd`.
+- `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from contract §6 with `Kbd`; sections General, Go to, Workflow · Board,
+  Issue, Workdatabase · Files.
 - `app/NewIssueDialog.tsx` — `n`: group picker, slug (auto from title), title, template (default|bug|research|doc), size.
   Calls `useNewIssue()`; opens the new issue.
 - `app/DevPanel.tsx` — a small "Prototype" pill bottom-left; opens controls: play next live event, simulate conflict
-  on next write, archify available toggle, connection state, reset data (back to the files on disk), open Workspace files,
-  jump to Kit. Hidden behind `.` key too.
-- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w`, `g l`, `g i`, `g f` (files), `g k` (kit), `n`, `?`.
+  on next write, archify available toggle, connection state, reset data (back to the files on disk), open
+  Workdatabase · Files, jump to Kit. Hidden behind `.` key too.
+- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g i` Inbox, `g d` Workdatabase (Library),
+  `g l` Library, `g g` Glossary, `g f` Files, `g k` Kit, `n`, `?`.
 
 ### board builder: `src/features/board/**`
 
 `index.ts` exports `BoardPage`. Files: `BoardPage.tsx`, `BoardToolbar.tsx`, `KanbanBoard.tsx`, `KanbanColumn.tsx`,
 `Swimlane.tsx`, `IssueCard.tsx`, `dnd.ts`, `useBoardKeys.ts`, `filter.ts`.
-- Toolbar (44 px): group breadcrumb (from `group` search), swimlanes toggle (child groups | none), author filter
+- Toolbar (44 px, the Board's one top bar): `ViewTabs view="workflow"` first, then the group breadcrumb (from `group` search)
+  and the count summary (container queries: the summary needs 1280 px of board width; the breadcrumb shows its whole
+  chain from 1152 px and only the current scope below that, the full path in its tooltip), swimlanes toggle (child groups | none), author filter
   (AuthorStack + menu), text filter (`/` focuses), "Show cancelled", count summary, "New issue" button.
 - 6 columns (`BOARD_COLUMNS`), cancelled only with `show=cancelled`. Column width `var(--wf-col-w)`. Backlog and Done
   fold to a 36 px vertical rail (`usePrefs().foldedColumns`) showing the vertical label + count; click to unfold.
@@ -414,7 +458,7 @@ before the other files exist.)
 ### library-inbox builder: `src/features/library/**`, `src/features/inbox/**`
 
 `library/index.ts` exports `LibraryView, LibraryItemView, PromoteDialog`. `inbox/index.ts` exports `InboxView`.
-- `LibraryView` — header with tabs Items | Glossary; Items: facets (kind, status, tags) at left, search (server
+- `LibraryView` — Workdatabase · Library (the Glossary is its own page, `/glossary`, `GlossaryPage`); Items: facets (kind, status, tags) at left, search (server
   `useSearch(q, "library")`), list of item rows (kind icon, title, "Use when…" description, status chip
   (draft = outline, reviewed = success, retired = faint strike), used by N, review overdue amber); selecting opens
   `LibraryItemView` in a right pane (`/lib/$id`). Glossary: term list with kind, means, avoid (struck synonyms → term),
@@ -427,7 +471,8 @@ before the other files exist.)
   entry: gotcha/pattern/tip→pattern, decision→decision), slug (auto), preview of the draft item, dedupe suggestion
   ("Similar: lib-… — merge instead?" when the mock search finds a close title), Create draft → `usePromote()`;
   explains that a review request goes to the group owner.
-- `InboxView` — the needs-you inbox across the workspace: tabs Mine | All | Answered; rows: urgency, kind icon,
+- `InboxView` — Workflow · Inbox, the needs-you inbox across the workspace: `ViewTabs` at the left of the top bar, a
+  Mine | All | Answered filter (segmented control) at the right; rows: urgency, kind icon,
   question, issue title (opens the issue), from → to, asked time, options as inline buttons / answer box
   (`useAnswerRequest`); blocking first; empty state "Nothing needs you". Notification opt-in banner for blocking
   requests (uses `usePrefs().setNotifications` + `Notification.requestPermission`).
@@ -435,11 +480,11 @@ before the other files exist.)
 ### workspace-files builder: `src/features/files/**` (+ View source in `features/issue/{tabs/FilesTab,DocsList,DocView}.tsx`)
 
 The prototype's way to see and change the markdown the board is built from. Route `/files?path=<workspace-relative path>`;
-nav item "Files" (`g f`); palette "Open workspace files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
+a Workdatabase sub-view: nav item "Files" (`g f`); palette "Workdatabase · Files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
 A "Prototype" chip in the top bar says it is a prototype surface (the product edits files in an editor, not the browser).
 `index.ts` exports `WorkspaceView`, `WorkspaceTree`, `SourceView`, `SourceEditor`, `NewFileDialog`, `useFilesNav`, `FilesLink`, `filesHref`,
 `requestFileEdit`, `ISSUE_FILE_NAMES`, `issueFileTemplate`, `templateForPath`, `type FilesSearch`; `@/app/search` has `validateFilesSearch`.
-- `WorkspaceView({ path? })` — 44 px top bar (title, one-line explanation, Prototype chip, "New file"), a 280 px tree at the left
+- `WorkspaceView({ path? })` — 44 px top bar (`ViewTabs` for the Workdatabase, one-line explanation, Prototype chip, "New file"), a 280 px tree at the left
   and `SourceView` at the right. Below 768 px the tree and the file are separate screens with a back arrow.
 - `WorkspaceTree({ selectedPath?, onSelect, onNewFile?, className? })` — `role="tree"`. Issue folders show the issue's
   `StatusIcon`, title and a faint slug; group folders their color dot (italic when implicit); root files sit under "Workspace";

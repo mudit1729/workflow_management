@@ -54,7 +54,7 @@ function TreeDemo({ initial }: { initial?: string }) {
       <WorkspaceTree
         selectedPath={selected}
         onSelect={setSelected}
-        onNewFile={() => toast("New file opens the dialog on the Workspace files page")}
+        onNewFile={() => toast("New file opens the dialog on the Files page")}
       />
     </div>
   );
@@ -178,7 +178,7 @@ function EditDemo({ path, staleLiveRev }: { path: string; staleLiveRev?: boolean
         liveRev={staleLiveRev ? "0000000" : data.rev}
         variant="pane"
         onSaved={({ rev, after }) => setSaved({ rev, text: after })}
-        onCancel={() => toast("Cancel closes the editor on the Workspace files page")}
+        onCancel={() => toast("Cancel closes the editor on the Files page")}
         onReload={() => toast("Reload takes the file as it is on disk now")}
       />
     </EditorFrame>
@@ -196,7 +196,7 @@ function CreateDemo({ path }: { path: string }) {
         startText={templateForPath(path, { author: me })}
         variant="pane"
         onSaved={({ rev }) => toast(`Created ${path}`, { description: `rev ${rev}` })}
-        onCancel={() => toast("Cancel closes the editor on the Workspace files page")}
+        onCancel={() => toast("Cancel closes the editor on the Files page")}
         onReload={() => undefined}
       />
     </EditorFrame>
@@ -280,35 +280,35 @@ function NewFileDialogBody() {
 
 export const filesEntries: KitEntry[] = [
   entry(
-    "Issue · Files",
+    "Workdatabase",
     "WorkspaceView",
     `${SRC}/WorkspaceView.tsx`,
-    "The board is read from markdown files, so there is a page that shows those files and lets you change one; seeing a status in the text and on the card at once is how you trust it.",
+    "The Workdatabase is a folder of markdown files, so Files shows them and lets you change one; seeing a status in the text and on the Workflow card at once is how you trust it.",
     WorkspaceViewBody,
   ),
   entry(
-    "Issue · Files",
+    "Workdatabase",
     "WorkspaceTree",
     `${SRC}/WorkspaceTree.tsx`,
     "The workspace is a folder tree, but a path means little by itself, so issue folders carry their status and title and every file shows its findings.",
     WorkspaceTreeBody,
   ),
   entry(
-    "Issue · Files",
+    "Workdatabase",
     "SourceView",
     `${SRC}/SourceView.tsx`,
     "A file is read as the text it is, with line numbers and the findings the linter put on those lines, so what an agent was told and what is wrong sit in one place.",
     SourceViewBody,
   ),
   entry(
-    "Issue · Files",
+    "Workdatabase",
     "SourceEditor",
     `${SRC}/SourceEditor.tsx`,
     "Editing the file is the one way to change anything, so the editor saves against the rev it opened from and says plainly when the file moved underneath.",
     SourceEditorBody,
   ),
   entry(
-    "Issue · Files",
+    "Workdatabase",
     "NewFileDialog",
     `${SRC}/NewFileDialog.tsx`,
     "A new issue is a folder with a goal.md, so creating one asks for a title and a folder and writes a valid file, and the path stays visible so nothing is hidden.",
