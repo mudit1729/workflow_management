@@ -1,4 +1,7 @@
-// One library item: what it says, how far to trust it, where it came from and who uses it.
+// One library item, read from its markdown file. The page is the rendered file (frontmatter as
+// properties, then every section in file order, each block tied to its line); "Source" shows
+// the text itself with its lint markers. Around the document: the draft, retired and overdue
+// banners, where the item came from and which issues use it.
 import {
   ArrowLeft,
   Check,
@@ -7,6 +10,7 @@ import {
   Info,
   Link2,
   type LucideIcon,
+  Pencil,
   SearchX,
   TriangleAlert,
   X,
@@ -24,12 +28,19 @@ import {
   MarkdownProse,
   RefLink,
 } from "@/components/common";
-import { Button, Chip, IconButton, Skeleton, Tooltip } from "@/components/ui";
+import { Button, Chip, IconButton, Segmented, Skeleton, Tooltip } from "@/components/ui";
+import { SourceView } from "@/features/files/SourceView";
+import { useFilesNav } from "@/features/files/useFilesNav";
 import type { Diagnostic, LibId, LibraryItemDetail, Ref } from "@/gen/types";
-import { useApproveLibrary, useIssueMap, useLibraryItem } from "@/lib/api";
+import { useApproveLibrary, useIssueMap, useLibraryItem, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { STATUS_LABEL } from "@/lib/status";
+import { MarkdownDocument, Properties, Property } from "./MarkdownDocument";
+import { splitFrontmatter } from "./markdown";
 import { formatDate, InlineCode, LibraryStatusChip, STALE_TEXT, sortSections } from "./meta";
+
+/** The item as the page it renders to, or as the text it is written in. */
+export type LibraryItemMode = "rendered" | "source";
 
 export interface LibraryItemViewProps {
   id: LibId;
@@ -37,9 +48,16 @@ export interface LibraryItemViewProps {
   onClose?: () => void;
   /** `screen` is the small-screen variant: the item fills the page and the button reads "Library". */
   variant?: "pane" | "screen";
+  /** Which view opens first. Default: the rendered page. */
+  defaultView?: LibraryItemMode;
 }
 
-export function LibraryItemView({ id, onClose, variant = "pane" }: LibraryItemViewProps) {
+export function LibraryItemView({
+  id,
+  onClose,
+  variant = "pane",
+  defaultView = "rendered",
+}: LibraryItemViewProps) {
   const query = useLibraryItem(id);
   const detail = query.data;
 
@@ -75,8 +93,16 @@ export function LibraryItemView({ id, onClose, variant = "pane" }: LibraryItemVi
     );
   }
 
-  // Keyed by id: selecting another item resets the scroll position.
-  return <ItemBody key={detail.summary.id} detail={detail} onClose={onClose} variant={variant} />;
+  // Keyed by id: selecting another item resets the scroll position and the view.
+  return (
+    <ItemBody
+      key={detail.summary.id}
+      detail={detail}
+      onClose={onClose}
+      variant={variant}
+      defaultView={defaultView}
+    />
+  );
 }
 
 // ---------------------------------------------------------------- body
@@ -85,60 +111,75 @@ function ItemBody({
   detail,
   onClose,
   variant,
+  defaultView,
 }: {
   detail: LibraryItemDetail;
   onClose?: () => void;
   variant: "pane" | "screen";
+  defaultView: LibraryItemMode;
 }) {
   const s = detail.summary;
+  const path = detail.edit.file || s.path;
   const overdue = s.review_overdue && s.status !== "retired";
-  const sections = useMemo(() => sortSections(s.kind, detail.sections), [s.kind, detail.sections]);
   // The overdue banner already says it; keep the panel for other findings.
   const findings = detail.diagnostics.filter((d) => !(overdue && d.rule === "Q013"));
+  const [mode, setMode] = useState<LibraryItemMode>(defaultView);
+  const [line, setLine] = useState<number>();
+  const file = useWorkspaceFile(path);
+  const text = file.data?.text ?? undefined;
+
+  const showSource = (at: number) => {
+    setLine(at);
+    setMode("source");
+  };
 
   return (
-    <div data-wf="LibraryItemView" data-status={s.status} className="flex h-full min-h-0 flex-col">
-      <Toolbar detail={detail} onClose={onClose} variant={variant} />
+    <div
+      data-wf="LibraryItemView"
+      data-status={s.status}
+      data-view={mode}
+      className="flex h-full min-h-0 flex-col"
+    >
+      <Toolbar
+        detail={detail}
+        path={path}
+        mode={mode}
+        onMode={(next) => {
+          setLine(undefined);
+          setMode(next);
+        }}
+        onClose={onClose}
+        variant={variant}
+      />
+      <PathRow id={s.id} path={path} retire={s.status === "reviewed"} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-5 px-5 py-4">
-          <header className="flex flex-col gap-2">
-            <h2
-              className={cn(
-                "font-semibold text-fg text-lg",
-                s.status === "retired" && "text-fg-muted",
-              )}
-            >
-              {s.title}
-            </h2>
-            <div className="flex min-w-0 items-center gap-1 text-fg-faint text-xs">
-              <code className="shrink-0 whitespace-nowrap font-mono">{s.id}</code>
-              <CopyButton text={s.id} label="Copy id" />
-              <span aria-hidden>·</span>
-              <code className="min-w-0 truncate font-mono" title={s.path}>
-                {s.path}
-              </code>
-              <CopyButton text={s.path} label="Copy file path" />
-            </div>
-            <p className="text-base text-fg-muted leading-relaxed">
-              <InlineCode text={s.description} className="text-fg-muted" />
-            </p>
-          </header>
-
+        <div className="flex flex-col gap-5 px-6 py-4">
           <Banners detail={detail} overdue={overdue} />
 
-          {sections.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {sections.map((section, i) => (
-                <section key={`${section.heading}-${i}`} aria-label={section.heading}>
-                  <h3 className="mb-1.5 font-semibold text-fg text-sm">{section.heading}</h3>
-                  <MarkdownProse md={section.body_md} />
-                </section>
-              ))}
-            </div>
+          {mode === "source" ? (
+            <SourceView
+              path={path}
+              variant="inline"
+              line={line}
+              showViewToggle={false}
+              onDeleted={onClose}
+            />
+          ) : text !== undefined ? (
+            <MarkdownDocument
+              path={path}
+              text={text}
+              variant="pane"
+              margin={24}
+              frontmatter={<ItemFrontmatter detail={detail} text={text} overdue={overdue} />}
+              onJump={showSource}
+            />
+          ) : file.isPending ? (
+            <DocumentSkeleton />
+          ) : (
+            <ParsedSections detail={detail} overdue={overdue} onRetry={() => void file.refetch()} />
           )}
 
-          <Details detail={detail} overdue={overdue} />
           <Sources sources={detail.source} />
           <UsedBy backlinks={detail.backlinks} />
           {findings.length > 0 && <Findings findings={findings} />}
@@ -148,20 +189,88 @@ function ItemBody({
   );
 }
 
+/** The file could not be read: show what the server parsed from it, and say so. */
+function ParsedSections({
+  detail,
+  overdue,
+  onRetry,
+}: {
+  detail: LibraryItemDetail;
+  overdue: boolean;
+  onRetry: () => void;
+}) {
+  const sections = useMemo(
+    () => sortSections(detail.summary.kind, detail.sections),
+    [detail.summary.kind, detail.sections],
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <ItemFrontmatter detail={detail} overdue={overdue} />
+      <p className="flex items-center gap-2 text-fg-faint text-sm">
+        <Info aria-hidden size={14} strokeWidth={1.75} className="shrink-0" />
+        <span>
+          The file did not load, so this is the parsed copy.{" "}
+          <button type="button" onClick={onRetry} className="text-fg-muted underline">
+            Try again
+          </button>
+        </span>
+      </p>
+      {sections.map((section, i) => (
+        <section key={`${section.heading}-${i}`} aria-label={section.heading}>
+          <h3 className="mb-1.5 font-semibold text-fg text-md">{section.heading}</h3>
+          <MarkdownProse md={section.body_md} document="pane" />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function DocumentSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading the file"
+      className="flex flex-col gap-4"
+    >
+      <div className="flex flex-col gap-2.5">
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </div>
+      <Skeleton className="h-16 w-full rounded-md" />
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <Skeleton className="h-3.5 w-16" />
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-5/6" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- toolbar
 
 function Toolbar({
   detail,
+  path,
+  mode,
+  onMode,
   onClose,
   variant,
 }: {
   detail: LibraryItemDetail;
+  path: string;
+  mode: LibraryItemMode;
+  onMode: (mode: LibraryItemMode) => void;
   onClose?: () => void;
   variant: "pane" | "screen";
 }) {
   const s = detail.summary;
+  const files = useFilesNav();
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-border border-b px-3 pl-5">
+    <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-border border-b py-1 pr-3 pl-5">
       {variant === "screen" && onClose && (
         <Button variant="ghost" size="sm" onClick={onClose} className="-ml-3">
           <ArrowLeft aria-hidden size={14} strokeWidth={1.75} />
@@ -173,8 +282,25 @@ function Toolbar({
         {KIND_LABEL[s.kind]}
       </span>
       <LibraryStatusChip status={s.status} />
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        {s.status === "reviewed" && <RetireButton />}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <Segmented
+          size="sm"
+          aria-label="Show the rendered page or the markdown source"
+          value={mode}
+          onChange={onMode}
+          options={[
+            { value: "rendered", label: "Rendered" },
+            { value: "source", label: "Source" },
+          ]}
+        />
+        {mode === "rendered" && (
+          <Tooltip content="Edit this file in Workspace files">
+            <Button variant="secondary" size="sm" onClick={() => void files.edit(path)}>
+              <Pencil aria-hidden size={14} strokeWidth={1.75} />
+              Edit
+            </Button>
+          </Tooltip>
+        )}
         {variant === "pane" && onClose && (
           <IconButton
             size="sm"
@@ -185,6 +311,32 @@ function Toolbar({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** The id and the file the page is read from, both copyable. The folder gives way before the name. */
+function PathRow({ id, path, retire }: { id: string; path: string; retire: boolean }) {
+  const cut = path.lastIndexOf("/") + 1;
+  return (
+    <div
+      data-wf="LibraryPathRow"
+      className="@container flex h-8 shrink-0 items-center gap-1 border-border border-b pr-3 pl-5 text-fg-faint text-xs"
+    >
+      <code className="shrink-0 whitespace-nowrap font-mono">{id}</code>
+      <CopyButton text={id} label="Copy id" />
+      <span aria-hidden>·</span>
+      <code className="flex min-w-0 font-mono" title={path}>
+        {/* The folder gives way first, then the name. */}
+        <span className="min-w-0 shrink-[20] truncate">{path.slice(0, cut)}</span>
+        <span className="min-w-0 truncate">{path.slice(cut)}</span>
+      </code>
+      <CopyButton text={path} label="Copy file path" />
+      {retire && (
+        <span className="ml-auto hidden shrink-0 @[500px]:block">
+          <RetireButton />
+        </span>
+      )}
     </div>
   );
 }
@@ -311,92 +463,114 @@ function Banner({
   );
 }
 
-// ---------------------------------------------------------------- details
+// ---------------------------------------------------------------- frontmatter
 
-function Details({ detail, overdue }: { detail: LibraryItemDetail; overdue: boolean }) {
+/**
+ * The top of the page: title and description, then the properties of the file. The values are the
+ * parsed ones (author chips, dates, overdue tone); each carries the line of its key in the file.
+ */
+function ItemFrontmatter({
+  detail,
+  text,
+  overdue,
+}: {
+  detail: LibraryItemDetail;
+  text?: string;
+  overdue: boolean;
+}) {
   const s = detail.summary;
-  return (
-    <section data-wf="LibraryDetails" aria-label="Details">
-      <dl className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5 text-sm">
-        <Field label="Authors">
-          {s.authors.length > 0 ? (
-            <span className="flex min-w-0 items-center gap-2">
-              <AuthorStack handles={s.authors} max={4} />
-              <span className="min-w-0 truncate text-fg-muted">
-                {s.authors.map((h) => `@${h}`).join(", ")}
-              </span>
-            </span>
-          ) : (
-            <Faint>None recorded</Faint>
-          )}
-        </Field>
-        <Field label="Reviewed by">
-          {detail.reviewed_by ? (
-            <AuthorChip handle={detail.reviewed_by} size="sm" />
-          ) : (
-            <Faint>Not reviewed yet</Faint>
-          )}
-        </Field>
-        <Field label="Created">
-          <span className="tabular">{formatDate(s.created)}</span>
-        </Field>
-        <Field label="Last reviewed">
-          {s.last_reviewed ? (
-            <span className="tabular">{formatDate(s.last_reviewed)}</span>
-          ) : (
-            <Faint>Never</Faint>
-          )}
-        </Field>
-        <Field label="Review after">
-          {s.review_after ? (
-            <span className={cn("tabular", overdue && STALE_TEXT)}>
-              {formatDate(s.review_after)}
-              {overdue && " · overdue"}
-            </span>
-          ) : (
-            <Faint>No date set</Faint>
-          )}
-        </Field>
-        {detail.superseded_by && s.status !== "retired" && (
-          <Field label="Replaced by">
-            <RefLink target={detail.superseded_by} />
-          </Field>
-        )}
-        <Field label="Tags">
-          {s.tags.length > 0 ? (
-            <span className="flex flex-wrap gap-1">
-              {s.tags.map((t) => (
-                <Chip key={t}>{t}</Chip>
-              ))}
-            </span>
-          ) : (
-            <Faint>None</Faint>
-          )}
-        </Field>
-        <Field label="Applies to">
-          {s.applies_to.length > 0 ? (
-            <span className="flex flex-wrap gap-1">
-              {s.applies_to.map((a) => (
-                <Chip key={a} tone="outline" className="font-mono">
-                  {a}
-                </Chip>
-              ))}
-            </span>
-          ) : (
-            <Faint>Everything</Faint>
-          )}
-        </Field>
-      </dl>
-    </section>
+  const lines = useMemo(
+    () => new Map((text ? (splitFrontmatter(text).entries ?? []) : []).map((e) => [e.key, e.line])),
+    [text],
   );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <>
-      <dt className="pt-px text-fg-faint">{label}</dt>
-      <dd className="min-w-0 text-fg">{children}</dd>
-    </>
+    <header data-wf="LibraryItemHeader" className="flex min-w-0 flex-col gap-2">
+      <h1
+        title={lines.has("title") ? `line ${lines.get("title")}` : undefined}
+        className={cn(
+          "font-semibold text-fg text-lg leading-snug",
+          s.status === "retired" && "text-fg-muted",
+        )}
+      >
+        {s.title}
+      </h1>
+      <p
+        title={lines.has("description") ? `line ${lines.get("description")}` : undefined}
+        className="text-base text-fg-muted leading-relaxed"
+      >
+        <InlineCode text={s.description} className="text-fg-muted" />
+      </p>
+      <section data-wf="LibraryDetails" aria-label="Details">
+        <Properties>
+          <Property label="authors" wide line={lines.get("authors")}>
+            {s.authors.length > 0 ? (
+              <span className="flex min-w-0 items-center gap-2">
+                <AuthorStack handles={s.authors} max={4} />
+                <span className="min-w-0 truncate">{s.authors.map((h) => `@${h}`).join(", ")}</span>
+              </span>
+            ) : (
+              <Faint>None recorded</Faint>
+            )}
+          </Property>
+          <Property label="reviewed_by" line={lines.get("reviewed_by")}>
+            {detail.reviewed_by ? (
+              <AuthorChip handle={detail.reviewed_by} size="sm" />
+            ) : (
+              <Faint>Not reviewed yet</Faint>
+            )}
+          </Property>
+          <Property label="created" line={lines.get("created")}>
+            <span className="tabular">{formatDate(s.created)}</span>
+          </Property>
+          <Property label="last_reviewed" line={lines.get("last_reviewed")}>
+            {s.last_reviewed ? (
+              <span className="tabular">{formatDate(s.last_reviewed)}</span>
+            ) : (
+              <Faint>Never</Faint>
+            )}
+          </Property>
+          <Property label="review_after" line={lines.get("review_after")}>
+            {s.review_after ? (
+              <span className={cn("tabular", overdue && STALE_TEXT)}>
+                {formatDate(s.review_after)}
+                {overdue && " · overdue"}
+              </span>
+            ) : (
+              <Faint>No date set</Faint>
+            )}
+          </Property>
+          {detail.superseded_by && s.status !== "retired" && (
+            <Property label="superseded_by" line={lines.get("superseded_by")}>
+              <RefLink target={detail.superseded_by} />
+            </Property>
+          )}
+          <Property label="tags" wide line={lines.get("tags")}>
+            {s.tags.length > 0 ? (
+              <span className="flex flex-wrap gap-1">
+                {s.tags.map((t) => (
+                  <Chip key={t}>{t}</Chip>
+                ))}
+              </span>
+            ) : (
+              <Faint>None</Faint>
+            )}
+          </Property>
+          <Property label="applies_to" wide line={lines.get("applies_to")}>
+            {s.applies_to.length > 0 ? (
+              <span className="flex flex-wrap gap-1">
+                {s.applies_to.map((a) => (
+                  <Chip key={a} tone="outline" className="font-mono">
+                    {a}
+                  </Chip>
+                ))}
+              </span>
+            ) : (
+              <Faint>Everything</Faint>
+            )}
+          </Property>
+        </Properties>
+      </section>
+    </header>
   );
 }
 

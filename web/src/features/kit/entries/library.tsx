@@ -38,11 +38,6 @@ function LibraryViewBody() {
           </Sandbox>
         </WhenVisible>
       </V>
-      <V label="glossary tab" fill height={620}>
-        <Sandbox quiet path="/lib?tab=glossary">
-          <LibraryView />
-        </Sandbox>
-      </V>
     </>
   );
 }
@@ -62,7 +57,21 @@ function Item({ id, label, note }: { id: string; label: string; note?: string })
 function LibraryItemViewBody() {
   return (
     <>
-      <Item id={LIB.reviewed} label="reviewed · lib-4tz7c (gotcha)" />
+      <Item
+        id={LIB.reviewed}
+        label="rendered · lib-4tz7c (gotcha)"
+        note="The page is the rendered markdown file: frontmatter as properties, then every section in file order. Point at a block to see its line."
+      />
+      <V
+        label="source · lib-4tz7c"
+        note="The same file as text, with its lint markers. Edit opens the inline editor."
+        width={560}
+        height={640}
+      >
+        <Sandbox quiet>
+          <LibraryItemView id={LIB.reviewed} defaultView="source" onClose={() => undefined} />
+        </Sandbox>
+      </V>
       <Item
         id={LIB.draft}
         label="draft · lib-7nq3d"
@@ -294,49 +303,49 @@ function LibraryFacetsBody() {
 
 export const libraryEntries: KitEntry[] = [
   entry(
-    "Library",
+    "Workdatabase",
     "LibraryView",
     `${SRC}/LibraryView.tsx`,
     "The library is what the team has learned, organized by kind and status; faceted browsing and server search find an item fast, and the detail pane docks beside the list.",
     LibraryViewBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "LibraryItemView",
     `${SRC}/LibraryItemView.tsx`,
     "An item shows its rule, when to use it, where it came from and who relies on it, and makes the one decision a reviewer owns (approve) impossible to miss.",
     LibraryItemViewBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "GlossaryView",
     `${SRC}/GlossaryView.tsx`,
     "The glossary fixes one word per idea and lists the words to avoid, which is what the S09 lint enforces in every issue.",
     GlossaryViewBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "PromoteDialog",
     `${SRC}/PromoteDialog.tsx`,
     "Promotion turns an issue's learning or decision into a reusable draft; the dialog previews it and warns about near-duplicates before a reviewer sees it.",
     PromoteDialogBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "LibraryRow",
     `${SRC}/LibraryRow.tsx`,
     "A row carries the title, the 'use when' line, status and how many issues rely on it, so scanning the list is enough to pick an item.",
     LibraryRowBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "LibraryList",
     `${SRC}/LibraryList.tsx`,
     "The list owns the quiet states (loading, empty library, nothing matches) so a filter that hides everything never looks like a bug.",
     LibraryListBody,
   ),
   entry(
-    "Library",
+    "Workdatabase",
     "LibraryFacets",
     `${SRC}/LibraryFacets.tsx`,
     "Kind, status, tag and overdue facets show counts that ignore their own selection, so you can see what the next click would give.",

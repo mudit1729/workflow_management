@@ -2,7 +2,7 @@
 // and lint markers, and the editor. Images show as images, other binaries say so. It is the same
 // component in the Workspace files pane and inline in an issue's Files tab.
 
-import { useBlocker } from "@tanstack/react-router";
+import { useBlocker, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Copy, Ellipsis, File, FileX, Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -15,9 +15,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   IconButton,
+  Segmented,
 } from "@/components/ui";
+import { MarkdownDocument } from "@/features/library/MarkdownDocument";
 import type { Diagnostic } from "@/gen/types";
-import { NotFoundError, useDeleteWorkspaceFile, useMe, useWorkspaceFile } from "@/lib/api";
+import {
+  NotFoundError,
+  useDeleteWorkspaceFile,
+  useIssue,
+  useMe,
+  useWorkspaceFile,
+} from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
 import { useHotkey } from "@/lib/hooks";
@@ -58,8 +66,17 @@ export interface SourceViewProps {
   onBack?: () => void;
   /** Called after the file was deleted. Without it the view returns to /files. */
   onDeleted?: () => void;
+  /** Scroll to this line (and flash it) once the text is on screen. In the pane the URL's `?line=` does the same. */
+  line?: number;
+  /** A markdown file opens as its source (the default) or as the rendered page. */
+  defaultView?: SourceViewMode;
+  /** Show the Source | Rendered switch on a markdown file (default). A host with its own switch turns it off. */
+  showViewToggle?: boolean;
   className?: string;
 }
+
+/** A markdown file can be read as the source text or as the page it renders to. */
+export type SourceViewMode = "source" | "rendered";
 
 interface Session {
   key: number;
@@ -80,6 +97,9 @@ export function SourceView({
   pathLabel,
   onBack,
   onDeleted,
+  line: lineProp,
+  defaultView = "source",
+  showViewToggle = true,
   className,
 }: SourceViewProps) {
   const query = useWorkspaceFile(path);
@@ -91,6 +111,13 @@ export function SourceView({
   const gone = query.isError && isNotFound(query.error);
   const file = gone ? undefined : query.data;
   const kind = fileKind(path);
+
+  // ---- source or rendered page (markdown only)
+  const [view, setView] = useState<SourceViewMode>(defaultView);
+  const [pendingLine, setPendingLine] = useState<number>();
+  const urlLine = (useSearch({ strict: false }) as { line?: unknown }).line;
+  const wanted = lineProp ?? (inline || typeof urlLine !== "number" ? undefined : urlLine);
+  const reading = kind === "md" && view === "rendered";
 
   // ---- editing
   const [session, setSession] = useState<Session | null>(null);
@@ -222,14 +249,46 @@ export function SourceView({
     });
   }, []);
 
+  /** Show the source text at `line`: from the rendered page, a finding or a deep link. */
+  const showSourceLine = useCallback((line: number) => {
+    setView("source");
+    setPendingLine(line);
+  }, []);
+
   const jumpToFinding = () => {
     if (diagnostics.length === 0) return;
     const target = diagnostics[jumped.current % diagnostics.length];
     jumped.current += 1;
     const line = Math.max(target.line, 1);
+    if (reading) {
+      showSourceLine(line);
+      return;
+    }
     scrollToLine(line);
     setActive(line);
   };
+
+  // A deep link (`?line=`, or the `line` prop) asks for a line once the text is there.
+  const asked = useRef("");
+  const hasText = text != null;
+  useEffect(() => {
+    if (!wanted || !hasText) return;
+    const key = `${path}:${wanted}`;
+    if (asked.current === key) return;
+    asked.current = key;
+    showSourceLine(wanted);
+  }, [wanted, hasText, path, showSourceLine]);
+
+  // The source is on screen: bring the line into view and fade it in.
+  useEffect(() => {
+    if (pendingLine === undefined || view !== "source" || session || !hasText) return;
+    const frame = requestAnimationFrame(() => {
+      scrollToLine(pendingLine);
+      setActive(pendingLine);
+      setPendingLine(undefined);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingLine, view, session, hasText, scrollToLine]);
 
   // After a save, bring the first changed line into view: a new entry lands at the bottom.
   useEffect(() => {
@@ -269,6 +328,9 @@ export function SourceView({
 
   // ---- states
   const editing = session !== null;
+  const rendered = reading && !editing;
+  const issueId = context.issue?.id;
+  const diagrams = useIssue(rendered ? issueId : undefined).data?.diagrams;
   let body: ReactNode;
   if (editing) {
     body = (
@@ -336,6 +398,31 @@ export function SourceView({
         />
       </div>
     );
+  } else if (text != null && rendered && text !== "") {
+    body = (
+      <div
+        ref={scroller}
+        data-wf="SourceRendered"
+        className={cn(
+          "min-h-0 overflow-y-auto overscroll-contain bg-bg",
+          inline
+            ? "max-h-[min(62vh,560px)] rounded-md border border-border"
+            : "flex-1 border-border border-t",
+        )}
+      >
+        <div className={inline ? "px-4 py-4" : "px-4 py-5 sm:px-6 sm:py-6"}>
+          <MarkdownDocument
+            path={path}
+            text={text}
+            variant={inline ? "pane" : "page"}
+            margin={inline ? 16 : 24}
+            diagrams={diagrams}
+            issueId={issueId}
+            onJump={showSourceLine}
+          />
+        </div>
+      </div>
+    );
   } else if (text != null) {
     body =
       text === "" ? (
@@ -394,6 +481,18 @@ export function SourceView({
             <CopyButton text={path} label="Copy path" size="sm" />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {!editing && showViewToggle && kind === "md" && file && text != null && (
+              <Segmented
+                size="sm"
+                aria-label="Show the source or the rendered page"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "source", label: "Source" },
+                  { value: "rendered", label: "Rendered" },
+                ]}
+              />
+            )}
             {!editing && link && !inline && (
               <Button variant="ghost" size="sm" onClick={link.run}>
                 {link.label}
@@ -405,7 +504,7 @@ export function SourceView({
                 path={path}
                 className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
               >
-                <span className="hidden min-[480px]:inline">Open in Workspace files</span>
+                <span className="hidden min-[480px]:inline">Open in Files</span>
                 <span className="min-[480px]:hidden">Open</span>
                 <ArrowUpRight {...ICON} aria-hidden />
               </FilesLink>

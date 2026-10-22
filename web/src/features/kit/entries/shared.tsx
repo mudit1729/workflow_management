@@ -1,5 +1,6 @@
 import { Archive, BookOpen, FileSearch } from "lucide-react";
 import { useMemo } from "react";
+import { toast } from "sonner";
 import {
   AuthorAvatar,
   AuthorChip,
@@ -494,6 +495,30 @@ function MarkdownProseBody() {
       </V>
       <V label="compact" width={420}>
         <MarkdownProse md={SAMPLE.split("```ts")[0]} issueId={ISSUE.rich} compact />
+      </V>
+      <V label="document typography · page (14 px body, 16 / 14 / 13 headings)" width={620}>
+        <MarkdownProse
+          md={`# A page of markdown\n\nBody text at 14 px with a 1.65 line height.\n\n## A section\n\n${SAMPLE}`}
+          diagrams={diagrams}
+          issueId={ISSUE.rich}
+          document="page"
+        />
+      </V>
+      <V
+        label="traced · source={{ path }}"
+        note="Every block carries data-src-line. Point at one: the tag in the left margin names path:line."
+        width={620}
+      >
+        <MarkdownProse
+          md={SAMPLE.split("```ts")[0]}
+          issueId={ISSUE.rich}
+          source={{
+            path: "issues/wf/web/live-board-updates/goal.md",
+            lineOffset: 14,
+            gutter: 150,
+            onJump: (line) => toast(`Would show line ${line} of goal.md`),
+          }}
+        />
       </V>
     </>
   );

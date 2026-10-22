@@ -1,13 +1,19 @@
 // The glossary: one term, one meaning. Each term lists the words to avoid (struck through, with an
-// arrow to the term) and links to related terms.
-import { ArrowRight, BookText, Info, SearchX, TriangleAlert } from "lucide-react";
+// arrow to the term) and links to related terms. The terms are written in glossary.md; each one
+// names its line there and opens it in Workspace files.
+import { ArrowRight, ArrowUpRight, BookText, Info, SearchX, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
 import { Button, Chip, SearchInput, Skeleton } from "@/components/ui";
+import { FilesLink } from "@/features/files/useFilesNav";
 import type { GlossaryTerm } from "@/gen/types";
-import { useGlossary } from "@/lib/api";
+import { useGlossary, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { glossaryLines } from "./markdown";
 import { InlineCode } from "./meta";
+
+/** Where the terms are written. */
+export const GLOSSARY_PATH = "glossary.md";
 
 export interface GlossaryViewProps {
   /**
@@ -25,12 +31,19 @@ const KIND_NAME: Record<GlossaryTerm["kind"], string> = {
   adj: "adjective",
 };
 
+/** The line of each term's heading in glossary.md; undefined until the file has loaded. */
+function useTermLines(): Map<string, number> | undefined {
+  const text = useWorkspaceFile(GLOSSARY_PATH).data?.text;
+  return useMemo(() => (text ? glossaryLines(text) : undefined), [text]);
+}
+
 function termDomId(term: string): string {
   return `term-${term.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
 export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
   const glossary = useGlossary();
+  const lines = useTermLines();
   const [own, setOwn] = useState("");
   const controlled = query !== undefined;
   const text = controlled ? query : own;
@@ -86,11 +99,18 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
         className="flex items-center gap-2 rounded-md border border-border bg-subtle px-3 py-2 text-fg-muted text-sm"
       >
         <Info aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
-        <span>
+        <span className="min-w-0 flex-1">
           One term, one meaning. Lint{" "}
           <code className="rounded-sm bg-muted px-1 py-px font-mono text-fg text-xs">S09</code>{" "}
           flags the avoided words.
         </span>
+        <FilesLink
+          path={GLOSSARY_PATH}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-fg-muted text-sm transition-colors duration-100 hover:bg-muted hover:text-fg"
+        >
+          View in glossary.md
+          <ArrowUpRight aria-hidden size={14} strokeWidth={1.75} />
+        </FilesLink>
       </p>
 
       {!controlled && (
@@ -134,7 +154,14 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
           </p>
           <dl className="m-0 flex flex-col divide-y divide-border border-border border-y">
             {shown.map((t) => (
-              <TermRow key={t.term} term={t} flash={flash === t.term} known={known} onJump={jump} />
+              <TermRow
+                key={t.term}
+                term={t}
+                line={lines?.get(t.term.toLowerCase())}
+                flash={flash === t.term}
+                known={known}
+                onJump={jump}
+              />
             ))}
           </dl>
         </>
@@ -147,11 +174,14 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
 
 function TermRow({
   term: t,
+  line,
   flash,
   known,
   onJump,
 }: {
   term: GlossaryTerm;
+  /** The line of the term's heading in glossary.md. */
+  line?: number;
   flash: boolean;
   known: Map<string, string>;
   onJump: (term: string) => void;
@@ -161,10 +191,27 @@ function TermRow({
       id={termDomId(t.term)}
       data-wf="GlossaryTerm"
       className={cn(
-        "grid scroll-mt-4 grid-cols-1 gap-x-6 gap-y-1.5 px-2 py-3.5 sm:grid-cols-[200px_minmax(0,1fr)]",
+        "group relative grid scroll-mt-4 grid-cols-1 gap-x-6 gap-y-1.5 px-2 py-3.5 sm:grid-cols-[200px_minmax(0,1fr)]",
         flash && "wf-flash",
       )}
+      data-src-line={line}
     >
+      {line !== undefined && (
+        <FilesLink
+          path={GLOSSARY_PATH}
+          line={line}
+          aria-label={`View ${t.term} in glossary.md, line ${line}`}
+          title="View in glossary.md"
+          className={cn(
+            "absolute top-3.5 right-2 inline-flex h-5 items-center gap-0.5 rounded-sm px-1 font-mono text-fg-faint text-xs",
+            "transition-opacity duration-100 ease-wf hover:bg-muted hover:text-fg-muted",
+            "opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100",
+          )}
+        >
+          {GLOSSARY_PATH}:{line}
+          <ArrowUpRight aria-hidden size={10} strokeWidth={2} />
+        </FilesLink>
+      )}
       <dt className="flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 truncate font-semibold text-fg text-md">{t.term}</span>
         <Chip title={`A ${KIND_NAME[t.kind]}`}>{t.kind}</Chip>

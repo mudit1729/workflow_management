@@ -2,7 +2,7 @@
 // path. Selecting an item keeps the search params, so the list does not reset.
 // (`useGo().libraryItem` drops them; the casts follow `src/lib/nav.ts`.)
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback } from "react";
 import type { LibId, LibraryKind } from "@/gen/types";
 import { type LibrarySearch, usePathname } from "@/lib/nav";
 
@@ -80,20 +80,4 @@ export function useLibraryNav(): LibraryNav {
     setQuery,
     setKind,
   };
-}
-
-/** Width of an element in px; 0 until the first measurement (before paint). */
-export function useElementWidth(): [(el: HTMLElement | null) => void, number] {
-  const [el, setEl] = useState<HTMLElement | null>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    if (!el) return;
-    setWidth(el.getBoundingClientRect().width);
-    const ro = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [el]);
-  return [setEl, width];
 }

@@ -1,15 +1,24 @@
 // Markdown fragments (`*_md`) rendered with calm typography. Raw HTML is off and the output
 // is sanitized. [[refs]] become RefLinks, @handles become author mentions, and
 // ```wf-diagram fences become ArchifyCards.
+//
+// With `source` set, the page is grounded in the file it came from: every block (heading,
+// paragraph, list item, code block, table, quote, diagram) carries `data-src-line`, the 1-based
+// line in the real file, and hovering a block shows a gutter tag with `path:line` that opens
+// that line. Without `source` nothing changes.
 import { Check } from "lucide-react";
 import {
   type ComponentProps,
   createContext,
   lazy,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   Suspense,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
 } from "react";
 import Markdown, { type Components, defaultUrlTransform, type ExtraProps } from "react-markdown";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
@@ -21,6 +30,7 @@ import { AuthorChip } from "./AuthorChip";
 import { CodeBlock } from "./CodeBlock";
 import { RefLink } from "./RefLink";
 import { AUTHOR_PROTOCOL, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";
+import { SourceLineMarker, useOpenInFiles } from "./SourceLineMarker";
 
 // Loaded lazily: keeps the diagram feature out of the common bundle and avoids an import cycle.
 const ArchifyCard = lazy(() =>
@@ -120,33 +130,87 @@ function hasClass(cls: unknown, name: string): boolean {
 
 type P<K extends keyof React.JSX.IntrinsicElements> = ComponentProps<K> & ExtraProps;
 
-function buildComponents(opts: { issueId?: string; compact: boolean }): Components {
-  const { issueId, compact } = opts;
-  const heading = "mt-2 first:mt-0 font-semibold text-fg leading-snug";
+/** Document typography: a docs page (14 px body) or a pane (13 px body); headings 16 / 14 / 13. */
+export type ProseDocument = "page" | "pane";
+
+/** Where the markdown came from, so every block can name its line. */
+export interface MarkdownSource {
+  /** Workspace-relative path of the file. */
+  path: string;
+  /** Lines of the file before `md` starts (a frontmatter block that was cut off). Default 0. */
+  lineOffset?: number;
+  /** Called with the file line of the block whose tag was clicked. Default: open the file at that
+   *  line in the Workspace files view. */
+  onJump?: (line: number) => void;
+  /** Width in px of the left gutter that holds the tag (default 40). 0 turns the tag off. */
+  gutter?: number;
+}
+
+/** The source line of a block, from its position in the markdown, as props for the element. */
+function lineProps(node: ExtraProps["node"], offset: number | undefined) {
+  const pos = node?.position;
+  if (offset === undefined || !pos) return undefined;
+  return { "data-src-line": pos.start.line + offset, "data-src-end": pos.end.line + offset };
+}
+
+interface BuildOptions {
+  issueId?: string;
+  compact: boolean;
+  doc?: ProseDocument;
+  /** Set when the blocks carry their source line. */
+  offset?: number;
+}
+
+function buildComponents(opts: BuildOptions): Components {
+  const { issueId, compact, doc, offset } = opts;
+  const traced = offset !== undefined;
+  const heading = doc
+    ? "mt-3 first:mt-0 font-semibold text-fg leading-snug"
+    : "mt-2 first:mt-0 font-semibold text-fg leading-snug";
+  const sizes = doc
+    ? { h1: "text-lg", h2: "text-md", h3: "text-base" }
+    : compact
+      ? { h1: "text-base", h2: "text-sm", h3: "text-sm" }
+      : { h1: "text-md", h2: "text-base", h3: "text-base" };
   return {
-    p: ({ node: _n, className, ...p }: P<"p">) => <p className={cn("min-w-0", className)} {...p} />,
-    h1: ({ node: _n, className, ...p }: P<"h1">) => (
-      <h1 className={cn(heading, compact ? "text-base" : "text-md", className)} {...p} />
+    p: ({ node, className, ...p }: P<"p">) => (
+      <p className={cn("min-w-0", className)} {...lineProps(node, offset)} {...p} />
     ),
-    h2: ({ node: _n, className, ...p }: P<"h2">) => (
-      <h2 className={cn(heading, compact ? "text-sm" : "text-base", className)} {...p} />
+    h1: ({ node, className, ...p }: P<"h1">) => (
+      <h1 className={cn(heading, sizes.h1, className)} {...lineProps(node, offset)} {...p} />
     ),
-    h3: ({ node: _n, className, ...p }: P<"h3">) => (
-      <h3 className={cn(heading, compact ? "text-sm" : "text-base", className)} {...p} />
+    h2: ({ node, className, ...p }: P<"h2">) => (
+      <h2 className={cn(heading, sizes.h2, className)} {...lineProps(node, offset)} {...p} />
     ),
-    h4: ({ node: _n, className, ...p }: P<"h4">) => (
-      <h4 className={cn(heading, "font-medium text-fg-muted", className)} {...p} />
+    h3: ({ node, className, ...p }: P<"h3">) => (
+      <h3 className={cn(heading, sizes.h3, className)} {...lineProps(node, offset)} {...p} />
     ),
-    h5: ({ node: _n, className, ...p }: P<"h5">) => (
-      <h5 className={cn(heading, "font-medium text-fg-muted", className)} {...p} />
+    h4: ({ node, className, ...p }: P<"h4">) => (
+      <h4
+        className={cn(heading, "font-medium text-fg-muted", className)}
+        {...lineProps(node, offset)}
+        {...p}
+      />
     ),
-    h6: ({ node: _n, className, ...p }: P<"h6">) => (
-      <h6 className={cn(heading, "font-medium text-fg-muted", className)} {...p} />
+    h5: ({ node, className, ...p }: P<"h5">) => (
+      <h5
+        className={cn(heading, "font-medium text-fg-muted", className)}
+        {...lineProps(node, offset)}
+        {...p}
+      />
+    ),
+    h6: ({ node, className, ...p }: P<"h6">) => (
+      <h6
+        className={cn(heading, "font-medium text-fg-muted", className)}
+        {...lineProps(node, offset)}
+        {...p}
+      />
     ),
     ul: ({ node: _n, className, ...p }: P<"ul">) => (
       <ul
         className={cn(
           "list-disc pl-4 marker:text-fg-faint [&>li+li]:mt-0.5 [li>&]:mt-0.5",
+          doc && "[&>li+li]:mt-1",
           className,
         )}
         {...p}
@@ -156,12 +220,13 @@ function buildComponents(opts: { issueId?: string; compact: boolean }): Componen
       <ol
         className={cn(
           "list-decimal pl-4 marker:text-fg-faint marker:tabular-nums [&>li+li]:mt-0.5 [li>&]:mt-0.5",
+          doc && "[&>li+li]:mt-1",
           className,
         )}
         {...p}
       />
     ),
-    li: ({ node: _n, className, ...p }: P<"li">) => (
+    li: ({ node, className, ...p }: P<"li">) => (
       <li
         className={cn(
           "pl-0.5 [&>p+*]:mt-1",
@@ -169,17 +234,23 @@ function buildComponents(opts: { issueId?: string; compact: boolean }): Componen
           hasClass(className, "task-list-item") && "-ml-4 list-none pl-0",
           className,
         )}
+        {...lineProps(node, offset)}
         {...p}
       />
     ),
-    blockquote: ({ node: _n, className, ...p }: P<"blockquote">) => (
+    blockquote: ({ node, className, ...p }: P<"blockquote">) => (
       <blockquote
         className={cn("border-border-strong border-l pl-3 text-fg-muted [&>*+*]:mt-2", className)}
+        {...lineProps(node, offset)}
         {...p}
       />
     ),
-    hr: ({ node: _n, className, ...p }: P<"hr">) => (
-      <hr className={cn("my-1 h-px border-0 bg-border", className)} {...p} />
+    hr: ({ node, className, ...p }: P<"hr">) => (
+      <hr
+        className={cn("my-1 h-px border-0 bg-border", className)}
+        {...lineProps(node, offset)}
+        {...p}
+      />
     ),
     a: ({ node: _n, href, children, className, ...p }: P<"a">) => {
       if (href?.startsWith(REF_PROTOCOL))
@@ -220,8 +291,20 @@ function buildComponents(opts: { issueId?: string; compact: boolean }): Componen
     ),
     pre: ({ node }: P<"pre">) => {
       const { lang, code } = fence(node);
-      if (lang === "wf-diagram") return <DiagramFence id={code.trim()} compact={compact} />;
-      return <CodeBlock code={code} lang={lang} compact={compact} />;
+      const block =
+        lang === "wf-diagram" ? (
+          <DiagramFence id={code.trim()} compact={compact} />
+        ) : (
+          <CodeBlock code={code} lang={lang} compact={compact} />
+        );
+      // The wrapper only exists on a traced page; an untraced one renders the block itself.
+      return traced ? (
+        <div className="min-w-0" {...lineProps(node, offset)}>
+          {block}
+        </div>
+      ) : (
+        block
+      );
     },
     input: ({ node: _n, type, checked, ...p }: P<"input">) =>
       type === "checkbox" ? <TaskBox checked={Boolean(checked)} /> : <input type={type} {...p} />,
@@ -233,18 +316,22 @@ function buildComponents(opts: { issueId?: string; compact: boolean }): Componen
         {...p}
       />
     ),
-    table: ({ node: _n, className, ...p }: P<"table">) => (
-      <div className="min-w-0 overflow-x-auto rounded-md border border-border">
+    table: ({ node, className, ...p }: P<"table">) => (
+      <div
+        className="min-w-0 overflow-x-auto rounded-md border border-border"
+        {...lineProps(node, offset)}
+      >
         <table
           className={cn(
             "w-full border-collapse text-left [&_tbody_tr:last-child_td]:border-b-0",
-            compact ? "text-xs" : "text-sm",
+            compact ? "text-xs" : doc === "page" ? "text-base" : "text-sm",
             className,
           )}
           {...p}
         />
       </div>
     ),
+    tr: ({ node, ...p }: P<"tr">) => <tr {...lineProps(node, offset)} {...p} />,
     th: ({ node: _n, className, ...p }: P<"th">) => (
       <th
         className={cn(
@@ -260,6 +347,115 @@ function buildComponents(opts: { issueId?: string; compact: boolean }): Componen
   };
 }
 
+// ---------------------------------------------------------------- source tags
+
+interface Traced {
+  line: number;
+  top: number;
+  height: number;
+}
+
+/**
+ * Follows the pointer (and the keyboard focus) over the blocks of a traced page and tells which
+ * block is under it: its source line and where it sits inside the page. The gutter is part of
+ * the page's box, so a pointer on the way to the tag keeps the block it left.
+ */
+function useTrace(enabled: boolean, gutter: number, resetKey: string) {
+  const root = useRef<HTMLDivElement>(null);
+  const [traced, setTraced] = useState<Traced | null>(null);
+
+  // Another text means other blocks: forget the old one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey is the trigger.
+  useEffect(() => setTraced(null), [resetKey]);
+
+  const read = (block: Element | null) => {
+    const el = root.current;
+    if (!el || !block || !el.contains(block)) return;
+    const line = Number((block as HTMLElement).dataset.srcLine);
+    if (!Number.isFinite(line)) return;
+    const box = el.getBoundingClientRect();
+    const r = block.getBoundingClientRect();
+    const next = { line, top: Math.round(r.top - box.top), height: Math.round(r.height) };
+    setTraced((prev) =>
+      prev && prev.line === next.line && prev.top === next.top && prev.height === next.height
+        ? prev
+        : next,
+    );
+  };
+
+  const onPointerMove = (e: ReactPointerEvent) => {
+    if (!enabled || e.pointerType === "touch") return;
+    const target = e.target as Element;
+    if (target.closest("[data-src-marker]")) return;
+    let block = target.closest("[data-src-line]");
+    if (!block || !root.current?.contains(block)) {
+      // The pointer is in the gutter or a gap: take the block at the same height in the text.
+      const box = root.current?.getBoundingClientRect();
+      if (!box) return;
+      block =
+        document.elementFromPoint(box.left + gutter + 8, e.clientY)?.closest("[data-src-line]") ??
+        null;
+    }
+    read(block);
+  };
+
+  return {
+    root,
+    traced: enabled ? traced : null,
+    props: {
+      onPointerMove,
+      onPointerLeave: () => setTraced(null),
+      onFocusCapture: (e: { target: EventTarget }) =>
+        enabled ? read((e.target as Element).closest("[data-src-line]")) : undefined,
+      onBlurCapture: (e: { relatedTarget: EventTarget | null }) => {
+        if (!root.current?.contains(e.relatedTarget as Node | null)) setTraced(null);
+      },
+    },
+  };
+}
+
+function SourceGutter({
+  source,
+  gutter,
+  traced,
+}: {
+  source: MarkdownSource;
+  gutter: number;
+  traced: Traced | null;
+}) {
+  const openInFiles = useOpenInFiles();
+  if (!traced) return null;
+  const jump = source.onJump ?? ((line: number) => openInFiles(source.path, line));
+  return (
+    <div
+      data-wf="SourceGutter"
+      className="pointer-events-none absolute inset-y-0 left-0 z-10"
+      style={{ width: gutter }}
+    >
+      {gutter >= 40 && (
+        <span
+          aria-hidden
+          className="absolute w-0.5 rounded-full bg-border-strong transition-[top,height] duration-100 ease-wf motion-reduce:transition-none"
+          style={{ left: gutter - 8, top: traced.top, height: traced.height }}
+        />
+      )}
+      <div
+        className="pointer-events-auto absolute left-0 flex justify-end transition-[top] duration-100 ease-wf motion-reduce:transition-none"
+        style={{ width: gutter, paddingRight: gutter >= 40 ? 14 : 3, top: traced.top + 1 }}
+      >
+        <SourceLineMarker
+          path={source.path}
+          line={traced.line}
+          room={gutter - (gutter >= 40 ? 14 : 3)}
+          onJump={jump}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- component
+
 export interface MarkdownProseProps {
   md: string;
   /** Diagrams of the issue, for ```wf-diagram fences. */
@@ -268,6 +464,10 @@ export interface MarkdownProseProps {
   issueId?: string;
   /** Tighter spacing, 12 px text (timeline bodies, cards). */
   compact?: boolean;
+  /** Document typography for a whole page of markdown. Sets the body size; see `ProseDocument`. */
+  document?: ProseDocument;
+  /** The file the text came from. Turns on the line tags (see the top of this file). */
+  source?: MarkdownSource;
   className?: string;
   /** Rendered when `md` is empty. */
   empty?: ReactNode;
@@ -278,18 +478,37 @@ export function MarkdownProse({
   diagrams,
   issueId,
   compact = false,
+  document: doc,
+  source,
   className,
   empty = null,
 }: MarkdownProseProps) {
-  // Stable across refetches: only `issueId` and `compact` shape the component types.
-  const components = useMemo(() => buildComponents({ issueId, compact }), [issueId, compact]);
+  const offset = source ? (source.lineOffset ?? 0) : undefined;
+  // Stable across refetches: only the options shape the component types.
+  const components = useMemo(
+    () => buildComponents({ issueId, compact, doc, offset }),
+    [issueId, compact, doc, offset],
+  );
+  const gutter = source ? (source.gutter ?? 40) : 0;
+  const trace = useTrace(Boolean(source) && gutter > 0, gutter, md);
   if (!md.trim()) return <>{empty}</>;
   return (
     <div
+      ref={trace.root}
       data-wf="MarkdownProse"
+      data-source={source?.path}
+      {...(source ? trace.props : undefined)}
+      style={gutter > 0 ? { paddingLeft: gutter } : undefined}
       className={cn(
         "flex min-w-0 flex-col break-words text-fg",
-        compact ? "gap-1.5 text-sm leading-normal" : "gap-2 text-base leading-[1.55]",
+        source && "relative",
+        doc === "page"
+          ? "gap-3 text-md leading-[1.65]"
+          : doc === "pane"
+            ? "gap-2.5 text-base leading-[1.6]"
+            : compact
+              ? "gap-1.5 text-sm leading-normal"
+              : "gap-2 text-base leading-[1.55]",
         className,
       )}
     >
@@ -304,6 +523,10 @@ export function MarkdownProse({
           {md}
         </Markdown>
       </DiagramsContext.Provider>
+      {/* Last, so a heading that opens the page keeps its `first:` margin while the tag shows. */}
+      {source && gutter > 0 && (
+        <SourceGutter source={source} gutter={gutter} traced={trace.traced} />
+      )}
     </div>
   );
 }
