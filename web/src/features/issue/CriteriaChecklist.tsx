@@ -268,16 +268,20 @@ export function CriteriaChecklist({ criteria, issueId }: CriteriaChecklistProps)
 
   const commit = async (c: Criterion, checked: boolean) => {
     setPending((p) => ({ ...p, [c.id]: checked }));
-    if (checked && !c.evidence && !claimedHintShown) {
-      claimedHintShown = true;
-      setPopover({ id: c.id, mode: "claimed" });
-    }
     const result = await toggle({ id: c.id, checked, base_rev: c.edit.rev }).catch(() => undefined);
-    if (!result)
+    if (!result) {
+      // The write failed (409 conflict, 422): roll the tick back and say nothing more.
       setPending((p) => {
         const { [c.id]: _dropped, ...rest } = p;
         return rest;
       });
+      return;
+    }
+    // Teach the claimed state only once the tick has actually been saved, and only once.
+    if (checked && !c.evidence && !claimedHintShown) {
+      claimedHintShown = true;
+      setPopover({ id: c.id, mode: "claimed" });
+    }
   };
 
   const onToggle = (c: Criterion, state: CriterionState, checked: boolean) => {
