@@ -134,7 +134,12 @@ export interface AuthorChipProps {
   className?: string;
 }
 
-export function AuthorChip({ handle: raw, size = "sm", variant = "chip", className }: AuthorChipProps) {
+export function AuthorChip({
+  handle: raw,
+  size = "sm",
+  variant = "chip",
+  className,
+}: AuthorChipProps) {
   const handle = raw.replace(/^@/, "");
   const authors = useAuthors();
   const author = authors.get(handle);

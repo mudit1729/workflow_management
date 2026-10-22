@@ -22,7 +22,7 @@ export function CommandInput({
 }: ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-2 border-border border-b px-3">
-      <Search aria-hidden size={16} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
+      <Search aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
       <CommandPrimitive.Input
         data-wf="CommandInput"
         className={cn(
@@ -123,7 +123,11 @@ export function CommandSeparator({
   ...props
 }: ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
-    <CommandPrimitive.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
+    <CommandPrimitive.Separator
+      data-wf="CommandSeparator"
+      className={cn("-mx-1 my-1 h-px bg-border", className)}
+      {...props}
+    />
   );
 }
 

@@ -3,7 +3,9 @@ import { Tabs as TabsPrimitive } from "radix-ui";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-export const Tabs = TabsPrimitive.Root;
+export function Tabs(props: ComponentProps<typeof TabsPrimitive.Root>) {
+  return <TabsPrimitive.Root data-wf="Tabs" {...props} />;
+}
 
 export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrimitive.List>) {
   return (

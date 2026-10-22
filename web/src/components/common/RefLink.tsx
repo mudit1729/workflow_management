@@ -92,11 +92,7 @@ export function RefLink({ target, issueId, className }: RefLinkProps) {
     const item = snap?.library.find((l) => l.id === id);
     if (snap && !item) return <Dangling target={target} className={className} />;
     return (
-      <Tooltip
-        content={
-          item ? `${item.id} · ${item.kind} · ${item.status}` : `Library item ${id}`
-        }
-      >
+      <Tooltip content={item ? `${item.id} · ${item.kind} · ${item.status}` : `Library item ${id}`}>
         <a
           data-wf="RefLink"
           href={hrefFor(`/lib/${id}`)}

@@ -15,10 +15,11 @@ export const buttonVariants = cva(
       variant: {
         primary: "bg-accent text-accent-fg hover:brightness-110 active:brightness-95",
         secondary:
-          "border border-border bg-bg text-fg hover:bg-subtle active:bg-muted data-[state=open]:bg-muted",
+          "border border-border bg-bg text-fg hover:bg-subtle active:bg-muted data-[state=open]:bg-muted aria-expanded:bg-muted",
         ghost:
-          "text-fg-muted hover:bg-muted hover:text-fg active:bg-border data-[state=open]:bg-muted data-[state=open]:text-fg aria-pressed:bg-muted aria-pressed:text-fg",
-        subtle: "bg-muted text-fg hover:bg-border data-[state=open]:bg-border",
+          "text-fg-muted hover:bg-muted hover:text-fg active:bg-border data-[state=open]:bg-muted data-[state=open]:text-fg aria-expanded:bg-muted aria-expanded:text-fg aria-pressed:bg-muted aria-pressed:text-fg",
+        subtle:
+          "bg-muted text-fg hover:bg-border data-[state=open]:bg-border aria-expanded:bg-border",
         danger:
           "border border-border bg-bg text-danger hover:border-danger/30 hover:bg-danger/8 active:bg-danger/12",
       },
@@ -33,9 +34,7 @@ export const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
-  extends ComponentProps<"button">,
-    VariantProps<typeof buttonVariants> {
+export interface ButtonProps extends ComponentProps<"button">, VariantProps<typeof buttonVariants> {
   /** Render the child element (e.g. an `<a>`) with button styles. */
   asChild?: boolean;
 }

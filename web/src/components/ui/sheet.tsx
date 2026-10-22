@@ -2,9 +2,10 @@
 // Click outside or Esc closes it. Non-modal by default, so the page stays usable.
 import { X } from "lucide-react";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { IconButton } from "./icon-button";
+import { focusInitial } from "./initial-focus";
 
 export interface SheetProps {
   open: boolean;
@@ -42,12 +43,14 @@ export function Sheet({
   bodyClassName,
   children,
 }: SheetProps) {
+  const body = useRef<HTMLDivElement>(null);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Content
           data-wf="Sheet"
           {...(description ? {} : { "aria-describedby": undefined })}
+          onOpenAutoFocus={(e) => focusInitial(e, e.currentTarget as HTMLElement, body.current)}
           onInteractOutside={(e) => {
             const target = e.target as Element | null;
             if (target?.closest?.(KEEP_OPEN)) e.preventDefault();
@@ -67,7 +70,9 @@ export function Sheet({
           {hideHeader ? (
             <VisuallyHidden.Root>
               <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
-              {description && <DialogPrimitive.Description>{description}</DialogPrimitive.Description>}
+              {description && (
+                <DialogPrimitive.Description>{description}</DialogPrimitive.Description>
+              )}
             </VisuallyHidden.Root>
           ) : (
             <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-2 border-border border-b pr-2 pl-4">
@@ -92,7 +97,9 @@ export function Sheet({
               </DialogPrimitive.Close>
             </header>
           )}
-          <div className={cn("min-h-0 flex-1 overflow-y-auto pt-3", bodyClassName)}>{children}</div>
+          <div ref={body} className={cn("min-h-0 flex-1 overflow-y-auto pt-3", bodyClassName)}>
+            {children}
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

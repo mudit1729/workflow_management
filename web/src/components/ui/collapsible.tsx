@@ -2,7 +2,9 @@ import { Collapsible as CollapsiblePrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 
-export const Collapsible = CollapsiblePrimitive.Root;
+export function Collapsible(props: ComponentProps<typeof CollapsiblePrimitive.Root>) {
+  return <CollapsiblePrimitive.Root data-wf="Collapsible" {...props} />;
+}
 export const CollapsibleTrigger = CollapsiblePrimitive.Trigger;
 
 export function CollapsibleContent({

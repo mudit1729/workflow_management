@@ -34,7 +34,9 @@ export function ProgressRing({
   const center = size / 2;
   const safeTotal = Math.max(total, 0);
   const v = safeTotal ? Math.min(verified, safeTotal) / safeTotal : 0;
-  const cl = safeTotal ? Math.min(claimed, safeTotal - Math.min(verified, safeTotal)) / safeTotal : 0;
+  const cl = safeTotal
+    ? Math.min(claimed, safeTotal - Math.min(verified, safeTotal)) / safeTotal
+    : 0;
   const vLen = v * c;
   const cLen = cl * c;
   const tip = progressText(verified, claimed, total);

@@ -11,8 +11,7 @@ export const chipVariants = cva(
         neutral: "bg-muted text-fg-muted",
         accent: "bg-accent-subtle text-accent",
         danger: "bg-danger/12 text-danger",
-        stale:
-          "bg-stale/12 text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]",
+        stale: "bg-stale/12 text-[color-mix(in_srgb,var(--wf-signal-stale)_78%,var(--wf-text))]",
         success:
           "bg-status-done/12 text-[color-mix(in_srgb,var(--wf-status-done)_85%,var(--wf-text))]",
         outline: "border border-border text-fg-muted",
@@ -64,7 +63,9 @@ export function Chip({
         type="button"
         onClick={onClick}
         aria-pressed={pressed}
+        id={props.id}
         title={props.title}
+        aria-label={props["aria-label"]}
         className={cn(
           classes,
           "cursor-default transition-[filter,background-color] duration-100 hover:brightness-95 dark:hover:brightness-125",

@@ -2,9 +2,10 @@
 import { cva } from "class-variance-authority";
 import { X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import type { ComponentProps, ReactNode } from "react";
+import { type ComponentProps, type ReactNode, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { IconButton } from "./icon-button";
+import { focusInitial } from "./initial-focus";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -52,8 +53,10 @@ export function DialogContent({
   bodyClassName,
   className,
   children,
+  onOpenAutoFocus,
   ...props
 }: DialogContentProps) {
+  const body = useRef<HTMLDivElement>(null);
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
@@ -68,6 +71,10 @@ export function DialogContent({
         // Without a description, tell Radix there is none on purpose.
         {...(description ? {} : { "aria-describedby": undefined })}
         className={cn(contentVariants({ size }), className)}
+        onOpenAutoFocus={(e) => {
+          onOpenAutoFocus?.(e);
+          focusInitial(e, e.currentTarget as HTMLElement, body.current);
+        }}
         {...props}
       >
         <header className="flex shrink-0 items-start gap-3 px-4 pt-3.5 pb-2">
@@ -97,7 +104,7 @@ export function DialogContent({
             </div>
           )}
         </header>
-        <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4", bodyClassName)}>
+        <div ref={body} className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4", bodyClassName)}>
           {children}
         </div>
       </DialogPrimitive.Content>

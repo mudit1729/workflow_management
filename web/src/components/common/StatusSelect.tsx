@@ -75,7 +75,7 @@ export function StatusSelect({
         aria-label={`Status: ${label}. Change status`}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "inline-flex shrink-0 cursor-default items-center justify-center rounded-sm transition-colors duration-100 hover:bg-muted data-[state=open]:bg-muted",
+          "inline-flex shrink-0 cursor-default items-center justify-center rounded-sm transition-colors duration-100 hover:bg-muted aria-expanded:bg-muted",
           sm ? "size-5" : "size-6",
           className,
         )}
@@ -90,7 +90,7 @@ export function StatusSelect({
         onClick={(e) => e.stopPropagation()}
         className={cn(
           "inline-flex shrink-0 cursor-default items-center rounded-md border border-border bg-bg font-medium text-fg",
-          "transition-colors duration-100 ease-wf hover:bg-subtle data-[state=open]:bg-muted",
+          "transition-colors duration-100 ease-wf hover:bg-subtle aria-expanded:bg-muted",
           sm ? "h-6 gap-1.5 px-1.5 text-sm" : "h-7 gap-2 px-2 text-base",
           className,
         )}

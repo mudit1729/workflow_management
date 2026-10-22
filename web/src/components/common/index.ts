@@ -12,7 +12,7 @@ export { MoveGateDialog } from "./MoveGateDialog";
 export { ProgressRing, type ProgressRingProps, progressText } from "./ProgressRing";
 export { RefLink, type RefLinkProps } from "./RefLink";
 export { RelativeTime, type RelativeTimeProps, useNow } from "./RelativeTime";
+export { AUTHOR_PROTOCOL, type ParsedRef, parseRef, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";
 export { StatusIcon, type StatusIconProps } from "./StatusIcon";
 export { StatusSelect, type StatusSelectProps } from "./StatusSelect";
 export { Toaster } from "./Toaster";
-export { AUTHOR_PROTOCOL, type ParsedRef, parseRef, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";

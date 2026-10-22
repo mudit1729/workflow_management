@@ -21,6 +21,7 @@ export function AuthorStack({ handles, max = 3, size = "sm", className }: Author
   return (
     <span
       data-wf="AuthorStack"
+      role="img"
       aria-label={unique.map((h) => `@${h}`).join(", ")}
       className={cn("inline-flex shrink-0 items-center", className)}
     >

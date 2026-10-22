@@ -1,7 +1,7 @@
 // Lint summary: a 6 px dot (cards, tabs) or a compact badge with per-severity counts.
 import { CircleX, Info, TriangleAlert } from "lucide-react";
-import type { LintCounts } from "@/gen/types";
 import { Tooltip } from "@/components/ui";
+import type { LintCounts } from "@/gen/types";
 import { cn } from "@/lib/cn";
 
 export interface LintBadgeProps {
@@ -42,12 +42,16 @@ export function LintBadge({ counts, variant = "badge", onClick, className }: Lin
     return (
       <Tooltip content={summary}>
         <button
+          data-wf="LintBadge"
           type="button"
           aria-label={summary}
           onClick={onClick}
-          className="inline-flex size-4 items-center justify-center rounded-sm hover:bg-muted"
+          className={cn(
+            "inline-flex size-4 cursor-default items-center justify-center rounded-sm hover:bg-muted",
+            className,
+          )}
         >
-          <span className={cn("size-[6px] rounded-full", color)} />
+          <span aria-hidden className={cn("size-[6px] rounded-full", color)} />
         </button>
       </Tooltip>
     );

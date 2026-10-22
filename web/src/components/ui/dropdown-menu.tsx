@@ -108,7 +108,9 @@ export function DropdownMenuItem({
     >
       {icon && <IconSlot>{icon}</IconSlot>}
       <Label hint={hint}>{children}</Label>
-      {selected && <Check aria-hidden size={14} strokeWidth={2} className="shrink-0 text-fg-muted" />}
+      {selected && (
+        <Check aria-hidden size={14} strokeWidth={2} className="shrink-0 text-fg-muted" />
+      )}
       {shortcut && <Kbd combo={shortcut} className="ml-1" />}
     </MenuPrimitive.Item>
   );
@@ -168,7 +170,11 @@ export function DropdownMenuRadioItem({
   ...props
 }: DropdownMenuRadioItemProps) {
   return (
-    <MenuPrimitive.RadioItem data-wf="DropdownMenuRadioItem" className={cn(item, className)} {...props}>
+    <MenuPrimitive.RadioItem
+      data-wf="DropdownMenuRadioItem"
+      className={cn(item, className)}
+      {...props}
+    >
       {icon && <IconSlot>{icon}</IconSlot>}
       <Label hint={hint}>{children}</Label>
       <MenuPrimitive.ItemIndicator className="flex shrink-0 items-center">
@@ -197,7 +203,11 @@ export function DropdownMenuSeparator({
   ...props
 }: ComponentProps<typeof MenuPrimitive.Separator>) {
   return (
-    <MenuPrimitive.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
+    <MenuPrimitive.Separator
+      data-wf="DropdownMenuSeparator"
+      className={cn("-mx-1 my-1 h-px bg-border", className)}
+      {...props}
+    />
   );
 }
 

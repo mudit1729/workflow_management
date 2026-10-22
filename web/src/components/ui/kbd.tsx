@@ -12,7 +12,8 @@ export interface KbdProps extends Omit<ComponentProps<"kbd">, "children"> {
   tone?: "default" | "inverted";
 }
 
-const cap = "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-mono text-[10.5px] leading-none font-medium";
+const cap =
+  "inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-[3px] px-[3px] font-mono text-[10.5px] leading-none font-medium";
 
 const tones = {
   default: "border border-border bg-subtle text-fg-muted",

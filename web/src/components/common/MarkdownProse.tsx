@@ -141,7 +141,6 @@ function buildComponents(opts: {
       <ul
         className={cn(
           "list-disc pl-4 marker:text-fg-faint [&>li+li]:mt-0.5 [li>&]:mt-0.5",
-          hasClass(className, "contains-task-list") && "list-none pl-0.5",
           className,
         )}
         {...p}
@@ -160,7 +159,8 @@ function buildComponents(opts: {
       <li
         className={cn(
           "pl-0.5 [&>p+*]:mt-1",
-          hasClass(className, "task-list-item") && "list-none",
+          // A task item swaps its bullet for the checkbox, hung where the bullet would sit.
+          hasClass(className, "task-list-item") && "-ml-4 list-none pl-0",
           className,
         )}
         {...p}

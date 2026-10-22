@@ -25,7 +25,10 @@ export function CodeBlock({
   return (
     <div
       data-wf="CodeBlock"
-      className={cn("group/code relative min-w-0 rounded-md border border-border bg-subtle", className)}
+      className={cn(
+        "group/code relative min-w-0 rounded-md border border-border bg-subtle",
+        className,
+      )}
     >
       <div className="absolute top-1 right-1 z-10 flex items-center gap-1 rounded-sm bg-subtle pl-1.5">
         {lang && (
