@@ -14,6 +14,10 @@ import { issueLogEntries } from "./entries/issue-log";
 import { issueNowEntries } from "./entries/issue-now";
 import { issuePlanEntries } from "./entries/issue-plan";
 import { libraryEntries } from "./entries/library";
+import { libraryAskEntries } from "./entries/library-ask";
+import { libraryPartsEntries } from "./entries/library-parts";
+import { libraryPersonalEntries } from "./entries/library-personal";
+import { libraryTeamEntries } from "./entries/library-team";
 import { libraryViewerEntries } from "./entries/library-viewer";
 import { primitiveEntries } from "./entries/primitives";
 import { sharedEntries } from "./entries/shared";
@@ -38,7 +42,11 @@ const ALL: KitEntry[] = [
   ...issueFilesEntries,
   ...diagramEntries,
   ...libraryEntries,
+  ...libraryPartsEntries,
   ...libraryViewerEntries,
+  ...libraryPersonalEntries,
+  ...libraryTeamEntries,
+  ...libraryAskEntries,
   ...skillsEntries,
   ...contextEntries,
   ...filesEntries,

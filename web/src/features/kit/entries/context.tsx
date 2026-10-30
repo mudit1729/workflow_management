@@ -1,4 +1,4 @@
-// Context from the Workdatabase: the picker (New file), what the agent gets, and the
+// Context from the library: the picker (New file), what the agent gets, and the
 // links as the Goal tab shows them. The sample items are read from the sample world (web/mock/sample) by id, so
 // the previews show and size the real library items, terms, files and decisions.
 import { type ReactNode, useMemo, useState } from "react";
@@ -25,7 +25,7 @@ const SRC = "src/features/context";
 
 // ---------------------------------------------------------------- sample items
 //
-// The items are built from the live Workdatabase with the same builders the picker uses, so a title
+// The items are built from the live library, glossary and files with the same builders the picker uses, so a title
 // or a size edited in a file changes here too. Only the ids live in ./data.
 
 interface Samples {
@@ -250,7 +250,7 @@ function LinkedContextBody() {
   return (
     <V
       label="a Links section with every kind of bullet"
-      note="Library items, entries and issues are RefLinks. A term opens the glossary, a file opens its source in Workdatabase · Files. A bullet wf does not know keeps its markdown."
+      note="Library items, entries and issues are RefLinks. A term opens the glossary, a file opens its source in Library · Files. A bullet wf does not know keeps its markdown."
       width={560}
     >
       <WithSamples>
@@ -280,28 +280,28 @@ function AddContextButtonBody() {
 
 export const contextEntries: KitEntry[] = [
   entry(
-    "Workdatabase",
+    "Library",
     "ContextPicker",
     `${SRC}/ContextPicker.tsx`,
     "Lets a person attach library items, glossary terms, files and decisions to an issue while they write it, so the agent starts with what the team already knows.",
     ContextPickerBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "ContextSearch",
     `${SRC}/ContextSearch.tsx`,
-    "One search over the whole Workdatabase, grouped by where an item lives, so context is found by typing a few words and pressing Enter.",
+    "One search over the whole library, grouped by where an item lives, so context is found by typing a few words and pressing Enter.",
     ContextSearchBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "ContextChip",
     `${SRC}/ContextPicker.tsx`,
     "Shows a picked item with its glyph, its title and its id, and flags a draft that agents will not get yet.",
     ContextChipBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "ContextPreview",
     `${SRC}/ContextPreview.tsx`,
     "Shows what the agent receives in the handoff context and what it costs, so nobody finds out after the fact that the budget cut their pick.",

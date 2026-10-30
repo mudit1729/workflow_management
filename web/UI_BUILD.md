@@ -10,12 +10,12 @@ can review each element and give feedback. It must look finished: calm, precise,
 Linear-like. It is also the real `web/` codebase, so write production-quality code.
 
 The product goals behind the screens (plan `docs/plan/proposals/codex-workflow-plan.md`): (1) distribute skills and plugins across the team
-(Workdatabase · Skills), (2) hand anyone the full context of an issue (the Now, Goal, Criteria, Plan, Log, Git, CI and Files tabs, the Open in Codex
+(Library · Skills), (2) hand anyone the full context of an issue (the Now, Goal, Criteria, Plan, Log, Git, CI and Files tabs, the Open in Codex
 button and **Copy context**, which copies the context bundle as markdown), (3) keep issues and tasks traceable (task ↔ commit ↔ CI run, every change a markdown diff).
 
 **The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
 markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
-what the board shows, edit a file there, or open **Workdatabase · Files** in the UI. Never add a
+what the board shows, edit a file there, or open **Library · Files** in the UI. Never add a
 TypeScript object that holds content. The one thing that is not markdown is git, pull request and CI data: in the product it is
 derived from git and GitHub and never stored in the workspace (plan D2), so the prototype reads a fixture
 (`mock/fixtures/delivery-sample.json`) and what a Codex run adds.
@@ -28,7 +28,10 @@ content. **Load sample data** (DevPanel, or `window.__wf.loadSample()`) puts it 
 data** goes back to the empty workspace; the **Kit** shows it while `/kit` is open. Every example id
 in this file (`wf-3k9x2` and so on) is an issue of the sample.
 
-## Naming: workspace, workflow, workdatabase
+## Naming: workspace, workflow, library (the old Workdatabase)
+
+The Workdatabase is now the **Library** (spec: `docs/plan/proposals/libraries-spec.md`). The view's id in code is still `workdatabase`
+(`WfView`), its label is "Library"; older paragraphs below that say "Workdatabase" mean this view.
 
 The words below are the product's vocabulary. Use them in UI copy, code comments, the Kit and
 feedback; the user quotes them.
@@ -36,7 +39,7 @@ feedback; the user quotes them.
 ```
 Workspace: wf            the container: workspace name, groups, workflow.toml
 ├─ Workflow              work in motion         sub-view: Board (with its Needs you filter)
-└─ Workdatabase          everything stored      sub-views: Library · Glossary · Files · Skills
+└─ Library               everything stored      sub-views: Personal · Team libraries · Files · Skills  (id `workdatabase`; the Glossary is a page of the workspace library)
 ```
 
 | word | means | where it shows |
@@ -44,30 +47,30 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | **Workflow** | work in motion | nav view, top bar name, tab title |
 | **Board** | the one Workflow sub-view: the issues as columns, with its filters | `/w`, drawer `/w/i/$id`, full page `/i/$id` |
 | **Needs you** | a board filter: only the issues that have an open request for the acting person. It replaces the inbox | toolbar toggle with a count, `/w?needs=me`, palette "Workflow · Needs you" |
-| **Workdatabase** | everything stored as markdown | nav view, top bar name |
-| **Library · Glossary · Files** | the stored notes, the terms and the raw files | `/lib`, `/glossary`, `/files` |
+| **Library** | markdown libraries read as a document wiki: **Personal** (`/lib/me`), **Team libraries** (`/lib/t/<alias>`, the workspace's own first), then **Files** and **Skills** | `/lib`, `/lib/me`, `/lib/t/<alias>`, `/files`, `/skills` |
+| **Glossary** | one page of the workspace library (`glossary.md`) | `/lib/t/<workspace>/glossary.md`; `/glossary` redirects |
 | **Skills** | the plugins and skills of the repository and how a team installs them (goal 1: distribute skills) | `/skills` |
 | **Add work** | the one way in: a group that Codex splits into issues, or one issue | the toolbar's `+ Add work`, `n`, palette "Add work…" |
 | **Open in Codex / Do next step** | the two Codex buttons beside each other: copy the command, or let Codex do the next ready task in the background | issue header, card menu, palette |
 | **Criteria · Git · CI** | the issue tabs added next to Goal and Log (see "issue tabs") | `?tab=criteria`, `git`, `ci` |
 | **Kit** | the prototype's own component gallery, not a view | `/kit`, `g k` |
 
-- A **view** is Workflow or Workdatabase; a **sub-view** is one page of it (Board, Library, Glossary,
-  Files, Skills). Say "Workflow · Board", "Workdatabase · Files". "Workspace files" is now
-  "Workdatabase · Files" (the nav and the top bar say just "Files"). **There is no inbox**: no route (`/inbox`
+- A **view** is Workflow or Library; a **sub-view** is one page of it (Board; Personal, Team libraries,
+  Files, Skills). Say "Workflow · Board", "Library · Files". "Workspace files" is now
+  "Library · Files" (the nav and the top bar say just "Files"). **There is no inbox**: no route (`/inbox`
   redirects to `/w?needs=me`), no nav item, no shortcut, no sub-view. A request that waits on you shows on its
   card, in the issue's Now tab and behind the Needs you filter.
 - **One top bar per page.** Each sub-view page starts its 44 px top bar with `ViewTabs`
   (`@/components/common`): the view's name and icon, a faint separator, then the sub-views as
-  real links (underline tabs; under 900 px the name gives way to the icon, under 420 px the icon goes too; counts: Library =
-  items; Glossary = terms; Files = files, with a red lint dot when any file has errors; Skills = skills). The
+  real links (underline tabs; under 900 px the name gives way to the icon, under 420 px the icon goes too; counts: Personal =
+  pages; Team libraries = libraries; Files = files, with a red lint dot when any file has errors; Skills = skills). The
   page's own controls follow (filters, search, actions) and stay visually secondary. The Board,
   its drawer (`/w/i/$id`) and the full issue page (`/i/$id`) all count as Board.
 - The **Groups** tree in the nav rail filters the Workflow board; it belongs to neither view.
 - **Kit** (`/kit`, `g k`) is the prototype's own tooling, not a view. It sits near the footer of
   the nav.
-- Page and tab titles: `(3) Workflow · wf`, `Workdatabase · wf` (Library), `Workdatabase · Glossary · wf`,
-  `Workdatabase · Files · wf`, `Workdatabase · Skills · wf`, `Kit · wf`; 3 = my open needs-you requests (no count at
+- Page and tab titles: `(3) Workflow · wf`, `Library · wf` (the home), `Library · Personal · wf`, `Library · Team libraries · wf`,
+  `Library · Files · wf`, `Library · Skills · wf`, `Kit · wf`; 3 = my open needs-you requests (no count at
   zero). A view's home sub-view (Board, Library) is not named in the title; the others are.
 - **The user's rule for every control:** buttons are preferred over multiple choice, multiple choice over
   drop-down menus, drop-down menus over typing. Add work asks one question per screen and types only one line (a lone issue's criterion is drafted by Codex and can be edited with a button).
@@ -141,11 +144,13 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | `/w/i/$id` | `BoardLayout` → `BoardPage` + `IssueDrawer id` | board search + `tab, log` |
 | `/i/$id` | `IssuePage id` | `tab, log` |
 | `/inbox` | **gone**: redirects to `/w?needs=me`, so an old link still lands on the filter | |
-| `/lib` | Workdatabase · Library: `LibraryView` (three layout modes, see its section) | `kind, q` (`?tab=glossary` redirects to `/glossary`, keeping `q`) |
-| `/lib/$id` | `LibraryView` with `LibraryItemView id` open | `kind, q` |
-| `/glossary` | Workdatabase · Glossary: `GlossaryPage` from `@/features/library` (renders its own top bar with `ViewTabs`) | `q` |
-| `/files` | Workdatabase · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed), `line` (scroll to and flash that line) |
-| `/skills` | Workdatabase · Skills: `SkillsView` from `@/features/skills` (the repository's plugins and skills, how to install them, the SKILL.md of the open one) | `skill` (the open skill: `/skills?skill=adding-work`) |
+| `/lib` | Library home: `LibraryHome` (a card per library, then the pages opened last) | `q, scope` (`?tab=glossary` redirects to the Glossary page, `q` opens it at that term) |
+| `/lib/me`, `/lib/me/$` | the personal library: `WikiView alias="me"` (home: `PersonalHome`; a page: the splat is its root-relative path) | `q, scope, view` (`view=source`) |
+| `/lib/t`, `/lib/t/$alias`, `/lib/t/$alias/$` | `/lib/t` redirects to the workspace library; otherwise `WikiView` of a team library (home page, or an overview drawn from the tree), or one of its pages | `q, scope, view` |
+| `/lib/$id` | old address of a library item (`lib-xxxxx`): redirects to its page in the workspace library; an unknown id goes to `/lib` | |
+| `/glossary` | old address of the glossary: redirects to `/lib/t/<workspace>/glossary.md`; `?q=<term>` opens at that term's heading | `q` |
+| `/files` | Library · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed), `line` (scroll to and flash that line) |
+| `/skills` | Library · Skills: `SkillsView` from `@/features/skills` (the repository's plugins and skills, how to install them, the SKILL.md of the open one) | `skill` (the open skill: `/skills?skill=adding-work`) |
 | `/kit` | `KitPage` (component gallery) | |
 
 `tab` is one of `now, goal, criteria, plan, log, git, ci, files` (`ISSUE_TABS` in `@/lib/nav`, the order of keys 1 to 8); `log` is
@@ -155,7 +160,7 @@ Every route renders inside the one `AppShell`. `subViewForPath(pathname)` (`@/co
 is the single place that says which sub-view a path belongs to (`/w`, `/w/…` and `/i/…` → Board; `/skills` → Skills;
 `/inbox` belongs to no sub-view, the router redirects it before anything renders);
 `ViewTabs`, the `NavRail` and the tab title all use it. **Lazy chunks:** the issue views (`IssueDrawer`, `IssuePage`, the whole
-issue feature), the Add work dialog and `SkillsView` are `React.lazy` in `app/lazy-views.tsx`, so the first paint carries the shell and the board;
+issue feature), the Add work dialog, `SkillsView`, the library viewer (`WikiView`, `LibraryHome`) and the Add team library dialog are `React.lazy` in `app/lazy-views.tsx`, so the first paint carries the shell and the board;
 the browser fetches the rest when idle (`preloadViews`). `/skills`'s search validator lives in `features/skills/search.ts` so the router does not import the view.
 
 Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`,
@@ -210,23 +215,36 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   — solid arc = verified, hatched arc = claimed, track = border color; total 0 → dashed ring. Tooltip text
   "2 verified · 1 claimed · 5 criteria".
 - `LintBadge({ counts: LintCounts, variant?: "dot"|"badge", onClick? })` — dot: 6 px, danger if errors, stale if warns, faint if info.
-- `MarkdownProse({ md: string, diagrams?: Diagram[], issueId?: string, compact?: boolean, className? })`
+- `MarkdownProse({ md: string, diagrams?: Diagram[], issueId?: string, compact?: boolean, document?: "page" | "pane" | "wiki", wiki?: ProseWiki, source?, className? })`
   — react-markdown + remark-gfm + rehype-sanitize. Renders ```` ```wf-diagram\n<id>\n``` ```` via
   `ArchifyCard` from `@/features/diagram` (look up the id in `diagrams`); other code blocks as mono blocks
   (shiki lazy-loaded is optional); `[[ref]]` → `RefLink`; `@handle` → `AuthorChip variant="text"`;
-  calm typography (13 px, 1.5 leading, 8 px paragraph gap, small H3/H4).
+  calm typography (13 px, 1.5 leading, 8 px paragraph gap, small H3/H4). **GitHub callouts** (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`,
+  `[!WARNING]`, `[!CAUTION]`) are boxes with their name in the header in every use (`remarkCallouts` in `remark-wf.ts`; the kind rides on `data-callout`).
+  **`wiki` = a page of a library** (`{ alias, path, links: PageLink[], media: Record<src, PageMedia> }`, from `LibraryPage`; read through context):
+  headings get anchors (`headingsOf` in `features/library/anchors.ts`, the GitHub slug, unique per page) and a `#` link; `[[path]]`, `[[path#heading]]`,
+  `[[alias:path]]`, `[[target|label]]` and relative `[text](../x.md)` links go to pages (`PageLink`, dashed with a tooltip when the page, heading or
+  library is missing); an issue id or lib id keeps `RefLink`. A paragraph that is only an image, a video file (`![Demo](media/demo.webm)`) or a
+  YouTube, Vimeo or Loom link becomes a `MediaFigure` / `EmbedCard` (`MarkdownMedia.tsx`; not in `compact` text). `document="wiki"`: body 15 px (16 px
+  from 1280 px) at 1.65, headings 28 / 22 / 18 / 16, inline code at 0.875em.
+- `MarkdownMedia.tsx` — `MediaFigure({ media, alt })` (an image with its alt as caption and click-to-zoom; a missing file or one over 25 MB
+  is a quiet note, not a stalled load), `GifPlayer({ src, alt, reducedMotion? })` (plays; under `prefers-reduced-motion` the first frame on a canvas with a
+  Play button; a Pause button on hover for everyone), `VideoPlayer({ src, label })` (`<video controls preload="metadata">`, never autoplay or loop),
+  `EmbedCard({ embed, title?, poster? })` (the player is an iframe from `youtube-nocookie.com`, `player.vimeo.com` or `loom.com/embed`, **mounted only
+  after a click**; the poster is a picture of the library, never fetched from the provider) and `parseEmbed(url)`.
 - `RefLink({ target: string, issueId?: string })` — `[[wf-3k9x2]]`, `[[wf-3k9x2#D-7f3k2]]`, `[[#T-4]]`, `[[lib-4tz7c]]`;
   resolves titles from the snapshot; dangling → dashed underline + F009 tooltip.
 - `GroupPath({ path: string[], className? })` — faint "wf / web".
 - `SourceLineMarker({ path, line, … })` — the quiet tag ("library/gotchas/rescan-subtrees.md:14") that a rendered block shows in the page's left
-  gutter on hover; it opens that line in Workdatabase · Files, or wherever its owner's `onJump` sends it. `CodeBlock({ code, lang?,
+  gutter on hover; it opens that line in Library · Files, or wherever its owner's `onJump` sends it. `CodeBlock({ code, lang?,
   highlightLine?, maxHeight?, compact? })` — mono block; the marked line has a 2 px `border-danger` left bar (a real `border-l-2`, the
   same bar `JsonSource` uses), never an inset shadow.
 - `ViewTabs({ view: "workflow" | "workdatabase", className? })` — the sub-view tabs of a view as real links (`Link`,
   `aria-current="page"` on the active one), after the view's name and icon. Workflow: Board (no count: what waits on you is the
-  board's Needs you filter); Workdatabase: Library · Glossary · Files · Skills (counts, lint dot when a file has errors). Also exports `VIEWS`,
-  `SUBVIEWS` (label, route, shortcut per sub-view), `subViewForPath(path)`, `useActiveSubView()`, `useViewCounts()`
-  (`library, glossary, files, skills, fileErrors`).
+  board's Needs you filter); Library (`view="workdatabase"`): Personal · Team libraries · Files · Skills (counts: pages, libraries, files, skills; lint dot when a file has
+  errors). The Library home (`/lib`, sub-view `library`) is the page the view's name opens, not a tab. Also exports `VIEWS`,
+  `SUBVIEWS` (label, route, shortcut per sub-view: `g l` home, `g p` Personal, `g t` Team libraries), `subViewForPath(path)`, `useActiveSubView()`, `useViewCounts()`
+  (`personal, team, files, skills, fileErrors`).
 - `CopyButton({ text, label })`
 - `MoveGateDialog()` — rendered once by the shell. Reads `useMoveGate()` from `@/lib/api`. Two modes:
   illegal move ("backlog → done is not an allowed move…" + "Move anyway") and done gate (lists `gaps`,
@@ -308,7 +326,7 @@ All four sit beside the markdown ones in `src/lib/api/` and `web/mock/`, with te
   `plugins/*/skills/*/SKILL.md`, `plugins/*/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` (`import.meta.glob`, so what is
   committed is what shows; the dev server lets Vite reach above `web/`).
 - **`openAddWork(start?)`** is in the shell store (`app/shell-store.ts`), not in the data layer: `start` is `{ kind?: "group" | "issue", group? }`.
-  `useShell` also holds `paletteOpen`, `shortcutsOpen`, `addWorkOpen`, `devPanelOpen`, `mobileNavOpen` and `narrowNavOpen`. The old
+  `useShell` also holds `paletteOpen`, `shortcutsOpen`, `addWorkOpen`, `addLibraryOpen` (`openAddLibrary()`), `devPanelOpen`, `mobileNavOpen` and `narrowNavOpen`. The old
   `newIssueOpen`, `newGroupOpen`, `openNewIssue` and `openNewGroup` are gone.
 
 #### Markdown first: how `web/mock/` works
@@ -428,8 +446,8 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   **768 to 1099 px: always the icon rail** whatever was saved (`useNavRail`, `NARROW_RAIL_QUERY`), so a tablet in portrait keeps its page
   width; ⌘B, `[` and the expand button then open the full rail as an overlay that is saved nowhere. Content: a faint "Workspace" label
   above the workspace name ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid
-  icon) with its one sub-item Board (`g w`), **Workdatabase** (Database icon; `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`)
-  and Skills (`g s`), each with a faint count; then the **Groups** tree (it filters the Workflow
+  icon) with its one sub-item Board (`g w`), **Library** (BookOpen icon; `g l`) with Personal (`g p`, its page count), Team libraries (`g t`: the workspace library first, then
+  each library added, then **+ Add team library**), Files (`g f`) and Skills (`g s`), each with a faint count; then the **Groups** tree (it filters the Workflow
   board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme (system/light/dark), density, notifications
   toggle, ⌘K hint, `?` hint. **There is no Inbox item and no inbox count**: what needs you is the board's Needs you filter. Icon rail:
   one icon per view, tooltips list the sub-views. The phone sheet mirrors the expanded rail. Active states follow the route
@@ -442,18 +460,18 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   goes first, so Enter runs what you typed. Actions: **Add work…** (`n`, group path) and **Add one issue…** (issue path); with an issue open:
   **Open <id> in Codex** (copies the command), **Do the next step of <id>** (a background run), move it to…, open it as a
   full page, "Edit goal.md of <id>", **Hand over <id>: copy its context** (`copyContextWithToast(id)` from `@/features/issue/handoff`: copies the bundle markdown, one toast "Copied context for wf-… (~1.9k tokens)" with **View**,
-  which opens the bundle in the issue view's dialog) and **View the context of <id>**; while a run goes on the issue the "Do the next step" row is **Cancel Codex's run on <id>**; then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"),
-  "Workdatabase · Library", "· Glossary", "· Files", "· Skills", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
+  which opens the bundle in the issue view's dialog) and **View the context of <id>**; while a run goes on the issue the "Do the next step" row is **Cancel Codex's run on <id>**; **Ask the library about <id>** (`openAskPanel({ issue })`; with no issue open the row is **Ask the library…**, and the panel offers recent issues to pick), then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"),
+  "Library", **"Open personal library"**, "Library · Team libraries", **"Add team library…"**, **"Search the library"** (goes to `/lib` and focuses the search box; `/`), "Library · Glossary" (the Glossary page), "Library · Files", "Library · Skills", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
   play the next live event. **The Codex actions use the same code as the buttons**: `copyCodexCommand(issue)` and `useNextStep(issue)` (`{ busy, start, cancel }`) from
   `@/features/codex`, so a run started from the palette, the issue header or the card menu gives exactly one toast (when it ends) and the copy
   has one wording. While a run goes the palette's action says "Codex is working on it" and is disabled.
 - `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from `SHORTCUTS` in `app/shortcuts.tsx` with `Kbd`; sections General, Go to,
-  Workflow · Board, Issue, Workdatabase · Files. Go to rows: "Workflow · Board" `g w`, "Workdatabase · Library"
-  `g l` or `g d`, "Workdatabase · Glossary" `g g`, "Workdatabase · Files" `g f`, "Workdatabase · Skills" `g s`, "Kit" `g k`. General has `n` = Add work.
+  Workflow · Board, Issue, Library · Files. Go to rows: "Workflow · Board" `g w`, "Library"
+  `g l` or `g d`, "Library · Personal" `g p`, "Library · Team libraries" `g t`, "Library · Glossary" `g g`, "Library · Files" `g f`, "Library · Skills" `g s`, "Kit" `g k`. A "Library · Pages" section lists `[`, `]` and `/`. General has `n` = Add work.
   Issue: keys 1 to 8 switch the tab (Now, Goal, Criteria, Plan, Log, Git, CI, Files). No inbox shortcut exists.
 - **The legacy New issue and New group dialogs are gone** (`app/NewIssueDialog.tsx`, `NewGroupDialog.tsx`, `dialog-parts.tsx`, their Kit
   entries and `newIssueOpen`, `newGroupOpen`, `openNewIssue`, `openNewGroup` in the shell store). Add work (`features/add-work`) replaces both;
-  `n` opens it. The "Context from the Workdatabase" picker of the old dialog lives on in the Add work flow's context step (a chip per match) and in the
+  `n` opens it. The "Context from the library" picker of the old dialog lives on in the Add work flow's context step (a chip per match) and in the
   New file dialog (`ContextPicker`); the Goal tab's "Add context" still adds context later.
 - `app/RouteStates.tsx` — `RouteError`: "This view failed to load", the message, **Try again** (`router.invalidate()` then the
   boundary's `reset()`; it does not reload the page, so the mock's in-memory edits survive), Copy details, Go to Workflow.
@@ -462,9 +480,9 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   play next live event, connection state, simulate conflict on next write, **archify available** (off by default; the unavailable
   diagram card's "Prototype" button turns it on and the switch follows), **Reset data** (back to the shipped files: groups,
   library, no issues), **Load sample data** (the 26 sample issues in one commit; toast "Loaded 26 sample issues"), open
-  Workdatabase · Files, jump to Kit. "Play next event" says "No live events apply here. Load sample data to play them." when
+  Library · Files, jump to Kit. "Play next event" says "No live events apply here. Load sample data to play them." when
   no scripted event fits the workspace. Toggled by the `.` key too.
-- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g d` Workdatabase (Library), `g l` Library, `g g` Glossary,
+- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g d` and `g l` Library, `g p` Personal, `g t` Team libraries, `g g` the Glossary page,
   `g f` Files, `g s` Skills, `g k` Kit, `n` Add work, `?`, `.`. `g i` (inbox) no longer exists.
 
 ### board builder: `src/features/board/**`
@@ -676,49 +694,123 @@ hundred bytes): the palette imports `copyContextWithToast` from that file direct
 - `DiagramDialog({ diagram, open, onOpenChange })` — fullscreen dialog, iframe without `embed`,
   `sandbox="allow-scripts allow-downloads"`, header with title, type, source location (`plan.md:40`), copy JSON.
 
-### library builder: `src/features/library/**`
+### library builder: `src/features/library/**` (spec: `docs/plan/proposals/libraries-spec.md`)
 
-`library/index.ts` exports `LibraryView, LibraryItemView, GlossaryPage, GlossaryView, MarkdownDocument, PromoteDialog`. (`features/inbox` is deleted:
-there is no `InboxView`; see "Needs you" under the board.)
-- `LibraryView` — Workdatabase · Library (the Glossary is its own page, `/glossary`, `GlossaryPage`): one 44 px top bar (`ViewTabs` first), then
-  facets (kind, status, review overdue, tags), search (server `useSearch(q, "library")`, `/` focuses it) and the list of item rows (kind icon,
-  title, "Use when…" description, status chip (draft = outline, reviewed = success, retired = faint strike), used by N, review overdue amber);
-  selecting a row opens `LibraryItemView` (`/lib/$id`). **Three layout modes, by the measured width of the page** (the rail counts as page;
-  `useElementWidth` on the root):
-  - **1100 px and up, docked:** facets, list and item side by side; the pane is 520 to 640 px (40% of the page).
-  - **860 to 1099 px, beside the list:** an open item takes the facets' place; the facets become filter chips above the list
-    (`LibraryFilterChips`), the item sits beside it, the list keeps its status column and at least 360 px.
-  - **under 860 px (and on a phone): its own screen.** An open item replaces the list; "← Library" goes back. On a phone the facets are
-    the filter chip row (it scrolls sideways on purpose) under a full-width search.
-  The list never sits half under the item.
-- `LibraryItemView({ id, variant?: "pane" | "screen" })` — a toolbar (kind, status chip, **Rendered | Source** switch, **Edit**, Close), a
-  path row, the draft / retired / overdue banners ("Draft — not injected into agent context until reviewed"), then the page: the file
-  rendered from its markdown (`MarkdownDocument`: frontmatter as properties, every section in file order, each block tied to its
-  source line with a `SourceLineMarker`), where it came from (RefLinks; a `source:` entry the server could not resolve, such as a
-  sample issue in the empty workspace, still shows from the file's own frontmatter as a dangling reference with "Not in this
-  workspace", never as "No source recorded"), "Used by N issues", Approve (draft → reviewed via
-  `useApproveLibrary`), Retire (disabled stub). **Source** shows `SourceView embedded` edge to edge under the toolbar, with lint
-  markers. **Edit edits inline, in either view**: it calls `requestFileEdit({ path })` (the source view starts its editor in place; the
-  person never leaves the Library), shows Edit as taken while the editor is open (`onEditingChange`), returns focus to the Edit button after
-  a save or cancel (`returnFocusTo`), and refuses a switch of view with a toast while an edit is open. "Open in Files" is a link in the
-  source meta line.
-- `GlossaryPage` (`/glossary`) — a 44 px top bar (`ViewTabs`, then a search box; the filter lives in `?q=`) over `GlossaryView`: the terms
-  read from `glossary.md`, each with its kind, meaning, the avoided synonyms struck through with an arrow to the term, and a "See:" list whose
-  entries are buttons (24 px hit area, 28 px on a phone) that jump to that term; every term names its source line and opens it in
-  Workdatabase · Files.
-- `PromoteDialog({ open, onOpenChange, issueId, entry: LearningEntry | DecisionEntry })` — kind (prefilled from the
-  entry: gotcha/pattern/tip→pattern, decision→decision), slug (auto), preview of the draft item, dedupe suggestion
-  ("Similar: lib-… — merge instead?" when the mock search finds a close title), Create draft → `usePromote()`;
-  explains that a review request goes to the group owner.
+The Library is a set of **libraries**: folders of markdown and media in a git repo, read as a document wiki. There are three origins
+(`LibraryOrigin`): the **workspace library** (decision L4: `library/` plus `glossary.md` as the page "Glossary"; alias = the workspace name, `wf`;
+listed first), the **personal library** (alias `me`; the files under `mock/personal/`, editable) and **team libraries** (added by a GitHub link;
+`registerLibrary`). The model is `mock/libraries/` (pure; the registry `createLibraries(store)` is stateful), the API `src/lib/api/library.ts`, the
+viewer `src/features/library/`.
+
+- **Model (`mock/libraries/`).** A `LibrarySource` (`@/lib/api/types`: `alias, kind, name, description?, url?, ref?, commit?, root?, access?, files, media`,
+  plus `others?`, `origin?`, `meta?`) becomes a `Layout` (`tree.ts`: pages, media and other files under the root; `findLibraryRoot` of spec 4.2 in
+  `manifest.ts`), a `LibraryTree` and `LibraryPage`s (`corpus.ts`, `buildCorpus(sources, workspaceFacts)`): folders are sections; `index.md`,
+  `README.md` or `_group.md` is a section's own page; a title is the frontmatter `title`, else the first `#` heading, else the file name read as words;
+  order is `wf-library.toml`'s `nav.order` (or the personal `library.toml`'s), then `order:`, then alphabetical by title. Links of every form (`links.ts`:
+  relative, `[[path]]`, `[[alias:path]]`, `[[wf-xxxxx]]`, `[[lib-xxxxx]]`, `[[#heading]]`, external) are resolved per page; a page lists its **backlinks**
+  across libraries and the **issues** whose `goal.md` `## Links` (or any file that cites a workspace item) name it. `search.ts` is a BM25 index over
+  title, headings and text, **per section** (a heading of level 1 to 3 starts one); `searchSections(index, query, { aliases?, pages?, k? })` returns
+  passages with a snippet and `marks`. Team libraries are listed in the personal `libraries.toml` (`[[team]]` blocks); `registerLibrary(source)` and
+  `unregisterLibrary(alias)` keep that text.
+- **API (`@/lib/api`).** `useLibraries()`, `useLibrary(alias)`, `useLibraryTree(alias)`, `useLibraryPage(alias, path)`, `useBacklinks(address)`,
+  `useLibrarySearch(query, scope?, k?)`, `resolveAddress(raw, from?)`, and the writes `savePage`, `deletePage`, `saveMedia`, `addLibrary(source)`,
+  `removeLibrary(alias)` (and `useSavePage`, `useAddLibrary`, `useRemoveLibrary`). Reads follow the libraries live while mounted (`useLibraryLive`).
+- **The viewer.** `WikiView({ alias, path })` is the page of `/lib/me*` and `/lib/t/*`: the 44 px top bar (`LibraryTopBar`: the Library tabs and the search with its
+  scope, `LibrarySearchBox`), then page tree (240 px, `PageTree`) · document · right rail (`RightRail`: On this page, Linked from, Used in issues, Page facts)
+  at **1280 px and up**; at **1024 to 1279 px** On this page is a popover in the header (`OutlinePopover`); under **1024 px** the tree is a left `Sheet`
+  (a Pages button; on a phone it sits in the search row). `PageHeader` holds the breadcrumbs (Library / library / sections), the title, a `MetaLine` (kind,
+  updated and by whom, minutes to read), the **Rendered | Source** switch, and the actions **Ask about this page** (`openAsk(address)` from `ask-hook.ts`),
+  **Link to an issue…** (`LinkToIssue`: pick an issue, a `- [[address]] title` bullet goes under its `## Links`; a workspace item keeps its `lib-` id),
+  **Copy link**, **Open on GitHub** (team pages) or **Open in Files** (the workspace library), and **Edit** (personal library: `PageEditor`, the Files
+  `SourceEditor` with a `save` of its own; the header then says "Saved · pushed a1b2c3d"). The keys: `[` and `]` go to the previous and next page in
+  reading order (they override the sidebar's `[` while a page is open), `/` focuses the search. A search (`?q=`) replaces the page with
+  `SearchResults`, grouped by library, each passage under its heading with the words marked. A library without a home page, or a folder without a
+  page, shows `LibraryOverview` (drawn from the tree). `LibraryHome` (`/lib`): a card per library, the add card, the pages opened last (`recent.ts`,
+  kept in this browser only).
+- **The workspace library's own features stay.** A page that is a library item shows its banners (Draft: **Approve** via `useApproveLibrary`, Retired,
+  review overdue; `ItemBanners`) and its facts (kind, status, authors, reviewed by, created, last reviewed, review after, tags, applies to, promoted from,
+  id; `ItemFacts`); the Glossary page renders `GlossaryView embedded` (terms, the words to avoid, See links, the line in glossary.md). `PromoteDialog({ open,
+  onOpenChange, issueId, entry })` is unchanged: kind (prefilled from the entry), slug (auto), preview, dedupe suggestion, Create draft → `usePromote()`.
+  `[[lib-xxxxx]]` links from issues (`RefLink`) go to `/lib/lib-xxxxx`, which redirects to the item's page.
+- **Where the rest lives.** The personal home and summaries are `features/library/personal/` (below), the Add team library flow is `features/library/team/`
+  (below), Ask library is `features/ask/` (below). `ask-hook.ts` is the seam between the page header and the Ask panel (`openAsk(address)` opens the
+  panel on that page; `AskHost` registers it with `setAskHandler`). `openAddLibrary()` (`app/shell-store.ts`) opens the Add team library dialog.
+- **Media rules (spec L7).** A page names media relative to itself: `![Caption](media/flow.gif)`. `MarkdownProse` (`document="wiki"`, `wiki={{ alias, path,
+  links, media }}` from a `LibraryPage`) renders it through `MarkdownMedia.tsx`: a picture is a `MediaFigure` (the alt text is the caption; a click opens it
+  full size); a **GIF** plays unless the reader prefers reduced motion, then it shows its first frame under a Play button (`GifPlayer`); a **video file**
+  (`.mp4`, `.webm`) is a `VideoPlayer` with controls, `preload="metadata"`, never autoplay; a line holding **only** a YouTube, Vimeo or Loom link is an
+  `EmbedCard` (no request to the provider until the card is clicked; a `[![Title](media/poster.png)](url)` uses the picture as its poster); a file over
+  25 MB (`LARGE_MEDIA_BYTES`) is linked, not loaded; a file the library lacks says so, quietly. Callouts are GitHub's `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`,
+  `[!WARNING]`, `[!CAUTION]`. Headings carry GitHub anchors; a broken `[[link]]` is dashed and listed in the page facts. A wiki table is 14 px so its code stays
+  at 12 px. Where the files live: personal `mock/personal/**` (and `mock/personal-sample/**` while the sample is loaded), the workspace library
+  `mock/workspace/library/**`, the example team library `mock/teams/acme-platform-handbook/**`. The `?wf-asset` import gives `{ url, bytes }`.
+- **Document typography.** UI text is 13 px; a wiki page body is 15 px (16 px from 1280 px) at line height 1.65, in a column of about 72ch; h1 28, h2 22, h3 18
+  (see `MarkdownProse`). Color only for status, author or group; one indigo accent.
+
+### personal library builder: `src/features/library/personal/**` (spec section 3)
+
+`/lib/me` is `PersonalHome`: a header (Private, the repo, the page count), then three sections, each a part of the markdown tree of the personal repo.
+**Research topics** (`TopicsSection`: `topics/<slug>/index.md`, a card per topic with its status, question, updated and note count, ordered active, paused, done;
+**New topic** writes a page from a template with `savePage`), **Codebases** (`CodebasesSection`, `CodebaseCardView`: `codebases/<owner>-<repo>.md`, the repo, the
+commit, "N commits behind main" from `codebase.ts`, Refresh) and **Work** (`WorkSection`, `WorkSectionView`: the group tree of the workspace with each group's
+issues under their status; a **Stale** mark when the issue or a group above changed after the summary; **Summarize this group**). A summary page shows
+`SummaryBanner` under its title. Before the first visit, `PersonalSetup` offers **Create github.com/<you>/wf-library (private)** or **Use a repo I already
+have** (the link field appears only after the second); `window.__wf.resetPersonal()` and `setUpPersonal()` flip it.
+
+- **Work summaries are generated, deterministically.** `mock/libraries/work-summaries.ts` writes `work/<workspace>/<group path>/_group.md` and `<issue-id>.md`
+  from the parsed workspace (formats of `plugins/workflow/skills/summarizing-work`). The rev of a page is the first 7 hex characters of the SHA-256 of the wf
+  files of its folder with times made neutral, so a lease renewal does not make a summary stale; `personal/work.ts` (`summaryState`, `workTree`) is the pure part.
+  The pages of the sample live in `mock/personal-sample/work/` and show only while the sample is loaded; four of them are kept by hand as an older state so the
+  demo shows Stale. A test pins the other 29 to the generator.
+- **Agent hook.** `setPersonalAgent({ summarize(request) })` (`personal/summarize.ts`): the agent connection registers it. Without one the prototype rewrites the page itself
+  after a short "Summarizing…" and says "Prototype".
+- **Fixture content.** Two research topics with a GIF, a video file and a YouTube card (`mock/personal/topics/`), a real summary of this repository
+  (`mock/personal/codebases/`). The `biome.json` in `mock/personal*` keeps the formatter off the markdown.
+
+### team libraries builder: `src/features/library/team/**`, `mock/libraries/github.ts`, `mock/teams/**` (spec section 4)
+
+**Adding a library takes one paste.** `AddTeamLibraryDialog` (opened by `openAddLibrary()`: the nav's **+ Add team library**, the library home card, the palette) is Add
+work's pattern: one screen at a time, Back and progress dots at the bottom. **1 Paste a GitHub link** (the one field; a pasted link goes on at once; the example
+`acme/platform-handbook` and unread entries of `libraries.toml` are buttons), **2 Which folder** (only when several of `library/`, `docs/`, `wiki/`, `handbook/` hold
+markdown; number keys), **3 Add this library?** (name, description, counts, public, the last commit, the alias with an Edit button, the first page small). **Add library**
+reads every page (`readLibrary`), calls `addLibrary(source)` (the `[[team]]` block of `libraries.toml`) and opens the library. A failure is one plain sentence with a way
+forward (`explain` in `flow.ts`): another host, a gist or raw link, private (**Connect an agent to read private repos**, the hook `setConnectAgentHandler`),
+unreachable (**Try again**, **Use the example library**), rate-limited (when GitHub lets the page ask again).
+
+- **Reader.** `mock/libraries/github.ts` (`parseGithubLink`, `findLibrary`, `previewLibrary`, `readLibrary`, `remoteHead`): the tree comes from one `git/trees?recursive=1` call
+  (3 API calls a lookup, ETag cached), files from `raw.githubusercontent.com/<o>/<r>/<sha>/<path>` pinned to the commit. It lives in `mock/` for now and is its own chunk. The unauthenticated limit is
+  60 calls an hour. A repo the prototype knows by name (`mock/teams/`, `FIXTURES`) is read offline in every link form; `window.__wf.teams.moveRemote()` plays a newer commit on it so
+  the footer's **Update** shows, `resetRemote()` undoes it.
+- **After adding.** A page footer says "a1b2c3d · 2 days ago" and, when the branch moved, "A newer version is on GitHub. **Update**" (`TeamCommit`, `useTeamUpdate`); the
+  header has a **library menu** (`TeamLibraryMenu`: Open repository on GitHub, Update, Remove library… with a confirmation). A library added in a session is gone on reload
+  (the registry holds it in memory; only a hand-written `libraries.toml` entry persists, and shows as "Not loaded" with a one-click read).
+
+### ask library builder: `src/features/ask/**` (spec section 6, decision L3)
+
+**Ask library** in the issue header (`AskLibraryButton`), **Ask about this page** in the library, and the palette open a side panel (`AskPanel` in `AskSheet`, 440 px, to the left of the issue
+drawer when both fit; it never closes on a click outside; Esc closes only the panel; under 640 px it covers the width). `AskHost` is mounted by `AppShell`. Top to bottom:
+**Where to look** (`ScopeChips`: buttons for Linked to this issue, My library, one per team library (the workspace's is "This workspace"), and **Pick pages…**, a tree of
+checkboxes in `PagePicker`; a size line "2 pages · ~480 tokens"), **Question** (`QuestionBox`: three suggested questions from `questions.ts`: the open request, the next unverified
+criterion, the goal; and a text box), then the result: reading, **the answer** (`AnswerView`: markdown with `[n]` citation chips and a Sources list, each opening the cited section in place;
+**Link cited pages**, **Save to log**, **Copy**; each write is one line in the panel, not a toast, and its button is spent) or, with no answer, the five best passages (`PassageList`) and
+**Connect an agent for an answer**.
+
+- **Who answers.** A connected agent first (`setAskAgent({ handle, ask(request, signal, onText) })`; the request carries the `querying-library` prompt: `Pages:` lines and the question),
+  else the prototype (`mock/libraries/ask.ts`, extractive and labelled "Prototype answer from N passages"; `window.__wf.setPrototypeAnswers(false)` turns it off), else nobody.
+  `answer.ts` (`parseAnswer`) reads the skill's output: the answer above the last `## Sources`, `[n]` citations, `Not in these pages.`, `Could not read:`, `Note:`.
+- **Writes.** `add_links` takes `kind: "page"` (`- [[alias:path]]: Cited for “<question>”.`; a workspace library item keeps its `lib-` id, a retired one is left out) and `add_learning`
+  (`useAddLearning`: a learning titled by the question, its summary the rule, `Evidence: answered from the library, sources:` and one `[[alias:path#section]]` bullet per source). Linked
+  team pages enter the context bundle as reference data pinned by commit (`platform:runbooks/x.md@a1b2c3d`), with a closing tag defused.
+- **Kit.** `AskBody` and `AskResult` are exported so the Kit can draw the panel's states in a frame (`question` asks one question on mount).
 
 ### workspace-files builder: `src/features/files/**` (+ View source in `features/issue/{tabs/FilesTab,DocsList,DocView}.tsx`)
 
 The prototype's way to see and change the markdown the board is built from. Route `/files?path=<workspace-relative path>[&line=n]`;
-a Workdatabase sub-view: nav item "Files" (`g f`); palette "Workdatabase · Files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
+a Library sub-view: nav item "Files" (`g f`); palette "Library · Files" and "Edit goal.md of <open issue>"; a button in the DevPanel.
 There is no "Prototype" chip on the page (the top bar's one-line explanation has a tooltip that says edits stay in the browser tab).
 `index.ts` exports `WorkspaceView`, `WorkspaceTree`, `SourceView`, `SourceEditor`, `NewFileDialog`, `useFilesNav`, `FilesLink`, `filesHref`,
 `requestFileEdit`, `ISSUE_FILE_NAMES`, `issueFileTemplate`, `templateForPath`, `type FilesSearch`; `@/app/search` has `validateFilesSearch`.
-- `WorkspaceView({ path? })` — 44 px top bar (`ViewTabs` for the Workdatabase, a one-line explanation from 1360 px, "New file"), a 280 px tree at
+- `WorkspaceView({ path? })` — 44 px top bar (`ViewTabs` for the Library, a one-line explanation from 1360 px, "New file"), a 280 px tree at
   the left and `SourceView` at the right. **Single-screen layout under 720 px of page width** (measured on the view's root, so the rail counts
   as page; not a viewport query): the tree and the file are separate screens with a back arrow. A 280 px tree leaves 440 px for a file, which
   is the least the source needs.
@@ -753,7 +845,7 @@ There is no "Prototype" chip on the page (the top bar's one-line explanation has
 - `NewFileDialog({ open, onOpenChange, defaultGroup?, defaultIssue?, onCreated, onEdit })` — templates "New issue (goal.md)"
   (title, group folder, slug; writes a valid backlog `goal.md` with a fresh `wf-xxxxx` id), "Change entry" (opens the issue's
   `changes.md` with a new entry appended and its title selected) and "Empty file". The path input is always visible and
-  validated (workspace-relative, `.md` or `.toml`, no `..`, no ignored folders, no duplicates). It also takes context from the Workdatabase.
+  validated (workspace-relative, `.md` or `.toml`, no `..`, no ignored folders, no duplicates). It also takes context from the library.
 - Issue Files tab — every issue file and doc row has "View source" (inline `SourceView`, with Edit and "Open in Files"); a missing issue file
   has "Create", which opens the editor with a starting text. `DocView` has "View source" too.
 - Data: only `useWorkspaceFiles`, `useWorkspaceFile`, `useWriteWorkspaceFile`, `useDeleteWorkspaceFile` from `@/lib/api`.
@@ -808,10 +900,10 @@ beside it a button that in the background does the next step".
 - `useRunActive(issueId)` — true while a run goes on the issue and for 1.5 s after (the time the issue takes to be read again). The header's Q005 row and the Now tab's "behind" chip wait on it.
 - Run words are in `run-copy.ts` (`runLine`, `runWord`, `runProgress`, `activeRun`): the strip, the card marker, the runs list and the toasts all read a run through them.
 
-### features/skills: `src/features/skills/**` (plan D7, Workdatabase · Skills)
+### features/skills: `src/features/skills/**` (plan D7, Library · Skills)
 
 `index.ts` exports `SkillsView, SkillItemView, SkillRow, SkillSource, InstallPanel, useSkillsNav, skillHref, validateSkillsSearch`. Goal 1 of the user: **distribute skills and plugins across the team**.
-- `SkillsView` (`/skills`, `g s`) — a 44 px top bar that starts with the Workdatabase tabs, then by page width (the rail counts): from 900 px the install panel and the list beside the open skill; under 900 px
+- `SkillsView` (`/skills`, `g s`) — a 44 px top bar that starts with the Library tabs, then by page width (the rail counts): from 900 px the install panel and the list beside the open skill; under 900 px
   and on a phone an open skill is a screen of its own. `?skill=<name>` opens one. Esc closes it.
 - `InstallPanel` — says the repository is the team's (`SKILLS_REPO`, `mudit1729/workflow_management`: GitHub redirects the old name there, so the constant stays) and gives the commands to install its plugins, **for two audiences**: for Claude Code "Just me" (`/plugin marketplace add <repo>`, one `/plugin install` per plugin) and
   "Everyone on the repository" (`claude plugin … --scope project`, then commit `.claude/settings.json`; `claudeTeamCommands`, `claudeInstallGroups`), and for Codex two steps (`scripts/install-skills.sh --codex`, which copies the skills to `.agents/skills/`, then `--print-agents-md >> AGENTS.md`; `CODEX_AGENTS_COMMAND`), each with a copy button. They are built from the plugin's own manifests (`claudeInstallCommands`, `codexInstallCommands`), so they do not go stale.
@@ -823,7 +915,7 @@ beside it a button that in the background does the next step".
 
 ### context builder: `src/features/context/**`
 
-Context from the Workdatabase: library items, glossary terms, files and decisions an agent should read with an issue. `index.ts` exports
+Context from the library: library items, glossary terms, files and decisions an agent should read with an issue. `index.ts` exports
 `ContextPicker` (a field with removable chips and an "Add" button that opens a command-style search right under it, in the flow of the form: used
 by the New issue and New file dialogs), `ContextSearch`, `ContextPreview` (what the agent will get, against a token budget; draft library items
 are marked "not injected until reviewed"), `AddContextButton` (the Goal tab's Links section: a pick is written at once with `useAddLinks`),
@@ -836,10 +928,13 @@ queries as the Library, Glossary and Files views) and the link grammar (`links.t
 as "ElementName: change". `?el=<ComponentName>` opens the page at that element's section (for example `/kit?el=IssueCard`); `?view=side` shows
 light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name, and `registry.ts` lists every file in index order.
 The groups (`GROUPS` in `kit-ui.tsx`) follow the product: Foundations, Shell, Workflow · Board, Issue · Header, Now, Goal, **Criteria**, Plan, Log, **Git**, **CI**, Files, Diagrams,
-Workdatabase, Shared, Primitives. There is no "Workflow · Inbox" group. The Add work entries (`entries/add-work.tsx`: `AddWorkDialog` screen by screen,
+Library, **Library · Personal**, **Library · Team**, **Library · Ask**, Shared, Primitives. The library entries: `entries/library.tsx` (`WikiView`, `LibraryHome`, `MarkdownProse (wiki)`, `GlossaryView`,
+`PromoteDialog`), `library-parts.tsx` (`PageHeader`, `PageTree`, `RightRail`, `OnThisPage`, `Callouts`, `MediaFigure`, `GifPlayer`, `VideoPlayer`, `EmbedCard`), `library-personal.tsx`
+(`PersonalHome`, `TopicsSection`, `CodebasesSection`, `WorkSection`, `SummaryBanner`, `PersonalSetup`), `library-team.tsx` (`AddTeamLibrary · link`, `· folder`, `· preview`, each screen in a framed
+surface that runs the real flow and adds nothing) and `library-ask.tsx` (`AskPanel` ready and answered, `AskPanel · states`, `PassageList`, `AskLibraryButton`). There is no "Workflow · Inbox" group. The Add work entries (`entries/add-work.tsx`: `AddWorkDialog` screen by screen,
 `ChoiceList`, `ChoiceButton`, `ToggleChip`, `ProgressDots`, `SplitProgress`, `SplitCard`, `SplitStart`, `DiscardDialog`, `NeedsYouToggle`) sit under Shell and
 Workflow · Board; the Codex entries (`entries/codex.tsx`: `CodexActions`, `CodexRunStatus`, `CodexRunNotice`, `OpenInCodexPanel`, `CodexRunsList`, `CodexRunMarker`) under Issue · Header and
-Workflow · Board; the Skills entries (`entries/skills.tsx`) under Workdatabase; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
+Workflow · Board; the Skills entries (`entries/skills.tsx`) under Library; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
 `PipelineRow` and `RunStateIcon`; `entries/issue-header.tsx` holds `HandoffPanel` (with the button, compact, and the panel before, after and without the clipboard); `entries/shared.tsx` holds `SkillHint` and `MetaLine`.
 The Kit's `EmptyState`, `CopyButton` and `CodeBlock` examples use real skill names and real commands (`codex '…'`), never `wf …`. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
 `needsYou={{ requests, issues }}`, so the Needs you count shows (and a variant has the filter on). Foundations shows the tokens live (surfaces,

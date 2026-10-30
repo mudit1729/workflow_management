@@ -59,7 +59,10 @@ export const GROUPS = [
   "Issue · CI",
   "Issue · Files",
   "Diagrams",
-  "Workdatabase",
+  "Library",
+  "Library · Personal",
+  "Library · Team",
+  "Library · Ask",
   "Shared",
   "Primitives",
 ] as const;
