@@ -1,0 +1,34 @@
+wf_format = 1
+
+[workspace]
+name = "wf"
+issues_dir = "issues"
+library_dir = "library"
+id_prefix = "wf"
+
+[leases]
+minutes = 60
+
+[staleness]
+issue_hours = 24
+task_hours = 4
+
+[context]
+budget_tokens = 6000
+changes = 5
+library = 3
+
+[archify]
+home = "~/.claude/skills/archify"
+quality = "showcase"
+concurrency = 2
+timeout_s = 90
+
+# S09 is off: the web issues say "card" for the board card, and the glossary lists "card" as a synonym of "issue".
+[lint]
+disable = ["S09"]
+severity = {}
+
+[server]
+port = 7777
+author = "shruti"
