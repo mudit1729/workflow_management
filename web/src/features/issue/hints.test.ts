@@ -21,7 +21,7 @@ describe("the skill names", () => {
     const folders = Object.keys(skillFiles)
       .map((path) => path.split("/").at(-2))
       .sort();
-    expect(folders.length).toBe(8);
+    expect(folders.length).toBe(12);
     expect([...WF_SKILLS].sort()).toEqual(folders);
   });
 

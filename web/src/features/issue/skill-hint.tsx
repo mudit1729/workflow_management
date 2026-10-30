@@ -18,6 +18,10 @@ export const WF_SKILLS = [
   "handing-off",
   "checking-status",
   "writing-readable-bulk-text",
+  "keeping-a-library",
+  "summarizing-codebase",
+  "summarizing-work",
+  "querying-library",
 ] as const;
 
 export type WfSkill = (typeof WF_SKILLS)[number];
