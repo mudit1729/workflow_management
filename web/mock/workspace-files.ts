@@ -16,7 +16,8 @@ const raw = import.meta.glob("./workspace/**/*.{md,toml}", {
 }) as Record<string, string>;
 
 // `?wf-asset` is the small plugin of vite.config.ts: the asset URL plus the file size.
-const binary = import.meta.glob("./workspace/**/*.{png,jpg,jpeg,gif,svg,webp}", {
+// Images, GIFs and videos: the library pages embed them (`![Flow](media/flow.gif)`).
+const binary = import.meta.glob("./workspace/**/*.{png,jpg,jpeg,gif,svg,webp,mp4,webm}", {
   query: "?wf-asset",
   import: "default",
   eager: true,

@@ -1,0 +1,12 @@
+# The alert rules the runbooks refer to. Edited by the platform team in pull requests.
+groups:
+  - name: orders
+    rules:
+      - alert: OrdersHighErrorRate
+        expr: rate(http_requests_total{service="orders",code=~"5.."}[5m]) > 0.02
+        for: 5m
+        labels: { severity: page }
+      - alert: OrdersDatabaseLag
+        expr: pg_replication_lag_seconds{cluster="orders"} > 30
+        for: 2m
+        labels: { severity: ticket }

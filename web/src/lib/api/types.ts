@@ -263,3 +263,273 @@ export interface WorkspaceFile {
   /** Findings of this file, with line numbers. */
   diagnostics: Diagnostic[];
 }
+
+// ---------------------------------------------------------------- libraries
+// A library is a folder of markdown files and media in a git repo (docs/plan/proposals/libraries-spec.md).
+// The workspace's own library, the person's private one and any team library added by a GitHub link
+// all read the same way. The prototype builds these shapes in `mock/libraries/`; `wf serve` and the
+// bridge would build them from a clone.
+
+/** Where a library comes from: this workspace, the person's own repo, or a team's repo. */
+export type LibraryOrigin = "personal" | "team" | "workspace";
+
+/** How its files are read: straight from GitHub, through the agent bridge, or from this workspace. */
+export type LibraryAccess = "public" | "bridge" | "local";
+
+/** A media file of a library: where the browser loads it and how large it is. */
+export interface LibraryMedia {
+  url: string;
+  bytes: number;
+}
+
+/**
+ * What a library is made of. `files` and `media` are keyed by repo-relative path; `root` is the
+ * folder of the repo that holds the library (empty: the repo root, left out: find it by the rules
+ * of spec 4.2). Pages and addresses are root-relative.
+ */
+export interface LibrarySource {
+  /** The short name links use: `platform` in `[[platform:runbooks/x]]`. The personal library is `me`. */
+  alias: string;
+  kind: LibraryOrigin;
+  name: string;
+  description?: string;
+  /** The GitHub repo, `https://github.com/o/r`. */
+  url?: string;
+  ref?: string;
+  /** The commit the files were read at. */
+  commit?: string;
+  root?: string;
+  access?: LibraryAccess;
+  /** Text files by repo-relative path: markdown pages, manifests, and any other text file. */
+  files: Record<string, string>;
+  /** Images, GIFs and videos by repo-relative path. */
+  media: Record<string, LibraryMedia>;
+  /** Names of files the browser has no text for (listed under "Other files", opened on GitHub). */
+  others?: string[];
+  /** Where a page lives in its own repo when that differs from its root-relative path. */
+  origin?: Record<string, string>;
+  /** What git knows about a page, by root-relative path: its last change and who made it. */
+  meta?: Record<string, { updated?: string; author?: string }>;
+}
+
+/** One library, as the nav and the home list it. */
+export interface LibraryInfo {
+  alias: string;
+  kind: LibraryOrigin;
+  name: string;
+  description?: string;
+  url?: string;
+  ref?: string;
+  commit?: string;
+  root?: string;
+  access?: LibraryAccess;
+  /** The handle that owns a personal library. */
+  owner?: string;
+  /** Markdown pages, media files and other files. */
+  pages: number;
+  media: number;
+  others: number;
+  /** Path of the home page, or null when the library has none (the viewer draws an overview). */
+  home: string | null;
+  /** The dashboard can edit its pages (the personal library). */
+  editable: boolean;
+  /** Its files are in memory. A library listed in `libraries.toml` that nobody has loaded is not. */
+  loaded: boolean;
+}
+
+/** A folder (section) or a page of the tree. Paths are root-relative; the root itself is "". */
+export interface LibraryTreeNode {
+  type: "section" | "page";
+  path: string;
+  title: string;
+  /** A section: the path of its own page (`index.md`, `README.md` or `_group.md`), if it has one. */
+  page?: string;
+  /** The `kind:` of the page's frontmatter. */
+  kind?: string;
+  /** The `status:` of the page's frontmatter. */
+  status?: string;
+  /** A section: the pages below it, its own page included. */
+  count?: number;
+  /** Characters of the file (a page) or of every file below (a section), for "12 pages · ~9k tokens" (about 4 characters a token). */
+  chars?: number;
+  children?: LibraryTreeNode[];
+}
+
+export interface LibraryTree {
+  alias: string;
+  /** The root section: `children` are the top level. */
+  root: LibraryTreeNode;
+  /** The home page, or null. */
+  home: string | null;
+  /** Every page in reading order: a section's own page, then its children. */
+  pages: string[];
+  /** Files that are neither markdown nor media. */
+  others: string[];
+}
+
+/** One heading of a page. `anchor` is the GitHub-style slug, unique within the page. */
+export interface PageHeading {
+  depth: number;
+  text: string;
+  anchor: string;
+  /** 1-based line in the page body (after the frontmatter). */
+  line: number;
+}
+
+/** The ways a link can be written (spec section 5). */
+export type LinkForm =
+  | "relative" // [text](../runbooks/x.md)
+  | "wiki" // [[runbooks/x]], [[runbooks/x#rotate]]
+  | "alias" // [[platform:runbooks/x]]
+  | "issue" // [[wf-3k9x2]], [[wf-3k9x2#D-7f3k2]]
+  | "library-item" // [[lib-6pm4c]]
+  | "anchor" // [[#rotate]], [text](#rotate)
+  | "external"; // [text](https://…)
+
+/** A link of a page and where it goes. */
+export interface PageLink {
+  /** As written: the href of a markdown link, or the text inside `[[ ]]`. */
+  raw: string;
+  form: LinkForm;
+  /** The text of a markdown link. */
+  label?: string;
+  /** The target exists. */
+  ok: boolean;
+  /** What is missing when `ok` is false. */
+  missing?: "page" | "heading" | "library" | "issue" | "item";
+  /** The page it goes to. */
+  alias?: string;
+  path?: string;
+  anchor?: string;
+  /** `alias:path#anchor`. */
+  address?: string;
+  /** The title of the page or issue it goes to. */
+  title?: string;
+  /** An issue (and an entry of it, `D-7f3k2`). */
+  issue?: string;
+  entry?: string;
+  /** A workspace library item (`lib-6pm4c`). */
+  item?: string;
+  /** An external address. */
+  href?: string;
+}
+
+/** A media file a page names, resolved. `src` is the path as written in the markdown. */
+export interface PageMedia {
+  src: string;
+  kind: "image" | "gif" | "video";
+  url?: string;
+  bytes?: number;
+  /** The library has no such file. */
+  missing?: boolean;
+  /** An address outside the library (`https://…`). */
+  external?: boolean;
+}
+
+/** A page that links to another, or a neighbour in the reading order. */
+export interface PageRef {
+  address: string;
+  alias: string;
+  path: string;
+  title: string;
+  /** The name of its library. */
+  library: string;
+}
+
+/** An issue whose `## Links` name a page. */
+export interface UsedInIssue {
+  id: string;
+  title: string;
+  status: string;
+  group_path: string[];
+}
+
+/** One page of a library: its text, what it links to and what links to it. */
+export interface LibraryPage {
+  /** `alias:path`. */
+  address: string;
+  alias: string;
+  path: string;
+  title: string;
+  /** The frontmatter `kind:`, else `section` for a section's own page, `glossary`, or `page`. */
+  kind: string;
+  /** The page is the page of a folder. */
+  section: boolean;
+  /** The library's name, for breadcrumbs. */
+  library: string;
+  libraryKind: LibraryOrigin;
+  /** The whole file, frontmatter included. */
+  text: string;
+  /** Lines of the file before the body starts. */
+  lineOffset: number;
+  frontmatter: Record<string, unknown>;
+  headings: PageHeading[];
+  /** Last change (a date or a timestamp) and who made it, from the frontmatter or from git. */
+  updated?: string;
+  author?: string;
+  /** The frontmatter `created`, for a page that says when it was written but not when it changed. */
+  created?: string;
+  /** Minutes to read the body. */
+  read_minutes: number;
+  /** Every link of the body, resolved. */
+  links: PageLink[];
+  /** The links that did not resolve. */
+  broken: PageLink[];
+  /** Pages of any library that link here. */
+  backlinks: PageRef[];
+  /** Issues whose goal.md Links name this page. */
+  used_in: UsedInIssue[];
+  /** Media the body names, by `src`. */
+  media: Record<string, PageMedia>;
+  /** Section breadcrumbs, from the root: the sections that hold the page. */
+  trail: { title: string; path: string; page?: string }[];
+  prev: PageRef | null;
+  next: PageRef | null;
+  /** For a section's page: the pages below it. */
+  children: PageRef[];
+  /** The file in its own repo or workspace (`library/playbooks/x.md`). */
+  file: string;
+  /** Hash of the file, for `savePage`. */
+  rev: string;
+  /** Open on GitHub, for a library with a GitHub address. */
+  github?: string;
+  /** The workspace library item this page is (`lib-6pm4c`). */
+  item?: string;
+  /** The library's commit, for the page footer. */
+  commit?: string;
+}
+
+/** A section of a page that matched a search, with the words marked. */
+export interface LibraryPassage {
+  /** `alias:path#anchor` (no anchor for the lead of a page). */
+  address: string;
+  alias: string;
+  path: string;
+  anchor?: string;
+  library: string;
+  pageTitle: string;
+  /** The heading of the section, `Procedure` or `Procedure › Step 2`; empty for a page's lead. */
+  heading: string;
+  /** About 200 characters of plain text around the best match. */
+  snippet: string;
+  /** Character ranges of the matches inside `snippet`. */
+  marks: [number, number][];
+  score: number;
+}
+
+/** Where a search looks: every library, one, several, or exactly the listed pages. */
+export type LibraryScope = "all" | { alias: string } | { aliases: string[] } | { pages: string[] };
+
+/** What an address or a link text points at. */
+export interface ResolvedAddress {
+  raw: string;
+  form: LinkForm;
+  ok: boolean;
+  alias?: string;
+  path?: string;
+  anchor?: string;
+  address?: string;
+  title?: string;
+  issue?: string;
+  item?: string;
+}

@@ -561,9 +561,25 @@ export const appendChange = (text: string | undefined, entry: ChangeSrc): string
 export const appendDecision = (text: string | undefined, entry: DecisionSrc): string =>
   appendBlock(text, "Decisions", decisionLines(entry));
 
-/** Append a learning at the bottom of `learnings.md`. */
+/** Does a log file already hold an entry with this id? The heading ends in `{#<id>}`. */
+const hasEntry = (text: string, id: string): boolean =>
+  text.split("\n").some((l) => l.startsWith("## ") && l.trimEnd().endsWith(`{#${id}}`));
+
+/**
+ * Append a learning at the bottom of `learnings.md`. An id that is already in the file is not
+ * written twice: the same call again returns the text as it is (a retry after a lost reply).
+ */
 export const appendLearning = (text: string | undefined, entry: LearningSrc): string =>
-  appendBlock(text, "Learnings", learningLines(entry));
+  text !== undefined && hasEntry(text, entry.id)
+    ? text
+    : appendBlock(text, "Learnings", learningLines(entry));
+
+/**
+ * The `Evidence:` of a learning that was read from library pages: one `sources:` list of page
+ * addresses (`alias:path`, `#anchor` for a section), each a link the dashboard opens.
+ */
+export const sourcesEvidence = (sources: string[]): string =>
+  ["answered from the library, sources:", ...sources.map((s) => `- [[${s}]]`)].join("\n");
 
 /** Change the `status` of a decision: the one key of an entry that may change. */
 export function setDecisionStatus(
