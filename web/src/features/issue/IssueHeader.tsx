@@ -24,6 +24,7 @@ import {
   useNow,
 } from "@/components/common";
 import { Button, IconButton, Tooltip } from "@/components/ui";
+import { AskLibraryButton } from "@/features/ask";
 import { CodexActions, useRunActive } from "@/features/codex";
 import type { IssueDetail, Lease, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
@@ -245,6 +246,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
           signals, so the run's strip stays put when a signal appears mid-run. */}
       <CodexActions issue={s} className={drawer ? "mt-3" : "mt-3.5"}>
         <HandoffButton issueId={s.id} compact />
+        <AskLibraryButton issueId={s.id} />
       </CodexActions>
 
       <IssueSignals detail={detail} />
