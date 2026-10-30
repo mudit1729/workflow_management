@@ -1,8 +1,18 @@
 # The prototype workspace
 
 This folder is a real `wf` workspace (`wf_format = 1`): markdown files and one `workflow.toml`.
-**It is the only source of truth of the mock world.** The prototype has no other data. Boards, cards,
-signals, lint, the inbox and the library are all read from these files.
+**It is the shipped workspace: the groups, the library and the glossary, and no issues.** The board
+starts as a clean slate. Groups (`wf`, `core`, `web`, `skills`, `platform`, `auth`) are the folders
+with a `_group.md` under `issues/`; an issue is a folder that holds a `goal.md`, and none is here.
+
+**The sample world lives in `../sample/`.** It is a full copy of this workspace from before the
+issues were removed: 26 issues (every status, every signal, the diagrams, the evidence image), the
+same library and glossary. It is a fixture, not shipped content. **Load sample data** in the
+Prototype panel (or `window.__wf.loadSample()`) puts it on the board; **Reset data** comes back to
+this folder; the Kit (`/kit`) shows it while it is open; the tests read it. The library items here
+still cite entries of sample issues (`[[wf-3k9x2#C-5wq7k]]`), so until the sample is loaded they
+show as dangling references (lint F009, a warning): 18 of them, plus one Q013 info, and no error.
+The scripted live events belong to sample issues and are skipped quietly here.
 
 In the browser the workspace has two views. **Workflow** (Board, Inbox) is work in motion.
 **Workdatabase** (Library, Glossary, Files) is everything stored. An issue is a folder of markdown
@@ -24,11 +34,12 @@ glossary.md                     one "## term" per term, with kind, means, avoid,
 issues/                         the root group (issues_dir)
   wf/                           a group: a folder with _group.md
     _group.md                   id, title, goal, owner, color, order, definition_of_done
-    web/live-board-updates/     an issue: a folder that holds goal.md
+    web/                        a nested group (core, web and skills sit under wf; auth under platform)
+    <an issue>/                 an issue: a folder that holds goal.md (none ships here; see ../sample/)
       goal.md  plan.md  current_state.md  changes.md  decisions.md  learnings.md
       notes/research.md         any other .md file is listed as a plain doc
       evidence/sc2.png          images and other files are assets
-  docs/                         an implicit group: a folder with issues and no _group.md
+  docs/                         an implicit group: a folder with issues and no _group.md (sample only)
 library/                        patterns/  playbooks/  gotchas/  decisions/   one <slug>.md per item
 ```
 
@@ -64,20 +75,25 @@ already shifted, so write times there as they read on the board.
 
 ## How the prototype reads and writes these files
 
-- `mock/workspace-files.ts` globs this folder (`?raw` for text, `?wf-asset` for images). It is the
-  only place the mock world comes from. In the dev server a saved, added or removed file replaces
+- `mock/workspace-files.ts` globs this folder (`?raw` for text, `?wf-asset` for images);
+  `mock/sample-files.ts` globs `../sample/` the same way. They are the only places the mock world
+  comes from. In the dev server a saved, added or removed file replaces
   that module and hands the new file set to the store (`mock/workspace-bus.ts`): the store shifts
   the times like at load, applies what differs from its working copy and ignores a file whose text
   it already holds (an echo).
 - The store (`mock/store.ts`) keeps the working copy of the files in memory. Every Op and every
   scripted live event is a minimal text edit of it (`mock/md/edit.ts`); then `loadWorkspace` and
   `derive` run again. Edits made in the browser (Workdatabase · Files, the board) stay in memory and
-  are never written back here. `reset()` goes back to the files as they are on disk.
+  are never written back here. `reset()` goes back to the files of this folder as they are on disk;
+  `loadSample()` swaps in the sample folder in one commit.
 - `mock/diagram-previews.json` lists the diagrams that have a stand-in preview page. The pages in
-  `public/diagrams/` are drawn from the archify blocks of `goal.md` and `plan.md` by
-  `node scripts/render-diagram-previews.mjs`. The dev server runs it again when a file with an
-  archify block changes.
+  `public/diagrams/` are drawn from the archify blocks of `goal.md` and `plan.md` of this folder and
+  of `../sample/` by `node scripts/render-diagram-previews.mjs`. The dev server runs it again when a
+  file with an archify block changes in either folder.
 
-`pnpm exec vitest run mock` reads these files back: the grammar of every file, the lint findings
-the seed world is meant to show, and the issues the tests name by id. Editing a file changes what
-the tests see, so a test that names an issue may need a look after a large edit.
+`pnpm exec vitest run mock` reads these files back. The tests that name issues by id read
+`../sample/` (the grammar of every file, the lint findings the sample world is meant to show);
+`mock/shipped.test.ts` checks this folder: no issues, six groups, the library and glossary, the
+findings above, a new issue written into it, and the round trip with `loadSample()`. Editing a
+sample file changes what those tests see, so a test that names an issue may need a look after a
+large edit.

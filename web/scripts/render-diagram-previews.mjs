@@ -1,9 +1,12 @@
 // Writes the stand-in diagram previews: public/diagrams/<id>.html, one page per archify block
-// of the workspace, and mock/diagram-previews.json (the ids that have a page).
+// of the workspace and of the sample world, and mock/diagram-previews.json (the ids that have a
+// page). The shipped workspace (mock/workspace) has no issues, so the blocks come from the sample
+// (mock/sample) until someone adds a diagram to the workspace; both folders are read, the shipped
+// workspace first, and an id that both hold gets its page from the first.
 //
 // archify is not installed in this environment, so the prototype cannot render real
 // diagrams. The blocks live in the markdown of the workspace (```archify <type> id=<id> in the
-// goal.md and plan.md files under mock/workspace/issues, contract 1.5); this script reads them
+// goal.md and plan.md files under mock/<folder>/issues, contract 1.5); this script reads them
 // from there and draws each valid one as a small self-contained page instead (layered layout,
 // SVG curves, wf tokens, no external requests). The cards show the page while the DevPanel's
 // "Archify available" switch is on (it starts on; off is the unavailable demo). A block with
@@ -27,7 +30,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..");
-const WORKSPACE = join(WEB, "mock/workspace");
+/** The folders whose archify blocks get a preview, in the order they win an id. */
+const FOLDERS = [join(WEB, "mock/workspace"), join(WEB, "mock/sample")];
 const OUT = join(WEB, "public/diagrams");
 const LIST = join(WEB, "mock/diagram-previews.json");
 const quiet = process.argv.includes("--quiet");
@@ -720,30 +724,37 @@ function put(file, content) {
 }
 
 mkdirSync(OUT, { recursive: true });
-const taken = new Map();
 const written = [];
-for (const file of issueFiles(join(WORKSPACE, "issues"))) {
-  for (const block of blocksOf(readFileSync(file, "utf8"))) {
-    // The loader keeps the first block of an id and numbers later ones (`id-2`).
-    let id = block.id;
-    for (let n = 2; taken.has(id); n++) id = `${block.id}-${n}`;
-    taken.set(id, file);
-    let spec;
-    try {
-      spec = JSON.parse(block.body);
-    } catch (err) {
-      say(`skipped ${id}: invalid JSON (${err.message})`);
-      continue;
+for (const folder of FOLDERS) {
+  // The loader numbers a repeated id inside one workspace (`id-2`), so the count is per folder.
+  const taken = new Map();
+  for (const file of issueFiles(join(folder, "issues"))) {
+    for (const block of blocksOf(readFileSync(file, "utf8"))) {
+      // The loader keeps the first block of an id and numbers later ones (`id-2`).
+      let id = block.id;
+      for (let n = 2; taken.has(id); n++) id = `${block.id}-${n}`;
+      taken.set(id, file);
+      if (written.includes(id)) {
+        say(`skipped ${id}: an earlier folder already drew it`);
+        continue;
+      }
+      let spec;
+      try {
+        spec = JSON.parse(block.body);
+      } catch (err) {
+        say(`skipped ${id}: invalid JSON (${err.message})`);
+        continue;
+      }
+      const bad = problems(spec);
+      if (bad.length) {
+        say(`skipped ${id}: ${bad.length} defects (${bad[0]})`);
+        continue;
+      }
+      const html = page(id, block.type, spec);
+      const changed = put(join(OUT, `${id}.html`), html);
+      written.push(id);
+      say(`${changed ? "wrote" : "kept "} public/diagrams/${id}.html (${(html.length / 1024).toFixed(1)} KB)`);
     }
-    const bad = problems(spec);
-    if (bad.length) {
-      say(`skipped ${id}: ${bad.length} defects (${bad[0]})`);
-      continue;
-    }
-    const html = page(id, block.type, spec);
-    const changed = put(join(OUT, `${id}.html`), html);
-    written.push(id);
-    say(`${changed ? "wrote" : "kept "} public/diagrams/${id}.html (${(html.length / 1024).toFixed(1)} KB)`);
   }
 }
 
@@ -754,4 +765,8 @@ for (const id of before) {
   rmSync(join(OUT, `${id}.html`), { force: true });
   say(`removed public/diagrams/${id}.html`);
 }
-put(LIST, `${JSON.stringify([...written].sort())}\n`);
+// Written the way `biome format` prints a JSON array (the file is under mock/, which biome checks):
+// one line with spaces while it fits in 100 columns, one id per line after that.
+const ids = [...written].sort().map((id) => JSON.stringify(id));
+const oneLine = `[${ids.join(", ")}]`;
+put(LIST, oneLine.length <= 100 ? `${oneLine}\n` : `[\n${ids.map((id) => `  ${id}`).join(",\n")}\n]\n`);

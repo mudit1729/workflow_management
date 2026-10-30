@@ -7,7 +7,9 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
+/** The shipped workspace (groups, library, glossary, no issues) and the sample world (a fixture). */
 const WORKSPACE = `${ROOT}mock/workspace/`;
+const SAMPLE = `${ROOT}mock/sample/`;
 
 /** Matches `/node_modules/<package>/` in a module id, whether or not pnpm nested it under `.pnpm`. */
 const pkg = (names: string[]) => new RegExp(`/node_modules/(?:${names.join("|")})/`);
@@ -81,22 +83,27 @@ function workspaceAssets(): Plugin {
 /**
  * The mock "watcher". A file added, changed or removed under `mock/workspace` re-runs
  * `mock/workspace-files.ts`, which accepts its own update and hands the new file set to the
- * store (`mock/workspace-bus.ts`). An edit keeps the file's own `?raw` module in the update
+ * store (`mock/workspace-bus.ts`); a file under `mock/sample` does the same through
+ * `mock/sample-files.ts`. An edit keeps the file's own `?raw` module in the update
  * (so the watcher imports the new text) and adds the watcher itself. An add or a remove is
  * the watcher alone: by default Vite also puts every module that ever failed to resolve into
  * the update of an added file, and one dead end there reloads the page and drops the
  * in-memory workspace. Dev server only.
  */
 function workspaceHot(): Plugin {
-  const WATCHER = `${ROOT}mock/workspace-files.ts`;
+  const WATCHERS = [
+    { folder: WORKSPACE, module: `${ROOT}mock/workspace-files.ts` },
+    { folder: SAMPLE, module: `${ROOT}mock/sample-files.ts` },
+  ];
   return {
     name: "wf:workspace-hot",
     apply: "serve",
     hotUpdate: {
       order: "post",
       handler({ file, type, modules }) {
-        if (!file.startsWith(WORKSPACE)) return;
-        const watcher = [...(this.environment.moduleGraph.getModulesByFile(WATCHER) ?? [])];
+        const owner = WATCHERS.find((w) => file.startsWith(w.folder));
+        if (!owner) return;
+        const watcher = [...(this.environment.moduleGraph.getModulesByFile(owner.module) ?? [])];
         return type === "update" ? [...modules, ...watcher] : watcher;
       },
     },
@@ -105,12 +112,14 @@ function workspaceHot(): Plugin {
 
 /**
  * Dev server only: keeps the stand-in diagram previews (`public/diagrams`) in step with the
- * archify blocks of the workspace. When a markdown file under `mock/workspace` that holds, or
- * held, an archify block changes, `scripts/render-diagram-previews.mjs` runs again. It writes
+ * archify blocks of the workspace and the sample world. When a markdown file under
+ * `mock/workspace` or `mock/sample` that holds, or held, an archify block changes,
+ * `scripts/render-diagram-previews.mjs` runs again. It writes
  * only what differs, so a run that changes nothing makes no noise. A failed run is logged and
  * the page keeps the previews it has.
  */
 function diagramPreviews(): Plugin {
+  const FOLDERS = [WORKSPACE, SAMPLE];
   const holders = new Set<string>();
   const hasBlock = (text: string) => /^\s{0,3}(`{3,}|~{3,})\s*archify\b/m.test(text);
   return {
@@ -141,17 +150,19 @@ function diagramPreviews(): Plugin {
         );
       };
       // Know which files hold a block now, so removing the last one from a file re-renders.
-      try {
-        for (const rel of readdirSync(WORKSPACE, { recursive: true }) as string[]) {
-          if (!rel.endsWith(".md")) continue;
-          const file = `${WORKSPACE}${rel}`;
-          if (hasBlock(readFileSync(file, "utf8"))) holders.add(file);
+      for (const folder of FOLDERS) {
+        try {
+          for (const rel of readdirSync(folder, { recursive: true }) as string[]) {
+            if (!rel.endsWith(".md")) continue;
+            const file = `${folder}${rel}`;
+            if (hasBlock(readFileSync(file, "utf8"))) holders.add(file);
+          }
+        } catch {
+          // No such folder: nothing to watch there.
         }
-      } catch {
-        // No workspace folder: nothing to watch.
       }
       const touch = (file: string, exists: boolean) => {
-        if (!file.startsWith(WORKSPACE) || !file.endsWith(".md")) return;
+        if (!FOLDERS.some((f) => file.startsWith(f)) || !file.endsWith(".md")) return;
         let relevant = holders.has(file);
         if (exists) {
           try {

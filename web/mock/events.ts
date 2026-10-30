@@ -2,7 +2,10 @@
 // a text edit of the workspace files through the store (an entry appended to changes.md, a
 // line of goal.md flipped), so the board, the drawer and the inbox change for real.
 // An event whose target no longer allows it (you already moved the issue, the request is
-// answered) is skipped, and the player moves on to the next one that applies.
+// answered) is skipped, and the player moves on to the next one that applies. The targets are
+// issues of the sample world (`mock/sample`). The shipped workspace has no issues, so there every
+// event is skipped without a sound: no edit, no activity, no toast. "Load sample data" brings
+// the issues, and the events, back.
 import type { Handle, IssueId } from "@/gen/types";
 import {
   addRequest,
@@ -23,7 +26,7 @@ export const EVENT_INTERVAL_MS = 20_000;
 
 /**
  * Targets of the scripted live events. The IDs are fixed by UI_BUILD.md: the event loop and
- * the DevPanel depend on them, and the workspace files hold the matching issues.
+ * the DevPanel depend on them, and the sample files (`mock/sample`) hold the matching issues.
  */
 export const EVENT_TARGETS = {
   appendChange: { issue: "wf-3k9x2", task: "T-3" },

@@ -28,7 +28,7 @@ import {
   type StoreOptions,
 } from "./store";
 import { byteLength, clone } from "./util";
-import { onDiskChange } from "./workspace-bus";
+import { onDiskChange, onSampleChange } from "./workspace-bus";
 
 export type { Connection } from "./store";
 
@@ -36,13 +36,23 @@ export type { Connection } from "./store";
 export interface MockControls {
   /** The next op is rejected with a 409 "goal.md changed by @codex". */
   conflictNextWrite: () => void;
-  /** Play the next scripted live event now. */
-  playNextEvent: () => void;
+  /** Play the next scripted live event now. Returns its name, or undefined when none applies. */
+  playNextEvent: () => string | undefined;
   setArchifyAvailable: (available: boolean) => void;
   /** `reconnecting` and `offline` hold events back; `live` replays them. */
   setConnection: (state: Connection) => void;
-  /** Back to the workspace files as they are on disk. */
+  /** Back to the shipped workspace files as they are on disk: groups and library, no issues. */
   reset: () => void;
+  /**
+   * Replace the working copy with the sample world (`mock/sample`) in one commit. Returns how many
+   * issues it holds. Nothing of the previous working copy is kept; `reset()` goes back to empty.
+   */
+  loadSample: () => number;
+  /**
+   * Show the sample while a screen needs it (the Kit) and give the working copy back exactly as
+   * it was when the last holder releases. Counted. Returns the release function.
+   */
+  holdSample: () => () => void;
 }
 
 export interface MockServerOptions extends StoreOptions {
@@ -108,15 +118,24 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     conflictNextWrite: () => {
       conflictNext = true;
     },
-    playNextEvent: () => {
-      player.playNext();
-    },
+    playNextEvent: () => player.playNext(),
     setArchifyAvailable: (on) => store.setArchify(on),
     setConnection: (state) => store.setConnection(state),
     reset: () => {
       conflictNext = false;
       player.reset();
       store.reset();
+    },
+    loadSample: () => {
+      conflictNext = false;
+      player.reset();
+      store.loadSample();
+      return store.derived.snapshot.issues.length;
+    },
+    holdSample: () => {
+      conflictNext = false;
+      player.reset();
+      return store.holdSample();
     },
   };
 
@@ -283,12 +302,19 @@ if (isBrowser && import.meta.env.VITE_API !== "real") {
 }
 
 // The mock watcher: when a file under mock/workspace changes on disk, the bundler hands the new
-// set of files over (see workspace-files.ts) and the store applies what differs.
-const stopWatching = isBrowser ? onDiskChange((disk) => server.store.applyDisk(disk)) : undefined;
+// set of files over (see workspace-files.ts) and the store applies what differs. A file under
+// mock/sample reaches the running mock only while the sample is loaded (the store keeps the new
+// set for the next "Load sample data" otherwise).
+const stopWatching = isBrowser
+  ? [
+      onDiskChange((disk) => server.store.applyDisk(disk)),
+      onSampleChange((disk) => server.store.applySample(disk)),
+    ]
+  : undefined;
 
 // A hot reload replaces this module (and its store): stop the old timer and the watcher.
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
     server.dispose();
-    stopWatching?.();
+    for (const stop of stopWatching ?? []) stop();
   });

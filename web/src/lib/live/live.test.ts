@@ -29,7 +29,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   const mock = await loadMock();
   controls = mock.mockControls;
-  controls.reset();
+  // The tests name sample issues (wf-3k9x2 and so on): the shipped workspace has none.
+  controls.loadSample();
   controls.setConnection("live");
   queryClient.clear();
   useLiveStore.setState({ activity: [], state: "live", rev: "" });
@@ -105,7 +106,7 @@ describe("notable activity", () => {
     expect(toasts.info.mock.calls[0][1].action).toBeUndefined();
 
     toasts.info.mockClear();
-    controls.reset();
+    controls.loadSample();
     const open = vi.fn();
     setLiveNavigator(open);
     playAll();

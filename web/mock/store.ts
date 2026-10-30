@@ -27,6 +27,7 @@ import { isIgnored, normPath } from "./md/paths";
 import { rebaseWorkspace, shiftSinceRecording } from "./md/rebase";
 import type { LoadedWorkspace } from "./md/types";
 import { rawTextUrl } from "./raw-url";
+import { SAMPLE } from "./sample-files";
 import type { ActivitySrc, IssueSrc, WorldSrc } from "./source";
 import { toTs } from "./time";
 import { byteLength, rev as hashRev, randomId } from "./util";
@@ -113,8 +114,13 @@ export interface StoreOptions {
   /** How many events the server keeps for replay. Default 256 (contract 1.10). */
   ringSize?: number;
   clock?: () => number;
-  /** The workspace on disk (recording-frame times). Default: the files under `mock/workspace`. */
+  /**
+   * The shipped workspace on disk (recording-frame times). Default: the files under
+   * `mock/workspace`: groups, library and glossary, no issues. `reset()` returns to it.
+   */
   disk?: WorkspaceDisk;
+  /** The sample world `loadSample()` brings in. Default: the files under `mock/sample`. */
+  sample?: WorkspaceDisk;
   /** Is archify available? Default false: archify is not installed here, so diagrams start unavailable. */
   archify?: boolean;
 }
@@ -159,12 +165,35 @@ export interface Store {
    * activity line per file. `by` is who the activity names (`disk` when unknown).
    */
   applyChanges(changes: FileChange[], by: Handle | undefined, via: ChangeSource): boolean;
-  /** The files on disk changed (dev server): apply what differs from the working copy. */
+  /**
+   * The shipped files on disk changed (dev server): apply what differs from the working copy.
+   * While the sample is on screen the new files only wait for `reset()`.
+   */
   applyDisk(disk: WorkspaceDisk): boolean;
+  /**
+   * The sample files on disk changed (dev server). Applied like `applyDisk` while the sample is
+   * loaded; otherwise kept for the next `loadSample()`.
+   */
+  applySample(disk: WorkspaceDisk): boolean;
   setArchify(on: boolean): void;
   /** Tell the store which diagrams have a stand-in preview page. */
   setPreviews(ids: Iterable<string>): void;
+  /** Back to the shipped files. While `holdSample()` is active: back to the pristine sample. */
   reset(): void;
+  /**
+   * Replace the working copy with the sample world in ONE commit: a single `resync`, no activity
+   * line per file. Nothing of the previous working copy is kept (see `holdSample` for that).
+   */
+  loadSample(): void;
+  /** True while the working copy was taken from the sample files. */
+  readonly sampleLoaded: boolean;
+  /**
+   * Show the sample while a screen needs it (the Kit), and give the working copy back exactly as
+   * it was when the last holder lets go. Counted: the first hold saves the working copy and
+   * loads the sample, nested or repeated holds only add to the count. The returned function
+   * releases once; a second call does nothing.
+   */
+  holdSample(): () => void;
 
   subscribe(fn: (e: ServerEvent) => void): () => void;
   onConnection(fn: (state: Connection) => void): () => void;
@@ -321,9 +350,14 @@ export function createStore(options: StoreOptions = {}): Store {
   let archify = options.archify ?? false;
   let seq = 0;
 
-  // The files on disk, as the bundler last saw them (recording-frame times). The working copy
-  // is the same files after the clock shift; ops and hand edits change only the working copy.
-  let disk: WorkspaceDisk = options.disk ?? DISK;
+  // Two sets of files on disk, as the bundler last saw them (recording-frame times): the shipped
+  // workspace (`home`) and the sample world. The working copy is one of them after the clock
+  // shift; ops and hand edits change only the working copy. `disk` is the set the working copy
+  // was taken from, the baseline `syncTo` diffs against.
+  let home: WorkspaceDisk = options.disk ?? DISK;
+  let sample: WorkspaceDisk = options.sample ?? SAMPLE;
+  let disk: WorkspaceDisk = home;
+  let showing: "home" | "sample" = "home";
   let shiftMs = 0;
   let loadedAt = clock();
   let files = new Map<string, string>();
@@ -335,7 +369,8 @@ export function createStore(options: StoreOptions = {}): Store {
     return rebaseWorkspace(text, shiftMs);
   }
 
-  function takeDisk(from: WorkspaceDisk) {
+  function takeDisk(from: WorkspaceDisk, which: "home" | "sample") {
+    showing = which;
     disk = from;
     shiftMs = shiftSinceRecording(clock());
     loadedAt = clock();
@@ -344,7 +379,53 @@ export function createStore(options: StoreOptions = {}): Store {
     previews = new Set(from.previews);
     activityLog = new Map();
   }
-  takeDisk(disk);
+  takeDisk(home, "home");
+
+  /**
+   * Everything that makes up a working copy, to put it back exactly. The texts, the activity
+   * log and the previews are never changed in place (a write builds new ones), so holding the
+   * references is enough; the file history grows in place, so it is copied. Archify is not part
+   * of it: that is a flag of the daemon, not of the files, and its callers manage it themselves.
+   */
+  interface Saved {
+    showing: "home" | "sample";
+    disk: WorkspaceDisk;
+    shiftMs: number;
+    loadedAt: number;
+    files: Map<string, string>;
+    assets: Record<string, { url: string; bytes: number }>;
+    previews: Set<string>;
+    activityLog: Map<IssueId, ActivitySrc[]>;
+    versions: Map<string, FileVersion[]>;
+  }
+
+  const copyVersions = (from: Map<string, FileVersion[]>) =>
+    new Map([...from].map(([path, log]) => [path, log.map((v) => ({ ...v }))]));
+
+  function capture(): Saved {
+    return {
+      showing,
+      disk,
+      shiftMs,
+      loadedAt,
+      files,
+      assets,
+      previews,
+      activityLog,
+      versions: copyVersions(versions),
+    };
+  }
+
+  function adopt(s: Saved) {
+    showing = s.showing;
+    disk = s.disk;
+    shiftMs = s.shiftMs;
+    loadedAt = s.loadedAt;
+    files = s.files;
+    assets = s.assets;
+    previews = s.previews;
+    activityLog = s.activityLog;
+  }
 
   function nextRev(note: string): string {
     seq += 1;
@@ -575,6 +656,86 @@ export function createStore(options: StoreOptions = {}): Store {
     return true;
   }
 
+  // ---- replacing the whole working copy: reset, load the sample, give a saved copy back
+
+  let holds = 0;
+  let kept: Saved | undefined;
+
+  /** Start the event log over from the current working copy and ask clients to read it again. */
+  function commitWhole(note: string, versionLog: Map<string, FileVersion[]> | undefined) {
+    // Build first: when the files cannot be read, nothing has changed yet.
+    const next = nextRev(note);
+    const fresh = build(files, activityLog, next);
+    rev = next;
+    built = fresh;
+    revs = pathRevs(files, assets);
+    sigs = sigsOf(built.derived, built.source.world);
+    versions = versionLog ?? initialVersions(revs);
+    ring = [];
+    pending = [];
+    overflowed = false;
+    emit({ event: "resync", id: rev, data: {} });
+  }
+
+  /** Throw the working copy away for a set of files: one commit, one `resync`, no activity. */
+  function replaceWorking(from: WorkspaceDisk, which: "home" | "sample", note: string) {
+    const before = capture();
+    try {
+      takeDisk(from, which);
+      commitWhole(note, undefined);
+    } catch (err) {
+      // The files could not be read: the working copy stays as it was.
+      adopt(before);
+      throw err;
+    }
+  }
+
+  /** Put a saved working copy back exactly, then catch up with files that changed meanwhile. */
+  function restoreSaved(saved: Saved) {
+    adopt(saved);
+    commitWhole("restore", saved.versions);
+    const latest = showing === "home" ? home : sample;
+    if (latest !== disk) syncTo(latest);
+  }
+
+  /** The files of `next` replace the baseline: apply what differs from the working copy. */
+  function syncTo(next: WorkspaceDisk): boolean {
+    const edits: FileChange[] = [];
+    const paths = new Set([...Object.keys(disk.text), ...Object.keys(next.text)]);
+    const moved: Record<string, string> = {};
+    for (const p of paths) {
+      const was = disk.text[p];
+      const now = next.text[p];
+      if (was === now) continue;
+      if (now === undefined) edits.push({ path: p, text: null });
+      else moved[p] = now;
+    }
+    // The same shift as the working copy, so a time typed into a file reads like the others.
+    const shifted = rebase(moved);
+    // A disk update whose text the store already holds is an echo: skip it.
+    for (const [p, text] of Object.entries(shifted)) {
+      if (files.get(p) !== text) edits.push({ path: p, text });
+    }
+    const gone = edits.filter((e) => e.text === null && !files.has(e.path));
+    const real = edits.filter((e) => !gone.includes(e));
+
+    const assetsChanged = json(next.assets) !== json(disk.assets);
+    const previewsChanged = json([...next.previews].sort()) !== json([...disk.previews].sort());
+    disk = next;
+    if (previewsChanged) previews = new Set(next.previews);
+    if (assetsChanged) assets = { ...next.assets };
+
+    if (real.length > 0) {
+      const done = applyChanges(real, undefined, "disk");
+      if (done) return true;
+    }
+    if (assetsChanged || previewsChanged) {
+      refresh("disk");
+      return true;
+    }
+    return false;
+  }
+
   // ---- public
 
   const store: Store = {
@@ -692,40 +853,15 @@ export function createStore(options: StoreOptions = {}): Store {
     applyChanges,
 
     applyDisk(next) {
-      const edits: FileChange[] = [];
-      const paths = new Set([...Object.keys(disk.text), ...Object.keys(next.text)]);
-      const moved: Record<string, string> = {};
-      for (const p of paths) {
-        const was = disk.text[p];
-        const now = next.text[p];
-        if (was === now) continue;
-        if (now === undefined) edits.push({ path: p, text: null });
-        else moved[p] = now;
-      }
-      // The same shift as the working copy, so a time typed into a file reads like the others.
-      const shifted = rebase(moved);
-      // A disk update whose text the store already holds is an echo: skip it.
-      for (const [p, text] of Object.entries(shifted)) {
-        if (files.get(p) !== text) edits.push({ path: p, text });
-      }
-      const gone = edits.filter((e) => e.text === null && !files.has(e.path));
-      const real = edits.filter((e) => !gone.includes(e));
+      home = next;
+      // The sample is on screen: the shipped files wait for `reset()`.
+      if (showing === "sample") return false;
+      return syncTo(next);
+    },
 
-      const assetsChanged = json(next.assets) !== json(disk.assets);
-      const previewsChanged = json([...next.previews].sort()) !== json([...disk.previews].sort());
-      disk = next;
-      if (previewsChanged) previews = new Set(next.previews);
-      if (assetsChanged) assets = { ...next.assets };
-
-      if (real.length > 0) {
-        const done = applyChanges(real, undefined, "disk");
-        if (done) return true;
-      }
-      if (assetsChanged || previewsChanged) {
-        refresh("disk");
-        return true;
-      }
-      return false;
+    applySample(next) {
+      sample = next;
+      return showing === "sample" ? syncTo(next) : false;
     },
 
     setArchify(on) {
@@ -742,16 +878,42 @@ export function createStore(options: StoreOptions = {}): Store {
     },
 
     reset() {
-      takeDisk(disk);
-      rev = nextRev("reset");
-      built = build(files, activityLog, rev);
-      revs = pathRevs(files, assets);
-      sigs = sigsOf(built.derived, built.source.world);
-      versions = initialVersions(revs);
-      ring = [];
-      pending = [];
-      overflowed = false;
-      emit({ event: "resync", id: rev, data: {} });
+      // Back to the shipped files; inside a `holdSample()` the screen that holds it still needs
+      // the sample, so it gets the pristine sample and the saved copy stays untouched.
+      if (holds > 0) replaceWorking(sample, "sample", "reset");
+      else replaceWorking(home, "home", "reset");
+    },
+
+    loadSample() {
+      replaceWorking(sample, "sample", "sample");
+    },
+
+    get sampleLoaded() {
+      return showing === "sample";
+    },
+
+    holdSample() {
+      if (holds === 0) kept = capture();
+      holds += 1;
+      if (holds === 1) {
+        try {
+          replaceWorking(sample, "sample", "hold");
+        } catch (err) {
+          holds = 0;
+          kept = undefined;
+          throw err;
+        }
+      }
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        holds -= 1;
+        if (holds > 0 || !kept) return;
+        const saved = kept;
+        kept = undefined;
+        restoreSaved(saved);
+      };
     },
 
     subscribe(fn) {

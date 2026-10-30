@@ -7,6 +7,7 @@ import type { Derived } from "./derive";
 import { EVENT_TARGETS } from "./events";
 import { diagramIds } from "./md/render";
 import type { LoadedWorkspace } from "./md/types";
+import { SAMPLE } from "./sample-files";
 import type { IssueSrc, WorldSrc } from "./source";
 import { createStore } from "./store";
 import { toDate } from "./time";
@@ -73,7 +74,7 @@ const ATTRS: Record<string, [string, string, string | undefined, string | undefi
 
 /** Group IDs fixed by UI_BUILD.md. They predate the Crockford rule (they hold o, l or u). */
 const FIXED_GROUP_IDS = ["g-wf001", "g-core1", "g-web01", "g-skl01", "g-plat1", "g-auth1"];
-/** The roster ID of "SSO login" is a pun and holds an l and an o. Other agents rely on it. */
+/** The roster ID of "Add SSO login" is a pun and holds an l and an o. Other agents rely on it. */
 const FIXED_ISSUE_IDS = ["wf-ss0lo"];
 
 let world: WorldSrc;
@@ -82,11 +83,11 @@ let d: Derived;
 let withArchify: Derived;
 
 beforeAll(() => {
-  const store = createStore({ clock: () => NOW });
+  const store = createStore({ clock: () => NOW, disk: SAMPLE });
   world = store.world;
   source = store.source;
   d = store.derived;
-  withArchify = createStore({ clock: () => NOW, archify: true }).derived;
+  withArchify = createStore({ clock: () => NOW, archify: true, disk: SAMPLE }).derived;
 });
 
 const summary = (id: string) => {
@@ -122,15 +123,18 @@ describe("config", () => {
   });
 
   it("gives every store its own working copy of the files", () => {
-    const a = createStore({ clock: () => NOW });
-    const b = createStore({ clock: () => NOW });
+    const a = createStore({ clock: () => NOW, disk: SAMPLE });
+    const b = createStore({ clock: () => NOW, disk: SAMPLE });
     const goal = a.filePath("wf-3k9x2", "goal.md");
     a.mutate("shruti", "wf-3k9x2", (w) => {
-      w.write(goal, (w.read(goal) ?? "").replace("title: Live board updates", "title: Changed"));
+      w.write(
+        goal,
+        (w.read(goal) ?? "").replace("title: Push board updates over SSE", "title: Changed"),
+      );
       return { touches: [{ file: goal, anchors: "all" }], activity: [] };
     });
     expect(a.summary("wf-3k9x2")?.title).toBe("Changed");
-    expect(b.summary("wf-3k9x2")?.title).toBe("Live board updates");
+    expect(b.summary("wf-3k9x2")?.title).toBe("Push board updates over SSE");
     expect(b.text(goal)).not.toBe(a.text(goal));
   });
 });
@@ -371,9 +375,7 @@ describe("wf-3k9x2, the dogfood issue", () => {
 
   it("has a current state with a blocking approval for the acting author", () => {
     const st = detail("wf-3k9x2").state;
-    expect(st?.summary).toBe(
-      "The delta stream runs end to end; lagged-client resync is in flight.",
-    );
+    expect(st?.summary).toBe("Delta stream runs end to end; lagged-client resync is in flight.");
     expect(st?.updated_by).toBe("claude-opus");
     const q = st?.needs_you[0];
     expect(q).toMatchObject({

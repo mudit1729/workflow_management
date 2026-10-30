@@ -1,3 +1,16 @@
+# The sample world
+
+**This folder is a fixture, not shipped content.** It is a full copy of the prototype workspace from
+before the issues were removed from `../workspace/`: 26 issues in the groups `wf`, `core`, `web`,
+`skills`, `platform`, `auth` and an implicit `docs`, the library and the glossary. The board does not
+start with it. **Load sample data** in the Prototype panel (or `window.__wf.loadSample()`) loads it,
+the Kit shows it while `/kit` is open, and the tests that name issues by id read it
+(`mock/sample-files.ts`). A saved file here reaches the running mock only while the sample is loaded.
+The ids the Kit and the tests rely on (`wf-3k9x2` and so on) are listed in `web/UI_BUILD.md`.
+Everything below is the README of the workspace as it was; read "this folder" as this sample.
+
+---
+
 # The prototype workspace
 
 This folder is a real `wf` workspace (`wf_format = 1`): markdown files and one `workflow.toml`.

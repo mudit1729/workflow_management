@@ -4,19 +4,20 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { FILE_EXCERPT_CHARS } from "@/features/context/links";
 import type { ContextLink } from "@/gen/types";
+import { SAMPLE } from "./sample-files";
 import { createMockServer, type MockServer } from "./server";
 
 let server: MockServer;
 
 beforeEach(() => {
-  server = createMockServer({ latency: 0 });
+  server = createMockServer({ latency: 0, disk: SAMPLE });
 });
 
 // resume-on-session-start links lib-6pm4c and also names it in its state, so the item is both
 // linked and ranked. Every seed issue links the library items it names; tests that need a ranked
 // item without a link take the bullet out of goal.md first.
 const issueBy = (suffix: string) =>
-  [...createMockServer({ latency: 0 }).store.derived.dirs].find(([, dir]) =>
+  [...createMockServer({ latency: 0, disk: SAMPLE }).store.derived.dirs].find(([, dir]) =>
     dir.endsWith(`/${suffix}`),
   )?.[0] as string;
 const ID = issueBy("resume-on-session-start");

@@ -11,13 +11,14 @@ import type {
 import { ApiError } from "@/lib/api/error";
 import type { WfOp } from "@/lib/api/types";
 import { EVENT_TARGETS, SCRIPT } from "./events";
+import { SAMPLE } from "./sample-files";
 import { createMockServer, type MockServer } from "./server";
 import { toDate } from "./time";
 
 let server: MockServer;
 
 beforeEach(() => {
-  server = createMockServer({ latency: 0 });
+  server = createMockServer({ latency: 0, disk: SAMPLE });
 });
 
 const issueOf = (s: WorkspaceSnapshot, id: string) => {
@@ -575,7 +576,7 @@ describe("connection", () => {
   });
 
   test("a gap beyond the ring buffer asks for a resync", async () => {
-    server = createMockServer({ latency: 0, ringSize: 4 });
+    server = createMockServer({ latency: 0, ringSize: 4, disk: SAMPLE });
     const { events, stop } = record();
     server.controls.setConnection("offline");
     for (let i = 0; i < 6; i++) server.store.setArchify(i % 2 === 0);
@@ -641,7 +642,7 @@ describe("search and context", () => {
 
   test("context is a markdown bundle with stubs and reference data", async () => {
     const md = await server.context("wf-3k9x2", 6000);
-    expect(md).toMatch(/^# wf-3k9x2 · Live board updates/);
+    expect(md).toMatch(/^# wf-3k9x2 · Push board updates over SSE/);
     expect(md).toContain("status: in_progress");
     expect(md).toContain("## Goal");
     expect(md).toContain("- [x] SC-1 (verified)");

@@ -1,12 +1,18 @@
 // Pure logic of the markdown viewer: frontmatter split, diagram fences that keep their lines,
 // glossary term lines, and where the source tag goes. The texts are the files of the mock workspace.
 
+import goal from "@mock/sample/issues/wf/web/live-board-updates/goal.md?raw";
 import glossary from "@mock/workspace/glossary.md?raw";
-import goal from "@mock/workspace/issues/wf/web/live-board-updates/goal.md?raw";
 import gotcha from "@mock/workspace/library/gotchas/notify-macos-rescan-subtrees.md?raw";
 import { describe, expect, it } from "vitest";
 import { markerText } from "@/components/common/SourceLineMarker";
-import { fenceDiagrams, glossaryLines, splitFrontmatter, traceLayout } from "./markdown";
+import {
+  fenceDiagrams,
+  frontmatterRefs,
+  glossaryLines,
+  splitFrontmatter,
+  traceLayout,
+} from "./markdown";
 
 const lineOf = (text: string, exact: string) => text.split("\n").indexOf(exact) + 1;
 
@@ -87,6 +93,18 @@ describe("splitFrontmatter", () => {
       body: "Body",
       lineOffset: 2,
     });
+  });
+});
+
+describe("frontmatterRefs", () => {
+  it("lists the targets of a key as written", () => {
+    expect(frontmatterRefs(gotcha, "source")).toEqual(["wf-3k9x2#L-2gk7r", "wf-3k9x2#C-5wq7k"]);
+  });
+
+  it("is empty for a missing key, an empty key or a file without frontmatter", () => {
+    expect(frontmatterRefs(gotcha, "superseded_by")).toEqual([]);
+    expect(frontmatterRefs("---\nsource: []\n---\nbody", "source")).toEqual([]);
+    expect(frontmatterRefs("# Just prose [[wf-3k9x2]]", "source")).toEqual([]);
   });
 });
 

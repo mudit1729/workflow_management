@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import type { ContextLink } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
 import { lineDiff } from "./md/test-support";
+import { SAMPLE } from "./sample-files";
 import { createMockServer, type MockServer } from "./server";
 import type { Store } from "./store";
 
@@ -12,7 +13,7 @@ let server: MockServer;
 let store: Store;
 
 beforeEach(() => {
-  server = createMockServer({ latency: 0 });
+  server = createMockServer({ latency: 0, disk: SAMPLE });
   store = server.store;
 });
 

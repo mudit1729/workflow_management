@@ -17,6 +17,7 @@ vi.mock("sonner", () => ({ toast: toasts }));
 
 import { api } from "./client";
 import { applyDelta } from "./delta";
+import { NotFoundError } from "./error";
 import { requestMove, useMoveGate } from "./gate";
 import { qk } from "./keys";
 import { queryClient } from "./query-client";
@@ -33,7 +34,8 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  (await loadMock()).mockControls.reset();
+  // The tests name sample issues (wf-3k9x2 and so on): the shipped workspace has none.
+  (await loadMock()).mockControls.loadSample();
   queryClient.clear();
   useMoveGate.getState().cancel();
   queryClient.setQueryData(qk.snapshot(), await api.snapshot());
@@ -136,5 +138,15 @@ describe("the move flow", () => {
     await settle();
     await settle();
     expect(cachedIssue("wf-3k9x2").status).toBe("review");
+  });
+});
+
+describe("an issue that is gone", () => {
+  test("reading it after Reset data is a NotFoundError, so an open drawer can say so", async () => {
+    await expect(api.issue("wf-3k9x2")).resolves.toMatchObject({
+      summary: { id: "wf-3k9x2" },
+    });
+    (await loadMock()).mockControls.reset();
+    await expect(api.issue("wf-3k9x2")).rejects.toBeInstanceOf(NotFoundError);
   });
 });

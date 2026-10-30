@@ -14,16 +14,34 @@ import {
 } from "./render";
 import type { LoadedWorkspace } from "./types";
 
-/** Every text file under web/mock/workspace, keyed by workspace-relative path. */
+/**
+ * Every text file under web/mock/sample (the sample world: 26 issues, the library, the
+ * glossary), keyed by workspace-relative path. The markdown tests read the sample, not the
+ * shipped workspace, because the shipped workspace has no issues.
+ */
 export function diskFiles(): Record<string, string> {
+  const raw = import.meta.glob("../sample/**/*.{md,toml}", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+  return stripReadme(raw, "../sample/");
+}
+
+/** Every text file under web/mock/workspace (the shipped workspace: groups, library, glossary). */
+export function shippedFiles(): Record<string, string> {
   const raw = import.meta.glob("../workspace/**/*.{md,toml}", {
     query: "?raw",
     import: "default",
     eager: true,
   }) as Record<string, string>;
+  return stripReadme(raw, "../workspace/");
+}
+
+function stripReadme(raw: Record<string, string>, root: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, text] of Object.entries(raw)) {
-    const path = key.replace("../workspace/", "");
+    const path = key.replace(root, "");
     if (path !== "README.md") out[path] = text;
   }
   return out;

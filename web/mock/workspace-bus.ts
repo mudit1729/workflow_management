@@ -1,6 +1,7 @@
-// The channel between the bundler and the store. `workspace-files.ts` is the module Vite
-// replaces when a file under `mock/workspace` changes, so it cannot hold listeners itself:
-// they would vanish with the old module. This module never changes, so the listeners stay.
+// The channel between the bundler and the store. `workspace-files.ts` and `sample-files.ts` are
+// the modules Vite replaces when a file under `mock/workspace` or `mock/sample` changes, so they
+// cannot hold listeners themselves: the listeners would vanish with the old module. This module
+// never changes, so the listeners stay.
 
 /** The workspace as the bundler sees it on disk, before the clock shift. */
 export interface WorkspaceDisk {
@@ -15,8 +16,19 @@ export interface WorkspaceDisk {
 type Listener = (disk: WorkspaceDisk) => void;
 
 const listeners = new Set<Listener>();
+const sampleListeners = new Set<Listener>();
 
-/** Call `fn` whenever the files on disk change (dev server only). Returns the unsubscribe. */
+function notify(set: Set<Listener>, disk: WorkspaceDisk) {
+  for (const fn of [...set]) {
+    try {
+      fn(disk);
+    } catch (err) {
+      console.error("mock watcher failed", err);
+    }
+  }
+}
+
+/** Call `fn` whenever the shipped files (`mock/workspace`) change on disk (dev server only). */
 export function onDiskChange(fn: Listener): () => void {
   listeners.add(fn);
   return () => {
@@ -24,13 +36,20 @@ export function onDiskChange(fn: Listener): () => void {
   };
 }
 
-/** Tell the stores the files on disk changed. */
+/** Tell the stores the shipped files changed on disk. */
 export function publishDisk(disk: WorkspaceDisk): void {
-  for (const fn of [...listeners]) {
-    try {
-      fn(disk);
-    } catch (err) {
-      console.error("mock watcher failed", err);
-    }
-  }
+  notify(listeners, disk);
+}
+
+/** Call `fn` whenever the sample files (`mock/sample`) change on disk (dev server only). */
+export function onSampleChange(fn: Listener): () => void {
+  sampleListeners.add(fn);
+  return () => {
+    sampleListeners.delete(fn);
+  };
+}
+
+/** Tell the stores the sample files changed on disk. */
+export function publishSample(disk: WorkspaceDisk): void {
+  notify(sampleListeners, disk);
 }

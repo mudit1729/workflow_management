@@ -6,17 +6,17 @@ import type { Conflict, ServerEvent } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
 import { rebaseWorkspace } from "./md/rebase";
 import { RECORDED_AT } from "./md/recorded-at";
+import { SAMPLE } from "./sample-files";
 import { createMockServer, type MockServer } from "./server";
 import { createStore, type Store } from "./store";
 import { toTs } from "./time";
 import type { WorkspaceDisk } from "./workspace-bus";
-import { DISK } from "./workspace-files";
 
 let server: MockServer;
 let store: Store;
 
 beforeEach(() => {
-  server = createMockServer({ latency: 0 });
+  server = createMockServer({ latency: 0, disk: SAMPLE });
   store = server.store;
 });
 
@@ -335,7 +335,7 @@ describe("a file written through the API changes the board", () => {
     expect(d.diagrams[0].status).toBe("unavailable");
     expect(d.diagrams[0].url).toBe("");
     // Once the preview exists it does.
-    store.setPreviews([...DISK.previews, "cheat-flow"]);
+    store.setPreviews([...SAMPLE.previews, "cheat-flow"]);
     d = await server.issue("wf-9zq4m");
     expect(d.diagrams[0]).toMatchObject({ status: "ready" });
     expect(d.diagrams[0].url).toMatch(/diagrams\/cheat-flow\.html$/);
@@ -351,6 +351,11 @@ describe("a file written through the API changes the board", () => {
 
 describe("reset", () => {
   test("restores the pristine files and forgets every write of the session", async () => {
+    // A stopped clock: the store shifts recorded times by the nearest whole minute, so a clock that
+    // runs across a :30 second between the load and the reset would read as an edit.
+    const now = Date.now();
+    server = createMockServer({ latency: 0, disk: SAMPLE, clock: () => now });
+    store = server.store;
     const before = new Map(store.paths().map((p) => [p, store.text(p)]));
     const snap = await server.snapshot();
 
@@ -374,8 +379,8 @@ describe("reset", () => {
 
   test("a store made with its own disk resets to that disk", async () => {
     const disk: WorkspaceDisk = {
-      ...DISK,
-      text: { ...DISK.text, "issues/wf/web/keyboard-cheat-sheet/goal.md": NEW_GOAL_TEXT },
+      ...SAMPLE,
+      text: { ...SAMPLE.text, "issues/wf/web/keyboard-cheat-sheet/goal.md": NEW_GOAL_TEXT },
     };
     const own = createStore({ disk });
     expect(own.summary("wf-9zq4m")).toBeDefined();
@@ -391,12 +396,12 @@ describe("reset", () => {
 describe("the mock watcher applies what changed on disk", () => {
   /** A copy of the disk with some files replaced (`null` removes one). */
   const diskWith = (changes: Record<string, string | null>): WorkspaceDisk => {
-    const text = { ...DISK.text };
+    const text = { ...SAMPLE.text };
     for (const [p, t] of Object.entries(changes)) {
       if (t === null) delete text[p];
       else text[p] = t;
     }
-    return { ...DISK, text };
+    return { ...SAMPLE, text };
   };
 
   test("identical text is ignored: no event, no new rev", () => {
@@ -404,7 +409,7 @@ describe("the mock watcher applies what changed on disk", () => {
     const rev = store.rev;
     expect(store.applyDisk(diskWith({}))).toBe(false);
     // The same text again, as a saved-without-change editor would send it.
-    expect(store.applyDisk({ ...DISK, text: { ...DISK.text } })).toBe(false);
+    expect(store.applyDisk({ ...SAMPLE, text: { ...SAMPLE.text } })).toBe(false);
     stop();
     expect(events).toHaveLength(0);
     expect(store.rev).toBe(rev);
@@ -413,7 +418,7 @@ describe("the mock watcher applies what changed on disk", () => {
   test("an update that equals what the store already holds is an echo", async () => {
     // The store holds T after an in-browser save; the disk then changes to the text T came from.
     const extra = "\n<!-- note -->\n";
-    const onDisk = (DISK.text[GOAL] as string) + extra;
+    const onDisk = (SAMPLE.text[GOAL] as string) + extra;
     const held = rebaseWorkspace({ [GOAL]: onDisk }, store.shiftMs)[GOAL];
     await server.writeFile({ path: GOAL, text: held });
     const { events, stop } = record();
@@ -428,7 +433,7 @@ describe("the mock watcher applies what changed on disk", () => {
     const entry = `\n## ${RECORDED_AT} @claude-sonnet — Disk entry {#C-8dd8d}\n- kind: progress\n\nWritten in an editor.\n`;
     const { events, stop } = record();
     const applied = store.applyDisk(
-      diskWith({ [CHANGES]: (DISK.text[CHANGES] as string) + entry }),
+      diskWith({ [CHANGES]: (SAMPLE.text[CHANGES] as string) + entry }),
     );
     stop();
     expect(applied).toBe(true);
@@ -450,7 +455,7 @@ describe("the mock watcher applies what changed on disk", () => {
     const { events, stop } = record();
     store.applyDisk(
       diskWith({
-        [GOAL]: (DISK.text[GOAL] as string).replace(
+        [GOAL]: (SAMPLE.text[GOAL] as string).replace(
           "\nstatus: in_progress\n",
           "\nstatus: review\n",
         ),
@@ -470,12 +475,12 @@ describe("the mock watcher applies what changed on disk", () => {
     // before RECORDED_AT is shifted by that much, so it reads five minutes before now.
     const recorded = Date.parse(RECORDED_AT);
     const now = recorded + 3 * 86_400_000 + 7 * 60_000;
-    const own = createStore({ clock: () => now });
+    const own = createStore({ clock: () => now, disk: SAMPLE });
     const typed = toTs(recorded - 5 * 60_000);
     const entry = `\n## ${typed} @codex — Typed {#C-8ee8e}\n- kind: progress\n\nx\n`;
     own.applyDisk({
-      ...DISK,
-      text: { ...DISK.text, [CHANGES]: (DISK.text[CHANGES] as string) + entry },
+      ...SAMPLE,
+      text: { ...SAMPLE.text, [CHANGES]: (SAMPLE.text[CHANGES] as string) + entry },
     });
     const c = own.issueSrc("wf-3k9x2")?.changes.find((x) => x.id === "C-8ee8e");
     expect(c?.ts).toBe(toTs(now - 5 * 60_000));
@@ -496,7 +501,7 @@ describe("the mock watcher applies what changed on disk", () => {
     await server.writeFile({ path: NEW_GOAL, text: NEW_GOAL_TEXT });
     store.applyDisk(
       diskWith({
-        "glossary.md": `${DISK.text["glossary.md"]}\n## gizmo\n- kind: term\n- means: A thing in a test.\n`,
+        "glossary.md": `${SAMPLE.text["glossary.md"]}\n## gizmo\n- kind: term\n- means: A thing in a test.\n`,
       }),
     );
     expect(store.summary("wf-9zq4m")).toBeDefined();
@@ -507,9 +512,9 @@ describe("the mock watcher applies what changed on disk", () => {
     store.setArchify(true);
     const ready = async () => (await server.issue("wf-skf01")).diagrams[0].status;
     expect(await ready()).toBe("ready");
-    store.applyDisk({ ...DISK, previews: [] });
+    store.applyDisk({ ...SAMPLE, previews: [] });
     expect(await ready()).toBe("unavailable");
-    store.applyDisk({ ...DISK });
+    store.applyDisk({ ...SAMPLE });
     expect(await ready()).toBe("ready");
   });
 });
