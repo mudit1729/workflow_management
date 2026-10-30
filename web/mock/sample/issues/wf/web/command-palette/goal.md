@@ -1,6 +1,6 @@
 ---
 id: wf-c2pn6
-title: Command palette
+title: Add a command palette
 status: done
 priority: medium
 size: m

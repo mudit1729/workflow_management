@@ -1,5 +1,5 @@
 ---
-summary: "The hook prints the bundle; @shruti reviews the timing test."
+summary: "Hook prints the bundle; @shruti reviews the timing test."
 updated_at: 2026-10-22T08:27+05:30
 updated_by: "@claude-opus"
 phase: Hook

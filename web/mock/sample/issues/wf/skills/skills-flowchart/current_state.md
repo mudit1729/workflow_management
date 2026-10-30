@@ -1,5 +1,5 @@
 ---
-summary: "The first draft of the flow is drawn; the node layout waits for your answer."
+summary: "First draft of the flow is drawn; the node layout waits for your answer."
 updated_at: 2026-10-22T15:47+05:30
 updated_by: "@claude-sonnet"
 phase: Draw

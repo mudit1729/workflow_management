@@ -1,5 +1,5 @@
 ---
-summary: "The format, index and write protocol are done; the context bundle and the board are in flight."
+summary: "Format, index and write protocol are done; the context bundle and the board are in flight."
 updated_at: 2026-10-22T14:07+05:30
 updated_by: "@claude-opus"
 phase: Board and skills

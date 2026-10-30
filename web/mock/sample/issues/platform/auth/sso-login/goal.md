@@ -1,6 +1,6 @@
 ---
 id: wf-ss0lo
-title: SSO login
+title: Add SSO login
 status: backlog
 priority: medium
 size: l

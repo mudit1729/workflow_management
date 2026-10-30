@@ -1,6 +1,6 @@
 ---
 id: wf-n7vy3
-title: Two-way sync with GitHub issues
+title: Sync GitHub issues in both directions
 status: cancelled
 priority: none
 size: l

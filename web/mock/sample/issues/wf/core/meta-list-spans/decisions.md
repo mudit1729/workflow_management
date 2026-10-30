@@ -1,6 +1,6 @@
 # Decisions
 
-## 2026-10-07T10:20+05:30 @codex — Store spans as byte offsets, not line and column {#D-5fm3v}
+## 2026-10-07T10:20+05:30 @codex — Store spans as byte offsets {#D-5fm3v}
 - status: accepted
 - topic: spans
 - affects: SC-1

@@ -1,5 +1,5 @@
 ---
-summary: "Done. The editor splices one value and writes the file atomically."
+summary: "Editor splices one value and writes the file atomically; done."
 updated_at: 2026-08-13T15:20+05:30
 updated_by: "@codex"
 ---

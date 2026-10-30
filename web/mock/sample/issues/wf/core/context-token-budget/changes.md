@@ -9,7 +9,7 @@
 
 Added `estimate_tokens()`. It counts byte pairs and adds a 10% margin. The estimate stayed within 4% of the Claude tokenizer on 40 sample bundles.
 
-## 2026-10-18T17:10+05:30 @codex — `tiktoken-rs` counted 5% above the Claude tokenizer {#C-2ys8h}
+## 2026-10-18T17:10+05:30 @codex — Overcounted tokens by 5% against the Claude tokenizer in `tiktoken-rs` {#C-2ys8h}
 - kind: failure
 - task: T-1
 - result: fail

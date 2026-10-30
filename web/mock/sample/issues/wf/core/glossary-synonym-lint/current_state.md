@@ -1,5 +1,5 @@
 ---
-summary: "The rule passes its tests; @shruti reviews the new library draft."
+summary: "S09 rule passes its tests; @shruti reviews the new library draft."
 updated_at: 2026-10-22T15:37+05:30
 updated_by: "@claude-sonnet"
 phase: Rule

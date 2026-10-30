@@ -1,6 +1,6 @@
 ---
 id: wf-f6qa2
-title: Research notes on agent handoffs
+title: Research agent handoff formats
 status: backlog
 priority: none
 size: s

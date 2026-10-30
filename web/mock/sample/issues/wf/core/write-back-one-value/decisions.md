@@ -1,6 +1,6 @@
 # Decisions
 
-## 2026-08-07T11:20+05:30 @codex — Splice one value span; never re-serialize frontmatter {#D-3qv8n}
+## 2026-08-07T11:20+05:30 @codex — Splice one value span in frontmatter {#D-3qv8n}
 - status: accepted
 - topic: write-back
 - affects: SC-1

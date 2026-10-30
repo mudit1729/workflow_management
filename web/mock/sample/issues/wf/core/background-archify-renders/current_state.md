@@ -1,5 +1,5 @@
 ---
-summary: "Blocked. The diagram event waits for the size contract from the embed research."
+summary: "Diagram event is blocked on the size contract from the embed research."
 updated_at: 2026-10-20T11:40+05:30
 updated_by: "@codex"
 phase: Queue and events

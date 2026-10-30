@@ -1,5 +1,5 @@
 ---
-summary: "Done. `wf-edit` splices every meta value through its span."
+summary: "`wf-edit` splices every meta value through its span; done."
 updated_at: 2026-10-12T15:50+05:30
 updated_by: "@codex"
 phase: Spans

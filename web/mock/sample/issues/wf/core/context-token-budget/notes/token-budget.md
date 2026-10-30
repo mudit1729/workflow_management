@@ -4,7 +4,7 @@ Measured on the 6 largest issues of the dogfood workspace, before and after the 
 
 | Issue | Before | After | Dropped |
 |---|---|---|---|
-| `wf-3k9x2` Live board updates | 11,240 | 5,870 | 6 older changes, 2 library items |
+| `wf-3k9x2` Push board updates over SSE | 11,240 | 5,870 | 6 older changes, 2 library items |
 | `wf-b1d7v` Build v1 | 9,410 | 5,640 | 3 older changes, 1 done task |
 | `wf-t3jp5` Trim context bundles | 6,980 | 5,310 | 2 older changes |
 | `wf-x5hd3` Promote learnings | 6,210 | 5,120 | 1 older change |

@@ -1,5 +1,5 @@
 ---
-summary: "Planned. The release flow diagram fails to render; fix it before the CI work starts."
+summary: "Release flow diagram fails to render and needs a fix before the CI work starts; planned."
 updated_at: 2026-10-21T15:10+05:30
 updated_by: "@mudit"
 ---

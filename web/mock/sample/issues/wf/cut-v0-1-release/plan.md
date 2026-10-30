@@ -132,7 +132,7 @@ Build, sign, notarize and upload in one CI workflow. The diagram shows the curre
 
 ## Phase 1: Prepare
 
-### T-1: Write the release checklist
+### T-1: Write release checklist
 - status: todo
 - lane: release
 - owns: `docs/release/checklist.md`
@@ -155,7 +155,7 @@ List the steps from the tag to the Homebrew pull request. Name the owner of each
 
 Build for `aarch64-apple-darwin`, `x86_64-apple-darwin` and `x86_64-unknown-linux-gnu`. Sign and notarize the macOS builds.
 
-### T-3: Write the Homebrew formula
+### T-3: Write Homebrew formula
 - status: todo
 - lane: release
 - depends_on: T-2

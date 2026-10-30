@@ -1,5 +1,5 @@
 ---
-summary: "Shipped. Two criteria still wait for evidence."
+summary: "Palette is shipped; two criteria still wait for evidence."
 updated_at: 2026-10-17T17:45+05:30
 updated_by: "@claude-sonnet"
 phase: Palette

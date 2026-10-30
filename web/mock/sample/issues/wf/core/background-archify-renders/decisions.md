@@ -1,6 +1,6 @@
 # Decisions
 
-## 2026-10-19T12:00+05:30 @codex — Run at most 2 archify renders at the same time {#D-7wc4x}
+## 2026-10-19T12:00+05:30 @codex — Limit archify to 2 parallel renders {#D-7wc4x}
 - status: accepted
 - topic: render-pool
 - affects: SC-3

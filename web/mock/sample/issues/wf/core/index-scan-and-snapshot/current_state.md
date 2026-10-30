@@ -1,5 +1,5 @@
 ---
-summary: "Done. The index scans the golden workspace in 118 ms."
+summary: "Index scans the golden workspace in 118 ms; done."
 updated_at: 2026-09-07T16:10+05:30
 updated_by: "@codex"
 ---

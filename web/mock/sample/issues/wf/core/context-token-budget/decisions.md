@@ -1,6 +1,6 @@
 # Decisions
 
-## 2026-10-18T17:40+05:30 @codex — Count tokens with an estimate, not a tokenizer crate {#D-4hv9s}
+## 2026-10-18T17:40+05:30 @codex — Count tokens with an estimate {#D-4hv9s}
 - status: accepted
 - topic: token-count
 - affects: SC-1

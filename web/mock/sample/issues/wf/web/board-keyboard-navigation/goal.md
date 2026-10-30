@@ -1,6 +1,6 @@
 ---
 id: wf-h2tb7
-title: Board keyboard navigation
+title: Navigate the board by keyboard
 status: in_progress
 priority: medium
 size: m

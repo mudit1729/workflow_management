@@ -1,5 +1,5 @@
 ---
-summary: "Promote and approve work in the daemon; the dialog is in flight."
+summary: "Promote and approve both work in the daemon; the dialog is in flight."
 updated_at: 2026-10-22T13:17+05:30
 updated_by: "@claude-sonnet"
 phase: Review flow

@@ -32,7 +32,7 @@ Write the grammar into `spec/format.md`. Cover every file type with a golden fix
 - [x] Write `spec/format.md`.
 - [x] Add one golden fixture per file type.
 
-### T-2: Ship the index and the watcher
+### T-2: Ship index and watcher
 - status: done
 - lane: core
 - depends_on: T-1
@@ -45,7 +45,7 @@ Scan the workspace into a snapshot and keep it current from watcher events.
 
 ## Phase 2: Daemon and CLI
 
-### T-3: Ship the write protocol
+### T-3: Ship write protocol
 - status: done
 - lane: server
 - depends_on: T-2
@@ -56,7 +56,7 @@ Scan the workspace into a snapshot and keep it current from watcher events.
 
 Lock the file, check the `base_rev`, splice one value and write the file atomically.
 
-### T-4: Ship the context bundle
+### T-4: Ship context bundle
 - status: in_progress
 - lane: core
 - depends_on: T-2
@@ -72,7 +72,7 @@ Land [[wf-t3jp5]]. The bundle must fit the budget and must keep `## Needs you` a
 
 ## Phase 3: Board and skills
 
-### T-5: Ship the board and the drawer
+### T-5: Ship board and drawer
 - status: in_progress
 - lane: web
 - depends_on: T-3
@@ -87,7 +87,7 @@ Build every element of the board, the drawer, the library and the inbox on the m
 - [x] Build the drawer tabs.
 - [ ] Build the library and the inbox.
 
-### T-6: Ship the skills and hooks
+### T-6: Ship skills and hooks
 - status: todo
 - lane: skills
 - depends_on: T-1

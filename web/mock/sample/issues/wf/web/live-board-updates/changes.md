@@ -14,7 +14,7 @@ Split the work into the `core`, `server` and `web` lanes. Made T-4 independent o
 
 Wrote `notes/research.md`. SSE needs one axum route and replays with `Last-Event-ID`. Polling every 2 s misses the latency target.
 
-## 2026-10-20T23:12+05:30 @codex — notify 9.0-rc lost the remove event of a renamed folder {#C-5wq7k}
+## 2026-10-20T23:12+05:30 @codex — Lost the remove event of a renamed folder in notify 9.0-rc {#C-5wq7k}
 - kind: failure
 - task: T-2
 - result: fail
@@ -81,7 +81,7 @@ Broke the YAML of `wf-7yq2m` by hand. The drawer showed F001 at line 7 and the r
 **Q:** Keep the SSE ring buffer at 256 events?
 **A:** Yes. Measure one laptop sleep before you change it. (@shruti)
 
-## 2026-10-22T15:37+05:30 @codex — Added the SSE delta stream {#C-7k2q9}
+## 2026-10-22T15:37+05:30 @codex — Streamed deltas over SSE {#C-7k2q9}
 - kind: progress
 - task: T-3
 - commit: 9f1e2ab

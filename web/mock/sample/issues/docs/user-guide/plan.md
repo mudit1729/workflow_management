@@ -10,7 +10,7 @@ Write the quickstart first, because it tests the CLI the way a new user does. Wr
 
 ## Phase 1: Draft
 
-### T-1: Write the quickstart
+### T-1: Write quickstart
 - status: done
 - lane: docs
 - owns: `docs/user/quickstart.md`
@@ -21,7 +21,7 @@ Write the quickstart first, because it tests the CLI the way a new user does. Wr
 
 Walk from `wf init` to `wf verify` on one criterion. Keep the page under 400 words.
 
-### T-2: Write the issue anatomy page
+### T-2: Write issue anatomy page
 - status: in_progress
 - lane: docs
 - depends_on: T-1

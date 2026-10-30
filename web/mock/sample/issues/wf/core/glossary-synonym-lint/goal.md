@@ -1,6 +1,6 @@
 ---
 id: wf-9gr4k
-title: Glossary synonym lint (S09)
+title: Lint glossary synonyms (S09)
 status: review
 priority: medium
 size: s

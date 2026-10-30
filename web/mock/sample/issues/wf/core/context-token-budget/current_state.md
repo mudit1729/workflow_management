@@ -15,7 +15,7 @@ session: cx-31ab
 - [[#T-2]] The trim order. @codex holds the lease. Sections drop in order and stop at the first fit. The `## Next steps` test remains.
 
 ## Blocked
-- [[#T-4]] needs the node count from the archify render. See [[wf-w8vz4]].
+- [[#T-4]] waits for the node count from the archify render. See [[wf-w8vz4]].
 
 ## Failed attempts
 - `tiktoken-rs` counted 5% above the Claude tokenizer: `bundle 6290 > budget 6000`. Switched to a byte-pair estimate with a 10% margin. See [[#C-2ys8h]].

@@ -50,7 +50,7 @@ Drop sections from the end of the order until the bundle fits. Never drop `## Ne
 - [x] Stop trimming at the first fit.
 - [ ] Test that `## Next steps` survives a 2000 token budget.
 
-### T-3: Name the dropped sections at the end of the bundle
+### T-3: Name dropped sections at the bundle end
 - status: todo
 - lane: core
 - depends_on: T-2

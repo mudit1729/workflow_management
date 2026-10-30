@@ -1,5 +1,5 @@
 ---
-summary: "The delta stream runs end to end; lagged-client resync is in flight."
+summary: "Delta stream runs end to end; lagged-client resync is in flight."
 updated_at: 2026-10-22T16:02+05:30
 updated_by: "@claude-opus"
 phase: Live transport
@@ -8,9 +8,9 @@ session: cc-7d2e
 ---
 
 ## Done
-- [[#T-1]] Snapshot diff into deltas. See [[#C-9df2a]].
+- [[#T-1]] The snapshot diff emits deltas. See [[#C-9df2a]].
 - [[#SC-1]] has evidence from `wf verify`. See [[#C-v2n8s]].
-- [[#SC-2]] checked by @shruti with `evidence/sc2.png`. See [[#C-m7x4c]].
+- [[#SC-2]] has evidence from a check by @shruti in `evidence/sc2.png`. See [[#C-m7x4c]].
 
 ## In flight
 - [[#T-3]] SSE delta stream. @codex holds the lease. The route and `snapshot` on connect work. `resync` for lagged clients remains.

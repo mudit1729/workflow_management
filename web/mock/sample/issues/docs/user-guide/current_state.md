@@ -1,5 +1,5 @@
 ---
-summary: "The quickstart is drafted; the anatomy page is half done."
+summary: "Quickstart is drafted; the anatomy page is half done."
 updated_at: 2026-10-19T17:05+05:30
 updated_by: "@shruti"
 phase: Draft

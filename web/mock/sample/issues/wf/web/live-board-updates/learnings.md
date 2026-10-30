@@ -1,6 +1,6 @@
 # Learnings
 
-## 2026-10-21T00:47+05:30 @codex — notify 8.2 drops rename events on macOS; rescan the subtree instead. {#L-2gk7r}
+## 2026-10-21T00:47+05:30 @codex — Rescan the subtree, since notify 8.2 drops rename events on macOS. {#L-2gk7r}
 - kind: gotcha
 - tags: notify, macos, watcher
 - applies_to: `crates/*/src/watch.rs`, notify
@@ -20,7 +20,7 @@ Compare files by blake3 hash, never by mtime. Editors and git checkouts rewrite 
 
 Evidence: `git checkout main` touched 212 files. The hash diff found 3 real changes.
 
-## 2026-10-21T14:52+05:30 @codex — Keep the SSE ring buffer at 256 events {#L-9mz4e}
+## 2026-10-21T14:52+05:30 @codex — Keep the SSE ring buffer at 256 events. {#L-9mz4e}
 - kind: tip
 - tags: sse, reconnect
 - applies_to: `crates/wf-server/src/sse.rs`

@@ -21,7 +21,7 @@ Walk the folder once, parse each file with `wf-parse` and build the snapshot in 
 
 Skip the ignored paths. Report a folder with both `goal.md` and `_group.md` as F008.
 
-### T-2: Build the snapshot and time the scan
+### T-2: Build the snapshot and benchmark the scan
 - status: done
 - lane: core
 - depends_on: T-1

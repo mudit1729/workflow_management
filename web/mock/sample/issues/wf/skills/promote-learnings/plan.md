@@ -58,7 +58,7 @@ Show the kind, the slug and a preview of the draft. Show `Similar: lib-…` when
 - [x] Show the preview of the draft.
 - [ ] Show the merge suggestion.
 
-### T-4: Leave drafts out of the context bundle
+### T-4: Skip drafts in the context bundle
 - status: todo
 - lane: core
 - depends_on: T-1

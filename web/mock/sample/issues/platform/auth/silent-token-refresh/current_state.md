@@ -1,5 +1,5 @@
 ---
-summary: "Planned. One question about the refresh time is open."
+summary: "Refresh time has one open question; planned."
 updated_at: 2026-10-21T14:27+05:30
 updated_by: "@claude-opus"
 phase: Refresh

@@ -1,6 +1,6 @@
 ---
 id: wf-3k9x2
-title: Live board updates
+title: Push board updates over SSE
 status: in_progress
 priority: high
 size: m

@@ -16,7 +16,7 @@ Added a roving tabindex to the cards of one column. `j` and `k` move focus down 
 
 Ran `wf verify wf-h2tb7 SC-1`. The test presses `j` 5 times and checks the focused card.
 
-## 2026-10-22T14:12+05:30 @shruti — Tried the keys on a board with 40 cards {#C-3dv6n}
+## 2026-10-22T14:12+05:30 @shruti — Tested the keys on a board with 40 cards {#C-3dv6n}
 - kind: review
 
 Opened the board with 40 cards and pressed `j` to the end. Focus moved without a visible lag. Asked for a rule for empty columns.

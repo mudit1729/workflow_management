@@ -1,6 +1,6 @@
 ---
 id: wf-v1cm9
-title: Group roll-up progress bars
+title: Show group roll-up progress bars
 status: backlog
 priority: low
 size: s

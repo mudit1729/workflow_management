@@ -36,7 +36,7 @@ Scan the workspace, serve the snapshot and push each block into a queue.
 
 Send `{hash, status, errors}` and a height hint. The hint depends on the size contract of [[wf-r6jk2]].
 
-### T-3: Limit renders to 2 at the same time
+### T-3: Limit renders to 2 in parallel
 - status: todo
 - lane: server
 - depends_on: T-2

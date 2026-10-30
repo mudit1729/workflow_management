@@ -11,7 +11,7 @@
 
 Ran `wf verify wf-b1d7v SC-1`. `wf init` created a workspace in a temp repo and `wf lint` reported zero findings.
 
-## 2026-10-15T12:05+05:30 @mudit — Verified SC-2: roll-ups rebuild in 180 ms {#C-9rm5t}
+## 2026-10-15T12:05+05:30 @mudit — Verified SC-2 with a 180 ms roll-up rebuild {#C-9rm5t}
 - kind: verify
 - task: T-2
 - criteria: SC-2
@@ -32,7 +32,7 @@ Touched one `goal.md` in the golden workspace with 40 issues. The roll-ups rebui
 
 Changed `goal.md` between the read and the write. The server answered 409 with the current value and left the file untouched.
 
-## 2026-10-21T14:17+05:30 @codex — CI timed out in `wf-index` {#C-8cw2n}
+## 2026-10-21T14:17+05:30 @codex — Failed CI on a timeout in `wf-index` {#C-8cw2n}
 - kind: failure
 - result: fail
 - evidence: `test result: FAILED. finished in 612.04s`
@@ -47,7 +47,7 @@ The `rust` job ran past 10 min. Each test rebuilt the golden fixtures from scrat
 
 Moved the fixture build into a `build.rs` step and cached it. The `rust` job now takes 74 s.
 
-## 2026-10-22T11:27+05:30 @claude-sonnet — Built the issue drawer on the mock server {#C-7qs5w}
+## 2026-10-22T11:27+05:30 @claude-sonnet — Added the issue drawer on the mock server {#C-7qs5w}
 - kind: progress
 - task: T-5
 - files: `web/src/features/issue/IssueDrawer.tsx`

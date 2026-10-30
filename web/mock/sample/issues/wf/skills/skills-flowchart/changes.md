@@ -9,7 +9,7 @@
 
 Read the `SKILL.md` frontmatter of the three plugins. Wrote one row per skill in `notes/skill-triggers.md`.
 
-## 2026-10-19T18:05+05:30 @shruti — Reviewed the skill inventory {#C-4qd8h}
+## 2026-10-19T18:05+05:30 @shruti — Checked the skill inventory {#C-4qd8h}
 - kind: verify
 - criteria: SC-1
 - result: pass

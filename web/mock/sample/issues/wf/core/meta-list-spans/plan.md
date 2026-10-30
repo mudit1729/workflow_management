@@ -41,7 +41,7 @@ Give each meta item a `key_span` and a `value_span` in bytes.
 
 Fill the spans while the parser reads each `- key: value` line. End the value span before a trailing comment.
 
-### T-3: Test the splice with a property test
+### T-3: Property-test the splice
 - status: done
 - lane: core
 - depends_on: T-2

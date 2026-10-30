@@ -32,7 +32,7 @@ Filled the spans in `parse_meta()`. A trailing comment now ends the value span.
 
 Replaced one value in each random list. All bytes outside the span matched the original.
 
-## 2026-10-11T12:10+05:30 @mudit — Timed the golden plan at 1.8 ms {#C-4pr7y}
+## 2026-10-11T12:10+05:30 @mudit — Benchmarked the golden plan at 1.8 ms {#C-4pr7y}
 - kind: verify
 - task: T-4
 - criteria: SC-4

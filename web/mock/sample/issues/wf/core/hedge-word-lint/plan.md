@@ -15,7 +15,7 @@ Collect the hedge words, then reuse the whole-word matcher of S09. Run the rule 
 
 ## Phase 1: Rule
 
-### T-1: Collect the hedge word list
+### T-1: List the hedge words
 - status: todo
 - lane: core
 - owns: `crates/wf-lint/data/hedge_words.txt`

@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-08-05T13:40+05:30 @codex — A round-trip serializer dropped YAML comments {#C-5bq9m}
+## 2026-08-05T13:40+05:30 @codex — Lost YAML comments in a round-trip serializer {#C-5bq9m}
 - kind: failure
 - task: T-1
 - result: fail
