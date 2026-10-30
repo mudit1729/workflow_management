@@ -1,13 +1,56 @@
 // The state behind the Codex buttons. One hook per place: the issue header (`useCodexIssue`), the
 // board card (`useCardRun`) and the card's menu (`useNextStep`). All three read the same runs from
 // the data layer, so a run started in one place shows in the others.
+//
+// Do next step needs a connected agent (plan D12). Where none is, the click is not an error: it
+// opens the connect flow, which remembers the issue and starts the run once the agent is
+// connected (`askToConnect`, `useResumeNextStep`). An agent that was lost opens the Agent panel
+// instead, where Reconnect is. Nothing is toasted for either: the dialog is the answer.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { type CodexRun, useCodexRuns, useStartCodexRun } from "@/lib/api";
+import { type AgentThen, openAgent, openAgentPanel } from "@/app/shell-store";
+import type { IssueId } from "@/gen/types";
+import {
+  AgentNotConnectedError,
+  type CodexRun,
+  type CodexRunKind,
+  useCodexRuns,
+  useIssueMap,
+  useStartCodexRun,
+} from "@/lib/api";
 import { useOpenIssue } from "@/lib/nav";
 import { followRun, holdStrip, type OpenIssue } from "./follow-run";
 import type { CodexIssue } from "./open-in-codex";
 import { activeRun, reasonAction } from "./run-copy";
+
+/**
+ * No agent can run it: open the connect flow, with the run to start when the agent is connected
+ * (a pairing in progress is picked up where it was), or the Agent panel for an agent that was lost.
+ */
+export function askToConnect(
+  issueId: IssueId,
+  kind: CodexRunKind,
+  status: "none" | "pairing" | "lost",
+) {
+  const then: AgentThen = { issueId, kind };
+  if (status === "lost") openAgentPanel({ then });
+  else openAgent({ then });
+}
+
+/** `start`, except that a missing agent asks to be connected and resolves to nothing. */
+async function startOrConnect(
+  start: (issueId: IssueId, kind: CodexRunKind) => Promise<CodexRun | undefined>,
+  issueId: IssueId,
+  kind: CodexRunKind,
+): Promise<CodexRun | undefined> {
+  try {
+    return await start(issueId, kind);
+  } catch (err) {
+    if (!(err instanceof AgentNotConnectedError)) throw err;
+    askToConnect(issueId, kind, err.status);
+    return undefined;
+  }
+}
 
 /** How long the end of a run stays on screen (ms). A reason the person must read stays longer. */
 const SHOW_DONE_MS = 6000;
@@ -76,7 +119,7 @@ export function useCodexIssue(issue: CodexIssue): CodexIssueState {
   const begin = useCallback(async () => {
     setStarting(true);
     setOutcome(undefined);
-    const run = await start(issue.id, "next_step");
+    const run = await startOrConnect(start, issue.id, "next_step");
     setStarting(false);
     if (!run) return;
     if (run.status === "running") followRun(run, issue, openIssue);
@@ -123,10 +166,10 @@ export function useCardRun(issueId: string): CodexRun | undefined {
 const SETTLE_MS = 1500;
 
 /**
- * True while Codex works on the issue, and a moment after it stops. Codex writes `current_state.md`
- * last, so during a run the log is ahead of it by design (Q005); the header and the Now tab hold
- * that signal back until the run is over and the issue has been read again, so nothing above the
- * tabs appears and disappears while the run goes.
+ * True while the agent works on the issue, and a moment after it stops. The agent writes
+ * `current_state.md` last, so during a run the log is ahead of it by design (Q005); the header and
+ * the Now tab hold that signal back until the run is over and the issue has been read again, so
+ * nothing above the tabs appears and disappears while the run goes.
  */
 export function useRunActive(issueId: string): boolean {
   const going = activeRun(useCodexRuns(issueId)) !== undefined;
@@ -144,12 +187,31 @@ export function useRunActive(issueId: string): boolean {
 }
 
 export interface NextStep {
-  /** True while Codex works on the issue. */
+  /** True while an agent works on the issue. */
   busy: boolean;
-  /** Start the next step; a run with nothing to do is explained in a toast. */
+  /** The run that goes on the issue: it names the agent that does it. */
+  run?: CodexRun;
+  /**
+   * Start the next step; a run with nothing to do is explained in a toast. With no agent
+   * connected it opens the connect flow instead (the Agent panel for a lost one) and resolves to
+   * nothing: the run starts when the agent is connected.
+   */
   start: () => Promise<CodexRun | undefined>;
   /** Stop the run that goes on the issue. Does nothing when none does; a cancel gives no toast. */
   cancel: () => Promise<void>;
+}
+
+/** Start the next step of an issue from a place with no strip, and say what the strip would. */
+async function runNextStep(
+  issue: CodexIssue,
+  start: (issueId: IssueId, kind: CodexRunKind) => Promise<CodexRun | undefined>,
+  openIssue: OpenIssue,
+): Promise<CodexRun | undefined> {
+  const run = await startOrConnect(start, issue.id, "next_step");
+  if (!run) return run;
+  if (run.status === "running") followRun(run, issue, openIssue);
+  else if (run.status === "nothing_ready") explainNothingReady(run, issue, openIssue);
+  return run;
 }
 
 /**
@@ -171,18 +233,32 @@ export function useNextStep(issue: CodexIssue | undefined): NextStep {
 
   const begin = useCallback(async () => {
     if (!issue) return undefined;
-    const run = await start(issue.id, "next_step");
-    if (!run) return run;
-    if (run.status === "running") followRun(run, issue, openIssue);
-    else if (run.status === "nothing_ready") explainNothingReady(run, issue, openIssue);
-    return run;
+    return runNextStep(issue, start, openIssue);
   }, [start, issue, openIssue]);
 
   const stop = useCallback(async () => {
     if (goingId) await cancel(goingId);
   }, [goingId, cancel]);
 
-  return { busy, start: begin, cancel: stop };
+  return { busy, run: going, start: begin, cancel: stop };
+}
+
+/**
+ * The run a connect flow was opened for (`AgentThen`), started now that the agent is connected. The
+ * same path as the card menu's Do next step, so the run, its card marker and its one toast are the
+ * same. Returns at once; an issue that is gone starts nothing.
+ */
+export function useResumeNextStep(): (then: AgentThen) => void {
+  const issues = useIssueMap();
+  const { start } = useStartCodexRun();
+  const openIssue = useOpenIssue();
+  return useCallback(
+    (then) => {
+      const issue = issues.get(then.issueId);
+      if (issue) void runNextStep(issue, start, openIssue);
+    },
+    [issues, start, openIssue],
+  );
 }
 
 function explainNothingReady(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue) {

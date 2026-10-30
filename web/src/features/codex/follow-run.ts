@@ -10,7 +10,7 @@
 // has no stream, so a run started there is announced while a hook polls it.
 import { toast } from "sonner";
 import type { IssueId } from "@/gen/types";
-import { type CodexRun, connectCodexLive, qk, queryClient } from "@/lib/api";
+import { agentName, type CodexRun, connectCodexLive, qk, queryClient } from "@/lib/api";
 import type { IssueTab } from "@/lib/nav";
 import type { CodexIssue } from "./open-in-codex";
 
@@ -47,18 +47,20 @@ function find(id: string, issue: IssueId): CodexRun | undefined {
 
 /**
  * Say how the run ended, once. A cancel is the person's own act and needs no toast, and a strip
- * on screen already says the rest.
+ * on screen already says the rest. The agent's name is the run's own: it may not be the one that
+ * is connected now. A run on a real bridge names no task.
  */
 export function announce(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue) {
   if (stripShows(issue.id)) return;
-  const task = run.task ?? "the task";
+  const name = agentName(run.agent);
+  const task = run.task ?? (run.source === "bridge" ? undefined : "the task");
   if (run.status === "done") {
-    toast(`Codex finished ${task}`, {
+    toast(task ? `${name} finished ${task}` : `${name} finished`, {
       description: `${issue.id} · ${issue.title}`,
       action: { label: "Open log", onClick: () => void openIssue(issue.id, { tab: "log" }) },
     });
   } else if (run.status === "failed") {
-    toast.error(`Codex failed on ${task}`, {
+    toast.error(task ? `${name} failed on ${task}` : `${name} failed`, {
       description: run.reason,
       action: { label: "Open plan", onClick: () => void openIssue(issue.id, { tab: "plan" }) },
     });

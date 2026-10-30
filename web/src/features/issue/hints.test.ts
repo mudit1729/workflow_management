@@ -56,6 +56,12 @@ describe("codexAsk", () => {
   test("a single quote in the prompt cannot end the argument", () => {
     expect(codexAsk("Plan Mudit's issue")).toBe("codex 'Plan Mudit'\\''s issue'");
   });
+
+  test("follows the agent: claude for Claude Code", () => {
+    expect(codexAsk("Plan wf-3k9x2 with the planning-issues skill.", "claude")).toBe(
+      "claude 'Plan wf-3k9x2 with the planning-issues skill.'",
+    );
+  });
 });
 
 describe("no invented names in the views", () => {

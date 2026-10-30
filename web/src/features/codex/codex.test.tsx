@@ -1,10 +1,21 @@
 // The words and the parts of a Codex run that need no data layer: the line for each phase, the
-// progress bar, the notice and the prompt panel. (The test environment has no DOM, so these render
-// to markup.)
+// progress bar, the notice and the prompt panel; the names that follow the connected agent; and the
+// rule that Do next step without an agent opens the connect flow. (The test environment has no DOM,
+// so these render to markup.)
+import { QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useShell } from "@/app/shell-store";
 import { TooltipProvider } from "@/components/ui";
-import type { CodexPhaseId, CodexRun, CodexRunStatus } from "@/lib/api";
+import {
+  AgentNotConnectedError,
+  agentControls,
+  type CodexPhaseId,
+  type CodexRun,
+  type CodexRunStatus,
+  queryClient,
+  simulatedConnection,
+} from "@/lib/api";
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 const copyText = vi.hoisted(() => vi.fn<(text: string) => Promise<boolean>>());
@@ -14,11 +25,23 @@ vi.mock("@/components/common", async (original) => ({
   copyText,
 }));
 
+import { nextStepHint } from "./CodexActions";
+import { CodexRunMarker } from "./CodexRunMarker";
 import { announce, holdStrip, stripShows } from "./follow-run";
 import { OpenInCodexPanel } from "./OpenInCodex";
-import { copyCodexCommand } from "./open-in-codex";
-import { RunNotice, RunProgress } from "./RunStatus";
-import { activeRun, plansFirst, reasonAction, runLine, runProgress, runWord } from "./run-copy";
+import { copyCodexCommand, openInAgentHint } from "./open-in-codex";
+import { RunNotice, RunProgress, RunStatus } from "./RunStatus";
+import { RunsList } from "./RunsPopover";
+import {
+  activeRun,
+  plansFirst,
+  reasonAction,
+  runLine,
+  runProgress,
+  runsLabel,
+  runWord,
+} from "./run-copy";
+import { askToConnect } from "./use-codex";
 
 const ORDER: CodexPhaseId[] = ["claim", "log", "verify", "done"];
 
@@ -47,6 +70,8 @@ function run(
     kind: "next_step",
     status,
     by: "codex",
+    agent: "codex",
+    source: "simulated",
     task: status === "nothing_ready" ? undefined : "T-3",
     phase,
     phases,
@@ -288,5 +313,228 @@ describe("one announcement per event", () => {
     toast.error.mockClear();
     await expect(copyCodexCommand(issue, { toast: false })).resolves.toBe(false);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------- the agent (plan D12)
+
+/** A run on a real bridge: no phases, no task, a last line. */
+function bridgeRun(status: CodexRunStatus, extra: Partial<CodexRun> = {}): CodexRun {
+  return {
+    id: "run-bridge",
+    issue: "wf-3k9x2",
+    kind: "next_step",
+    status,
+    by: "codex",
+    agent: "codex",
+    source: "bridge",
+    phases: [],
+    started_at: "2026-10-30T10:00:00Z",
+    ...extra,
+  };
+}
+
+const claudeRun = (status: CodexRunStatus, extra: Partial<CodexRun> = {}) =>
+  bridgeRun(status, { by: "claude", agent: "claude", ...extra });
+
+// The agent's tile reads the authors, so a view needs the query client.
+const view = (node: React.ReactElement) =>
+  renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>{node}</TooltipProvider>
+    </QueryClientProvider>,
+  );
+
+describe("a run on a real bridge", () => {
+  it("says where it runs, and how it ended", () => {
+    expect(runLine(bridgeRun("running"), "laptop-2")).toBe("Running on laptop-2");
+    expect(runLine(bridgeRun("running"))).toBe("Running");
+    expect(runLine(bridgeRun("done"))).toBe("Done");
+    expect(runLine(bridgeRun("failed"))).toBe("Failed");
+    expect(runLine(bridgeRun("cancelled"))).toBe("Cancelled");
+  });
+
+  it("never invents a task or a phase", () => {
+    expect(runLine(bridgeRun("running"), "laptop-2")).not.toMatch(/T-|Claiming|task/);
+    expect(runWord(bridgeRun("running"))).toBe("Running");
+    expect(runWord(bridgeRun("done"))).toBe("Done");
+    expect(runProgress(bridgeRun("running"))).toEqual({ done: 0, total: 0 });
+  });
+
+  it("shows the host and the last line in the strip, with no progress bar", () => {
+    const html = view(
+      <RunStatus
+        run={bridgeRun("running", { lastLine: "Reading plan.md" })}
+        host="laptop-2"
+        onCancel={() => undefined}
+      />,
+    );
+    expect(html).toContain("Running on laptop-2");
+    expect(html).toContain("Reading plan.md");
+    expect(html).toContain("Cancel");
+    expect(html).not.toContain('role="progressbar"');
+    // A run on the prototype's own simulation keeps its bar.
+    expect(renderToStaticMarkup(<RunProgress run={run("running", "log")} />)).toContain(
+      "progressbar",
+    );
+  });
+
+  it("shows the exit code of a failed run as its reason", () => {
+    const html = view(
+      <RunNotice
+        run={bridgeRun("failed", { reason: "Codex exited with code 1." })}
+        onOpen={() => undefined}
+      />,
+    );
+    expect(html).toContain("Failed: Codex exited with code 1.");
+  });
+
+  it("marks the card without a task id", () => {
+    const html = view(<CodexRunMarker run={bridgeRun("running")} />);
+    expect(html).toContain("Running");
+    expect(html).not.toContain("font-mono");
+    expect(view(<CodexRunMarker run={run("running", "log")} />)).toContain("T-3");
+  });
+
+  it("lists the last line of a run that goes on", () => {
+    const html = view(
+      <RunsList runs={[bridgeRun("running", { lastLine: "Editing plan.md" })]} host="laptop-2" />,
+    );
+    expect(html).toContain("Running on laptop-2");
+    expect(html).toContain("Editing plan.md");
+  });
+});
+
+describe("runsLabel", () => {
+  it("names the agent that did the runs", () => {
+    expect(runsLabel([run("done", "done")], "claude")).toBe("Codex runs");
+    expect(runsLabel([claudeRun("done")], "codex")).toBe("Claude Code runs");
+  });
+
+  it("says Agent runs when both worked on the issue", () => {
+    expect(runsLabel([run("done", "done"), claudeRun("done")], "codex")).toBe("Agent runs");
+  });
+
+  it("names the agent the buttons name while there are no runs", () => {
+    expect(runsLabel([], "claude")).toBe("Claude Code runs");
+    expect(runsLabel([], "codex")).toBe("Codex runs");
+  });
+});
+
+describe("the labels follow the agent", () => {
+  const issue = { id: "wf-3k9x2", title: "Push board updates", path: "issues/wf/web/live" };
+  const open = vi.fn();
+
+  afterEach(() => {
+    toast.mockClear();
+    toast.error.mockClear();
+    copyText.mockReset();
+    // The last agent is remembered: leave Codex as the one the buttons name.
+    agentControls.simulate("codex");
+    agentControls.disconnect();
+  });
+
+  it("copies a codex command while Codex is the agent, and a claude command for Claude Code", async () => {
+    copyText.mockResolvedValue(true);
+    await copyCodexCommand(issue);
+    expect(copyText.mock.calls[0]?.[0]).toMatch(/^codex 'Work on wf-3k9x2/);
+
+    agentControls.simulate("claude");
+    await copyCodexCommand(issue);
+    expect(copyText.mock.calls[1]?.[0]).toMatch(/^claude 'Work on wf-3k9x2/);
+    expect(toast.mock.calls.at(-1)?.[0]).toBe("Copied the Claude Code command");
+  });
+
+  it("names the agent of the panel, its prompt and its command", () => {
+    agentControls.simulate("claude");
+    const html = renderToStaticMarkup(<OpenInCodexPanel issue={issue} copied />);
+    expect(html).toContain("Claude Code gets this prompt");
+    expect(html).toContain("claude &#x27;Work on wf-3k9x2");
+    expect(html).not.toContain("Codex gets");
+    expect(html).not.toContain("Codex reads");
+    // A panel can be shown for either agent whichever is connected.
+    expect(renderToStaticMarkup(<OpenInCodexPanel issue={issue} agent="codex" />)).toContain(
+      "Codex gets this prompt",
+    );
+  });
+
+  it("says the same in the tooltip", () => {
+    expect(openInAgentHint("claude")).toContain("claude command");
+    expect(openInAgentHint("claude")).toContain("Claude Code");
+    expect(openInAgentHint("codex")).toContain("codex command");
+  });
+
+  it("toasts the end of a run with the name of the agent that did it", () => {
+    announce(claudeRun("done", { task: "T-3" }), issue, open);
+    expect(toast.mock.calls[0]?.[0]).toBe("Claude Code finished T-3");
+    // The agent that is connected now does not matter.
+    announce(claudeRun("failed", { reason: "Claude Code exited with code 2." }), issue, open);
+    expect(toast.error.mock.calls[0]?.[0]).toBe("Claude Code failed");
+    expect(toast.error.mock.calls[0]?.[1]).toMatchObject({
+      description: "Claude Code exited with code 2.",
+    });
+  });
+
+  it("names no task for a run that picked none", () => {
+    announce(bridgeRun("done"), issue, open);
+    expect(toast.mock.calls[0]?.[0]).toBe("Codex finished");
+  });
+});
+
+describe("nextStepHint", () => {
+  const issue = { id: "wf-3k9x2", title: "Push board updates", path: "issues/wf/web/live" };
+
+  it("says a connected agent does the work, by name", () => {
+    expect(nextStepHint(issue, simulatedConnection("codex"))).toMatch(
+      /^Codex does the next ready task/,
+    );
+    expect(nextStepHint(issue, simulatedConnection("claude"))).toMatch(
+      /^Claude Code does the next/,
+    );
+  });
+
+  it("says the click connects one when none is", () => {
+    expect(nextStepHint(issue, { status: "none" })).toContain("connects one");
+    expect(nextStepHint(issue, { status: "pairing", agent: "codex" })).toContain("connects one");
+  });
+
+  it("says the click opens the panel for an agent that was lost", () => {
+    const lost = { ...simulatedConnection("codex"), status: "lost" as const };
+    expect(nextStepHint(issue, lost)).toBe(
+      "Codex stopped answering. The click opens the agent panel, where you can reconnect.",
+    );
+  });
+});
+
+describe("Do next step without an agent", () => {
+  const state = () => useShell.getState();
+
+  afterEach(() => {
+    useShell.setState({ agentOpen: false, agentPanelOpen: false, agentStart: undefined });
+  });
+
+  it("opens the connect flow, with the run it waits to start", () => {
+    askToConnect("wf-3k9x2", "next_step", "none");
+    expect(state().agentOpen).toBe(true);
+    expect(state().agentPanelOpen).toBe(false);
+    const then = { issueId: "wf-3k9x2", kind: "next_step" };
+    expect(state().agentStart).toEqual({ then });
+  });
+
+  it("picks a pairing up where it was", () => {
+    askToConnect("wf-3k9x2", "next_step", "pairing");
+    expect(state().agentOpen).toBe(true);
+  });
+
+  it("opens the Agent panel for an agent that was lost, so it can be reconnected", () => {
+    askToConnect("wf-3k9x2", "next_step", "lost");
+    expect(state().agentPanelOpen).toBe(true);
+    expect(state().agentOpen).toBe(false);
+    expect(state().agentStart?.then?.issueId).toBe("wf-3k9x2");
+  });
+
+  it("is what the start of a run asks for: a missing agent is an error that names its state", () => {
+    expect(new AgentNotConnectedError("lost").status).toBe("lost");
+    expect(new AgentNotConnectedError().status).toBe("none");
   });
 });

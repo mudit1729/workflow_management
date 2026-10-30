@@ -1,7 +1,8 @@
 // The left navigation. Workspace "wf" holds two views: Workflow (work in motion: Board) and
 // Workdatabase (everything stored: Library, Glossary, Files, Skills). Below them the Groups tree,
-// which filters the Workflow board, then Kit (prototype tools) and the display controls. What needs
-// you is a filter of the board, not a place in the nav. 232 px, or a
+// which filters the Workflow board, then the agent row (Codex or Claude Code: connected or not), Kit
+// (prototype tools) and the display controls. What needs you is a filter of the board, not a place
+// in the nav. 232 px, or a
 // 52 px icon rail when collapsed (⌘B or [): one icon per view, tooltips list the sub-views.
 // Below 768 px AppShell shows it inside a sheet (variant "sheet").
 import { Link } from "@tanstack/react-router";
@@ -32,6 +33,7 @@ import {
   type WfView,
 } from "@/components/common";
 import { Button, Chip, Kbd, Segmented, Tooltip } from "@/components/ui";
+import { AgentStatus } from "@/features/agent/AgentStatus";
 import { useMe, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLiveStatus } from "@/lib/live";
@@ -130,6 +132,10 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
       </div>
 
       {!isCollapsed && <NavNotifyBanner />}
+
+      <div className={cn("shrink-0 pb-px", isCollapsed ? "flex justify-center px-2" : "px-2")}>
+        <AgentStatus collapsed={isCollapsed} onNavigate={onNavigate} />
+      </div>
 
       <div
         className={cn(

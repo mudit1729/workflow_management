@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
-import { AddWorkDialog, preloadViews, whenIdle } from "./lazy-views";
+import { AddWorkDialog, AgentDialogs, preloadViews, whenIdle } from "./lazy-views";
 import { LiveBadge, NavRail } from "./NavRail";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
@@ -22,12 +22,8 @@ import { useNavRail } from "./useNavRail";
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 const OPEN_NAV_ID = "wf-open-nav";
 
-/**
- * Add work mounts when it is first wanted, or when the browser is idle after the first paint
- * (which also fetches the other lazy views), so its chunk is there by the first click.
- */
-function AddWorkHost() {
-  const open = useShell((s) => s.addWorkOpen);
+/** True once the browser is idle after the first paint, when the other lazy views are fetched. */
+function useIdle(): boolean {
   const [idle, setIdle] = useState(false);
   useEffect(
     () =>
@@ -37,10 +33,32 @@ function AddWorkHost() {
       }),
     [],
   );
+  return idle;
+}
+
+/**
+ * Add work mounts when it is first wanted, or when the browser is idle after the first paint
+ * (which also fetches the other lazy views), so its chunk is there by the first click.
+ */
+function AddWorkHost() {
+  const open = useShell((s) => s.addWorkOpen);
+  const idle = useIdle();
   if (!open && !idle) return null;
   return (
     <Suspense fallback={null}>
       <AddWorkDialog />
+    </Suspense>
+  );
+}
+
+/** The connect flow and the Agent panel, mounted the same way. */
+function AgentHost() {
+  const open = useShell((s) => s.agentOpen || s.agentPanelOpen);
+  const idle = useIdle();
+  if (!open && !idle) return null;
+  return (
+    <Suspense fallback={null}>
+      <AgentDialogs />
     </Suspense>
   );
 }
@@ -87,6 +105,7 @@ export function AppShell() {
       <CommandPalette />
       <ShortcutsDialog />
       <AddWorkHost />
+      <AgentHost />
       <MoveGateDialog />
       <GlobalShortcuts />
     </div>

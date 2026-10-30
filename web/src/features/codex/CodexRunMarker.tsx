@@ -1,6 +1,7 @@
-// The mark a board card shows while Codex works on its issue: the Codex author tile, the task id
-// and one word for the phase ("T-3 Claiming"). It takes the place of the group path in the card's
-// id row, so the card keeps its height and its right-hand marks stay where they are.
+// The mark a board card shows while an agent works on its issue: the agent's author tile, the task
+// id and one word for the phase ("T-3 Claiming"). A run on a real bridge names no task and says
+// "Running". It takes the place of the group path in the card's id row, so the card keeps its
+// height and its right-hand marks stay where they are.
 import { Check } from "lucide-react";
 import { AuthorChip } from "@/components/common";
 import type { CodexRun } from "@/lib/api";
@@ -31,7 +32,7 @@ export function CodexRunMarker({ run, className }: CodexRunMarkerProps) {
           />
         )}
       </span>
-      <span className="shrink-0 font-mono text-fg tabular">{run.task}</span>
+      {run.task && <span className="shrink-0 font-mono text-fg tabular">{run.task}</span>}
       <span className="flex min-w-0 items-center gap-1 truncate">
         {done && (
           <Check aria-hidden size={12} strokeWidth={1.75} className="shrink-0 text-status-done" />

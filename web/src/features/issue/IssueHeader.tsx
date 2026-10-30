@@ -416,7 +416,7 @@ function LeasePill({ lease }: { lease: Lease }) {
   const tip = none
     ? "Coordinator without a lease"
     : expired
-      ? `Coordinator lease expired. It ended ${absolute(lease.until)}. The next step Codex does takes it over.`
+      ? `Coordinator lease expired. It ended ${absolute(lease.until)}. The next step the agent does takes it over.`
       : `Coordinator lease until ${absolute(lease.until)}`;
 
   return (

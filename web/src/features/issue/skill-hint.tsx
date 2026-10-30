@@ -1,11 +1,11 @@
 // SkillHint: what an empty state offers when the work can also be done without the dashboard. It
 // names the one skill of the workflow plugin that does the job, links to it in Workdatabase ·
-// Skills, and gives `codex '<prompt>'`, a command that exists today. It replaces hints that named
+// Skills, and gives `codex '<prompt>'` or `claude '<prompt>'`, a command that exists today. It replaces hints that named
 // skills the plugin does not have and a CLI that has not been built (hints.test.ts keeps them out).
 import type { MouseEvent } from "react";
 import { CopyButton } from "@/components/common";
 import { skillHref, useSkillsNav } from "@/features/skills/search";
-import { shellQuote } from "@/lib/api";
+import { type AgentKind, agentName, shellQuote, usePreferredAgent } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 /** The skills of `plugins/workflow/skills`. A hint may name only these. */
@@ -22,12 +22,15 @@ export const WF_SKILLS = [
 
 export type WfSkill = (typeof WF_SKILLS)[number];
 
-/** `codex '<prompt>'`: what the Copy button of a hint puts on the clipboard. */
-export function codexAsk(prompt: string): string {
-  return `codex ${shellQuote(prompt)}`;
+/**
+ * `codex '<prompt>'`: what the Copy button of a hint puts on the clipboard. `claude '<prompt>'` for
+ * Claude Code: the agent's kind is also the name of its command.
+ */
+export function codexAsk(prompt: string, agent: AgentKind = "codex"): string {
+  return `${agent} ${shellQuote(prompt)}`;
 }
 
-/** The prompts the issue hints hand to Codex, one place so the empty states say the same thing. */
+/** The prompts the issue hints hand to the agent, one place so the empty states say the same thing. */
 export const ASK = {
   plan: (id: string) => `Plan ${id} with the planning-issues skill.`,
   moreTasks: (id: string) =>
@@ -74,7 +77,7 @@ export function SkillLink({ skill, className }: { skill: WfSkill; className?: st
 
 export interface SkillHintProps {
   skill: WfSkill;
-  /** What Codex is asked, one sentence that names the issue. */
+  /** What the agent is asked, one sentence that names the issue. */
   prompt: string;
   /** `start` left-aligns it inside a compact empty state. */
   align?: "center" | "start";
@@ -82,12 +85,15 @@ export interface SkillHintProps {
 }
 
 /**
- * "Codex does this with the <skill> skill", the prompt it is asked, and a button that copies the
- * `codex '<prompt>'` command. The prompt is shown as text that wraps (a long one stays readable);
- * the command it becomes is the button's tooltip and what lands on the clipboard.
+ * "<Agent> does this with the <skill> skill", the prompt it is asked, and a button that copies the
+ * `codex '<prompt>'` command (`claude '<prompt>'` for Claude Code, the connected agent or else the
+ * last one chosen). The prompt is shown as text that wraps (a long one stays readable); the command
+ * it becomes is the button's tooltip and what lands on the clipboard.
  */
 export function SkillHint({ skill, prompt, align = "center", className }: SkillHintProps) {
-  const command = codexAsk(prompt);
+  const agent = usePreferredAgent();
+  const name = agentName(agent);
+  const command = codexAsk(prompt, agent);
   return (
     <div
       data-wf="SkillHint"
@@ -98,7 +104,7 @@ export function SkillHint({ skill, prompt, align = "center", className }: SkillH
       )}
     >
       <p className="text-fg-muted text-sm">
-        Codex does this with the <SkillLink skill={skill} /> skill:
+        {name} does this with the <SkillLink skill={skill} /> skill:
       </p>
       {/* An absolute width: a percentage would not hold inside an empty state that sizes itself by
           its content, and a long prompt would push the Copy button out of the panel. */}
@@ -110,7 +116,7 @@ export function SkillHint({ skill, prompt, align = "center", className }: SkillH
         >
           {prompt}
         </p>
-        <CopyButton text={command} label="Copy Codex command" />
+        <CopyButton text={command} label={`Copy ${name} command`} />
       </div>
     </div>
   );

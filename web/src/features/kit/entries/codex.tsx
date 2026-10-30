@@ -1,9 +1,11 @@
-// Kit entries for the Codex buttons (plan D3, D4). The live variants run the real mock: a click
-// starts a run in the sample copy the kit holds, and the run takes about six seconds. The static
-// variants show one state each.
+// Kit entries for the agent buttons (plan D3, D4, D12). The live variants run the real mock: a
+// click starts a run in the sample copy the kit holds, and the run takes about six seconds; with no
+// agent connected (the nav's agent row) the click opens the connect flow first. The static variants
+// show one state each, for Codex and for Claude Code, and for a run on a real bridge.
 import { Play } from "lucide-react";
 import { Button } from "@/components/ui";
 import { IssueCard } from "@/features/board";
+import type { CodexIssue } from "@/features/codex";
 import {
   CodexActions,
   CodexRunMarker,
@@ -11,9 +13,9 @@ import {
   RunNotice,
   RunStatus,
   RunsList,
+  useNextStep,
 } from "@/features/codex";
 import type { CodexPhaseId, CodexRun, CodexRunStatus } from "@/lib/api";
-import { useStartCodexRun } from "@/lib/api";
 import { entry, type KitEntry, Sandbox, V, WithSummary } from "../kit-ui";
 import { ISSUE } from "./data";
 
@@ -62,6 +64,8 @@ function fixture(
     kind: "next_step",
     status,
     by: "codex",
+    agent: "codex",
+    source: "simulated",
     task: status === "nothing_ready" ? undefined : task,
     task_title: status === "nothing_ready" ? undefined : "Wire resync into the board store",
     phase,
@@ -71,6 +75,35 @@ function fixture(
     ...extra,
   };
 }
+
+/** A run on a real bridge: no phases, no task; the agent printed a last line. */
+function bridge(status: CodexRunStatus, extra: Partial<CodexRun> = {}): CodexRun {
+  return {
+    id: `run-bridge-${status}`,
+    issue: ISSUE.rich,
+    kind: "next_step",
+    status,
+    by: "codex",
+    agent: "codex",
+    source: "bridge",
+    phases: [],
+    started_at: ago(40),
+    ...(status === "running" ? {} : { finished_at: ago(30) }),
+    ...extra,
+  };
+}
+
+const HOST = "laptop-2";
+
+const BRIDGE_RUNNING = bridge("running", {
+  lastLine: "Reading plan.md and picking the next ready task",
+});
+const CLAUDE_RUNNING = bridge("running", {
+  id: "run-bridge-claude",
+  by: "claude",
+  agent: "claude",
+  lastLine: "Editing plan.md: T-4 is in progress",
+});
 
 const RUNNING: { label: string; run: CodexRun }[] = [
   { label: "claim", run: fixture("running", "claim") },
@@ -125,6 +158,7 @@ const HISTORY: CodexRun[] = [
     finished_at: ago(26 * 3600),
     reason: "T-4 changed while Codex worked on it.",
   }),
+  bridge("done", { id: "run-h4b", finished_at: ago(27 * 3600), started_at: ago(27 * 3600 + 50) }),
   fixture("nothing_ready", undefined, {
     id: "run-h5",
     finished_at: ago(2 * 86400),
@@ -153,7 +187,7 @@ function CodexActionsBody() {
     <>
       <V
         label="live · wf-3k9x2 (T-4 is ready)"
-        note="Click Do next step: the strip follows the run (about 6 s), then the task, the Log, Git and CI change."
+        note="Click Do next step: the strip follows the run (about 6 s), then the task, the Log, Git and CI change. With no agent connected the click opens the connect flow, and the run starts after it. The buttons name the connected agent."
       >
         <Framed id={ISSUE.rich} width={528} />
       </V>
@@ -164,7 +198,7 @@ function CodexActionsBody() {
         <Framed id={ISSUE.noPlan} width={528} />
       </V>
       <V
-        label="live · wf-e6kc1 (no plan: Codex plans first)"
+        label="live · wf-e6kc1 (no plan: the agent plans first)"
         note="Click Do next step: the strip says Planning, claiming T-1, then follows the run. plan.md and the first change entry appear."
       >
         <Framed id="wf-e6kc1" width={528} />
@@ -192,8 +226,26 @@ function RunStatusBody() {
           <RunStatus run={run} onCancel={() => undefined} />
         </V>
       ))}
+      <V
+        label="running · on a bridge: where it runs and the last line"
+        note="No phases to count: the tile pulses, the last line the agent printed follows."
+        width={480}
+      >
+        <RunStatus run={BRIDGE_RUNNING} host={HOST} onCancel={() => undefined} />
+      </V>
+      <V label="running · on a bridge · Claude Code" width={480}>
+        <RunStatus run={CLAUDE_RUNNING} host={HOST} onCancel={() => undefined} />
+      </V>
+      <V label="running · on a bridge · phone (358 px), the last line gives way" width={358}>
+        <div className="@container w-full">
+          <RunStatus run={BRIDGE_RUNNING} host={HOST} onCancel={() => undefined} />
+        </div>
+      </V>
       <V label="done" note="Stays for six seconds, with a way to the Log." width={360}>
         <RunStatus run={fixture("done", "done")} onOpenLog={() => undefined} />
+      </V>
+      <V label="done · on a bridge" width={360}>
+        <RunStatus run={bridge("done")} onOpenLog={() => undefined} />
       </V>
       <V label="done · the task waits for a hand check" width={360}>
         <RunStatus run={fixture("done", "done", { review: true })} onOpenLog={() => undefined} />
@@ -218,6 +270,13 @@ function RunNoticeBody() {
       <V label="failed" width={480}>
         <RunNotice
           run={fixture("failed", "log", { reason: "T-4 changed while Codex worked on it." })}
+          onOpen={() => undefined}
+          onDismiss={() => undefined}
+        />
+      </V>
+      <V label="failed · on a bridge, by the exit code" width={480}>
+        <RunNotice
+          run={bridge("failed", { reason: "Codex exited with code 1." })}
           onOpen={() => undefined}
           onDismiss={() => undefined}
         />
@@ -264,6 +323,18 @@ function OpenInCodexBody() {
           )}
         </WithSummary>
       </V>
+      <V
+        label="Claude Code · the button follows the connected agent"
+        note="Open in Claude Code copies claude '…'."
+      >
+        <WithSummary id={ISSUE.rich}>
+          {(s) => (
+            <Popover>
+              <OpenInCodexPanel issue={s} copied agent="claude" />
+            </Popover>
+          )}
+        </WithSummary>
+      </V>
     </>
   );
 }
@@ -279,6 +350,22 @@ function RunsListBody() {
             <RunsList runs={HISTORY} onOpenTab={() => undefined} />
           </Popover>
         </Sandbox>
+      </V>
+      <V
+        label="a run on a bridge: where it runs and its last line"
+        note="Both agents on one issue: the title says Agent runs."
+        width={340}
+      >
+        <Popover>
+          <RunsList
+            runs={[
+              CLAUDE_RUNNING,
+              bridge("failed", { reason: "Codex exited with code 1." }),
+              HISTORY[1],
+            ]}
+            host={HOST}
+          />
+        </Popover>
       </V>
       <V label="no runs" width={340}>
         <Popover>
@@ -300,15 +387,11 @@ function Slot({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StartOnCard({ id }: { id: string }) {
-  const { start } = useStartCodexRun();
+function StartOnCard({ issue }: { issue: CodexIssue }) {
+  // The same path as the card menu: with no agent connected it opens the connect flow.
+  const { start } = useNextStep(issue);
   return (
-    <Button
-      variant="secondary"
-      size="sm"
-      className="self-start"
-      onClick={() => void start(id, "next_step")}
-    >
+    <Button variant="secondary" size="sm" className="self-start" onClick={() => void start()}>
       <Play size={14} strokeWidth={1.75} />
       Do next step
     </Button>
@@ -325,6 +408,16 @@ function CodexRunMarkerBody() {
           </Slot>
         </V>
       ))}
+      <V label="running · on a bridge: no task, one word" width={264}>
+        <Slot>
+          <CodexRunMarker run={BRIDGE_RUNNING} />
+        </Slot>
+      </V>
+      <V label="running · on a bridge · Claude Code" width={264}>
+        <Slot>
+          <CodexRunMarker run={CLAUDE_RUNNING} />
+        </Slot>
+      </V>
       <V label="done" note="Shows for four seconds, then the path comes back." width={264}>
         <Slot>
           <CodexRunMarker run={fixture("done", "done")} />
@@ -337,8 +430,14 @@ function CodexRunMarkerBody() {
       >
         <Sandbox quiet>
           <div className="flex flex-col gap-2">
-            <WithSummary id={ISSUE.rich}>{(s) => <IssueCard issue={s} dragDisabled />}</WithSummary>
-            <StartOnCard id={ISSUE.rich} />
+            <WithSummary id={ISSUE.rich}>
+              {(s) => (
+                <>
+                  <IssueCard issue={s} dragDisabled />
+                  <StartOnCard issue={s} />
+                </>
+              )}
+            </WithSummary>
           </div>
         </Sandbox>
       </V>
@@ -353,14 +452,14 @@ export const codexEntries: KitEntry[] = [
     "Issue · Header",
     "CodexActions",
     `${SRC}/CodexActions.tsx`,
-    "Two buttons let you work with Codex without leaving the board: hand the issue over, or let it do the next step in the background and watch it.",
+    "Two buttons let you work with your agent without leaving the board: hand the issue over, or let it do the next step in the background and watch it.",
     CodexActionsBody,
   ),
   entry(
     "Issue · Header",
     "CodexRunStatus",
     `${SRC}/RunStatus.tsx`,
-    "While Codex works, the button's own slot says what it is doing, so a click is answered and the run is never a mystery.",
+    "While the agent works, the button's own slot says what it is doing, so a click is answered and the run is never a mystery.",
     RunStatusBody,
   ),
   entry(
@@ -374,21 +473,21 @@ export const codexEntries: KitEntry[] = [
     "Issue · Header",
     "OpenInCodexPanel",
     `${SRC}/OpenInCodex.tsx`,
-    "The popover shows the exact prompt Codex receives, so the person never pastes a command they have not seen.",
+    "The popover shows the exact prompt the agent receives, so the person never pastes a command they have not seen.",
     OpenInCodexBody,
   ),
   entry(
     "Issue · Header",
     "CodexRunsList",
     `${SRC}/RunsPopover.tsx`,
-    "The issue's recent runs, each with how it ended and the commit and CI run it added, answer 'what did Codex do here?'.",
+    "The issue's recent runs, each with how it ended and the commit and CI run it added, answer 'what did the agent do here?'.",
     RunsListBody,
   ),
   entry(
     "Workflow · Board",
     "CodexRunMarker",
     `${SRC}/CodexRunMarker.tsx`,
-    "A card shows that Codex is on its issue without growing: the Codex tile, the task and one word for the phase take the path's place.",
+    "A card shows that an agent is on its issue without growing: the agent's tile, the task and one word for the phase take the path's place.",
     CodexRunMarkerBody,
   ),
 ];

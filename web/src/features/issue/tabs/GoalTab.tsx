@@ -241,7 +241,7 @@ function FrontmatterError({
       {raw !== undefined && <RawFile text={raw} fileName={fileName} errorLine={finding?.line} />}
 
       <p className="text-sm text-fg-faint">
-        Fix the YAML in the editor, or ask Codex to repair it with the formats of the{" "}
+        Fix the YAML in the editor, or ask your agent to repair it with the formats of the{" "}
         <SkillLink skill="using-wf" /> skill. The sections below come from the parts wf could still
         read.
       </p>

@@ -738,7 +738,7 @@ export const sharedEntries: KitEntry[] = [
     "Shared",
     "EmptyState",
     `${SRC}/EmptyState.tsx`,
-    "An empty panel should tell you what fills it: a button when the dashboard can do it, and the one skill that does it without the dashboard, with a Codex command to copy, so an empty tab is an instruction, not a dead end.",
+    "An empty panel should tell you what fills it: a button when the dashboard can do it, and the one skill that does it without the dashboard, with the command to copy for the connected agent (`codex` or `claude`), so an empty tab is an instruction, not a dead end.",
     EmptyStateBody,
   ),
   entry(

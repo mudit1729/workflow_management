@@ -3,7 +3,11 @@
 //
 // Shape of every line: the state first, then the task ("Claiming T-3", "Done: T-3"). Live phases
 // are continuous, finished runs name how they ended. Fixed order: claim, log, verify, done.
-import type { CodexPhaseId, CodexRun } from "@/lib/api";
+//
+// A run on a real bridge (`source: "bridge"`, plan D9) has no phases and names no task: the agent
+// picks it. Its lines say where it runs ("Running on laptop") and how it ended ("Done", "Failed";
+// the reason, such as the exit code, is on the run).
+import { type AgentKind, agentName, type CodexPhaseId, type CodexRun } from "@/lib/api";
 import type { IssueTab } from "@/lib/nav";
 
 /**
@@ -31,8 +35,28 @@ const SHORT: Record<CodexPhaseId, string> = {
   done: "Finishing",
 };
 
-/** The line for a run: what it is doing now, or how it ended. */
-export function runLine(run: CodexRun): string {
+/** The run is the agent itself working on the person's computer, with no phases of its own. */
+export const isBridgeRun = (run: CodexRun): boolean => run.source === "bridge";
+
+/**
+ * The line for a run: what it is doing now, or how it ended. `host` is the computer a bridge run
+ * works on ("Running on laptop"); a run on the prototype's own simulation has no use for it.
+ */
+export function runLine(run: CodexRun, host?: string): string {
+  if (isBridgeRun(run)) {
+    switch (run.status) {
+      case "running":
+        return host ? `Running on ${host}` : "Running";
+      case "done":
+        return "Done";
+      case "cancelled":
+        return "Cancelled";
+      case "failed":
+        return "Failed";
+      case "nothing_ready":
+        return "Nothing ready";
+    }
+  }
   const task = run.task ?? "the task";
   switch (run.status) {
     case "running":
@@ -53,6 +77,7 @@ export function runLine(run: CodexRun): string {
 export function runWord(run: CodexRun): string {
   switch (run.status) {
     case "running":
+      if (isBridgeRun(run)) return "Running";
       return run.phase === "claim" && plansFirst(run) ? "Planning" : SHORT[run.phase ?? "claim"];
     case "done":
       return "Done";
@@ -69,6 +94,17 @@ export function runWord(run: CodexRun): string {
 export function runProgress(run: CodexRun): { done: number; total: number } {
   const total = run.phases.length;
   return { done: run.phases.filter((p) => p.state === "done").length, total };
+}
+
+/**
+ * What to call a list of runs: the name of the agent that did them all ("Codex runs"), "Agent
+ * runs" when both agents worked on the issue, and the name of `fallback` (the connected or last
+ * chosen agent) for an empty list.
+ */
+export function runsLabel(runs: readonly CodexRun[], fallback: AgentKind): string {
+  const kinds = new Set(runs.map((r) => r.agent));
+  if (kinds.size > 1) return "Agent runs";
+  return `${agentName(kinds.values().next().value ?? fallback)} runs`;
 }
 
 /** The run that is going, if any. At most one per issue. */

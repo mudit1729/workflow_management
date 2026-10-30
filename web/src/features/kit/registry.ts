@@ -1,5 +1,6 @@
 // Every element in the kit, in index order. A group's entries keep the order of their file.
 import { addWorkEntries } from "./entries/add-work";
+import { agentEntries } from "./entries/agent";
 import { boardEntries } from "./entries/board";
 import { codexEntries } from "./entries/codex";
 import { contextEntries } from "./entries/context";
@@ -25,6 +26,7 @@ import { GROUPS, type KitEntry } from "./kit-ui";
 const ALL: KitEntry[] = [
   ...foundationEntries,
   ...shellEntries,
+  ...agentEntries,
   ...viewsEntries,
   ...boardEntries,
   ...addWorkEntries,

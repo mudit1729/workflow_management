@@ -112,7 +112,7 @@ function AuthorCard({ author }: { author: Author }) {
             <span className="font-mono text-xs">{author.model}</span>
           </Row>
         )}
-        <Row label="Lanes">
+        <Row label="Areas">
           {author.lanes.length ? (
             <span className="flex flex-wrap gap-1">
               {author.lanes.map((l) => (
@@ -125,7 +125,7 @@ function AuthorCard({ author }: { author: Author }) {
               ))}
             </span>
           ) : (
-            <span className="text-fg-muted">Any lane</span>
+            <span className="text-fg-muted">Any area</span>
           )}
         </Row>
         <Row label="Max leases">
