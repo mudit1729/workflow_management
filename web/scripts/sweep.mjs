@@ -1,13 +1,16 @@
 // Screenshot every route at several widths and themes in one browser session, check each page for
 // runtime errors and page-level scroll, and optionally build contact sheets for quick review.
 // usage: node scripts/sweep.mjs --out <dir> [--routes "/w,/inbox"] [--widths 1440,1680,390]
-//          [--themes light,dark] [--sheets] [--wait 600]
+//          [--themes light,dark] [--sheets] [--wait 600] [--sample]
+// The board starts without issues and the default routes name sample issues: pass --sample to load
+// the sample world (26 issues) in each page before its route opens. /kit holds the sample itself.
 // Base URL: SHOT_BASE (default http://localhost:5177). For the static build use SHOT_BASE=http://host:port/#
 // Writes <dir>/<route-slug>__<width>__<theme>.png, <dir>/report.json, and with --sheets
 // <dir>/sheets/<route-slug>.png (desktop widths) and <dir>/sheets/<route-slug>__mobile.png.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
+import { gotoRoute } from "./goto.mjs";
 
 export const ROUTES = [
   "/w",
@@ -69,7 +72,7 @@ for (const route of routes) {
       const errors = [];
       page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
       page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
-      await page.goto(base + route, { waitUntil: "networkidle" }).catch((e) => errors.push(`goto: ${e.message}`));
+      await gotoRoute(page, base, route, { sample: args.includes("--sample") }).catch((e) => errors.push(`goto: ${e.message}`));
       await page.waitForTimeout(wait);
       const checks = await page
         .evaluate(() => {
