@@ -17,7 +17,9 @@ integrated; this file says what exists, what was decided and what is open.
    `.claude-plugin/marketplace.json`; `scripts/install-skills.sh --codex` copies the skills to `.agents/skills/`) and the
    Workdatabase · Skills view (`/skills`, `g s`) that lists them with their install commands.
 2. **Hand anyone the full context of an issue.** Eight issue tabs (Now, Goal, Criteria, Plan, Log, Git, CI, Files), the
-   **Open in Codex** button (copies a `codex "Work on wf-xxxxx …"` command and shows the exact prompt), and the `handing-off` skill.
+   **Open in Codex** button (copies a `codex "Work on wf-xxxxx …"` command and shows the exact prompt), **Copy context** (copies the context bundle as markdown, the text the
+   `handing-off` skill prints, and shows it, with a prompt that asks Codex or Claude to do the same hand-off), and the `handing-off` skill. Handing an issue over hands over
+   the content, not a command.
 3. **Keep issues and tasks traceable.** Task ↔ commit ↔ CI run: the Git and CI tabs derive from commits that carry the trailer
    `Issue: wf-xxxxx` (or a branch `wf-xxxxx/…`); a Codex run writes the task, the change entry, the commit and the CI run, every
    one visible as a markdown diff.
@@ -38,10 +40,14 @@ with a set of skills without coming to the ui and the ui should be able to work 
   button adds the issues, so **a group takes 8 clicks, the opening click included, and one typed line** (checked with Playwright; a unit test pins the number).
   A single issue has its own short path with a Review screen.
 - **Issue tabs 1 to 8** in the drawer and on the narrow page; three columns on the wide page: `[Now + Goal] | [Plan + Criteria] | [Log · Git · CI]`.
-  Criteria moved out of Goal into its own tab; `[[#SC-n]]` links go to it.
+  Criteria moved out of Goal into its own tab; `[[#SC-n]]` links go to it. Keys 1 to 8 work in every layout (on the wide page a section scrolls into view and takes focus).
+  **Traceability runs both ways:** the Git tab's `T-n` pill opens the task, a Log entry's commit chip opens the commit in Git, and a task's detail lists its commits and CI runs, each a link.
+- **Empty states and hints** (`features/issue/skill-hint.tsx`): a button first (Do next step, Write the context), then one real skill of the workflow plugin linked to its page in
+  Workdatabase · Skills, and the prompt with a copy button for `codex '…'`. No invented skill names and no `wf …` command shown as runnable (there is no CLI); see "UI hints" in `web/UI_BUILD.md`.
 - **Open in Codex / Do next step** (`web/src/features/codex`). The run is simulated in the prototype, but each phase is a real markdown edit
   (claim the task, log a change, verify with a CI run, finish the task and `current_state.md`, add a commit). The same code path serves the
-  issue header, the card menu and the palette, so a run gives **exactly one toast, when it ends**, whichever started it. While a run goes the
+  issue header, the card menu and the palette. **One confirmation per event:** a run shown in the header's strip has no toast; one started from the card menu or the palette gives one toast when it ends;
+  Open in Codex confirms in its popover line and has no toast; Copy context confirms in its popover (the palette gives one toast with View). While a run goes the
   Q005 "current_state is behind" signal is held back (the log is ahead of `current_state.md` on purpose), so the tabs do not move.
 - **Skills** (`web/src/features/skills`, `plugins/workflow/skills/*`): `using-wf`, `adding-work`, `planning-issues`, `doing-next-step`,
   `logging-work`, `checking-status`, `handing-off`, `writing-readable-bulk-text`. They edit the same markdown, so Codex or Claude can run the
@@ -86,8 +92,8 @@ unless a note says otherwise.
 
 Smaller calls made while integrating, in case the user wants them the other way:
 
-- **One toast per run, from every origin.** The header used to say nothing at the end of a run (its strip shows it for 6 s); now it also gives the one toast
-  with "Open log", like the card menu and the palette. If that reads as noise, restore the "unless the header is open" rule in `features/codex/follow-run.ts`.
+- **One confirmation per event** (replaces the earlier "one toast per run, from every origin"): while the header's strip shows the end of a run it is the confirmation, so no toast; the card menu and the
+  palette have no strip and toast once. The same goes for the copy buttons (a popover line, or one toast where there is no popover).
 - **Q005 returns 1.5 s after a run ends** (`useRunActive`, the time the issue takes to be read again), so the signal does not flash at the very end.
 - The palette's "Add work…" opens the group path; `n` and the toolbar button start at "What are you adding?".
 
@@ -104,6 +110,35 @@ Smaller calls made while integrating, in case the user wants them the other way:
   sample, left as written.
 - The plan sections §1–§17 are written by another session into `docs/plan/parts/` and `docs/plan/diagrams/`. Do not create or edit those here.
 
+## Review pass on the issue views (2026-10-30)
+
+Fixed in `web/src/features/issue/**` (not `IssueHeader.tsx`), `RefLink`, the Kit, `UI_BUILD.md` and the sweep scripts; each was checked with a screenshot or a Playwright run:
+
+- **Copy context** (goal 2): `HandoffButton` and `HandoffPanel` copy the bundle markdown (`api.context`) and show it; `copyContextWithToast(id)` is the palette's version; both can open the whole text in a dialog
+  (`HandoffViewHost`, mounted by the issue view). Verified: the clipboard holds the bundle (7.7 kB, 1.9k tokens on `wf-3k9x2`), the popover says so, no toast.
+- **Hints name real skills** (`SkillHint`): Now (`handing-off`), Plan (`planning-issues`, plus a **Do next step** button, which plans first), Goal and Criteria (`using-wf`, plus an editor button), the three logs (`logging-work`),
+  missing issue files in the Files tab (each file's skill, linked), the claimed-criterion popover (`doing-next-step`). The fake `wf state|append|check|decide|resolve` lines are gone from these screens.
+- **Traceability:** a Log entry's commit chip opens the Git tab on that commit; a task's detail has Commits and CI rows that open the Git or CI tab on that row.
+- **Layout:** Plan lanes fit a 440 px column (level columns `minmax(168px, 240px)`, lane names above their tasks under 520 px, the task in progress scrolled into view); the log column's tab strip has the drawer's
+  active bar; the Log tab no longer says its count three times; `MetaLine` ends the stranded dots (Now tab, Needs you rows, CI rows); CI rows lose the word "CI" and say "test failed" once; Files rows put the
+  description under the name on a phone; evidence chips and all `InlineText` code stay at or above 11 px (`sweep.mjs` now prints a note for any text under 11 px).
+- **Keyboard:** keys 1 to 8 work on the full page in the two- and three-column layouts; answering a request moves focus to the next request, or to the Now panel when it was the last.
+
+## Integration pass (2026-10-30): what the four review teams left and how it was closed
+
+- **The handoff bundle follows the `handing-off` table** (`web/mock/context.ts`): Goal, Success criteria, Current state, **Linked context** after Current state, Ready tasks, Last changes, Decisions, Learnings (last 3), **Git/PRs/CI** from the delivery data, **Library**,
+  `none.` for every empty section, one reference-data note, an `Updated <age> ago` line, a footer `<!-- wf context <id> · ~N of 6,000 tokens · left out: <sections or none> -->` and the last line `To resume: codex '…'` (the one resume prompt of `format.md` §15, also used by the README, `src/lib/api/resume.ts` and the Open in Codex button).
+  The budget cuts from the bottom of the table, never rows 1 to 3. The Copy context button, the palette ("Hand over <id>: copy its context", "View the context of <id>") and the Kit all copy that same markdown.
+- **Do next step plans first.** On an issue without a plan the run writes `plan.md` from the criteria (`mock/codex-plan.ts`, the `planning-issues` format), sets `planned`, then claims T-1 in the same run. `doing-next-step`, `planning-issues` and the AGENTS.md snippet say the same; the UI keeps one label, "Do next step" (header, Plan tab, card menu, palette).
+  A run claims goal.md too (`status: in_progress`, `claimed_by`, `lease_until`) unless another author holds a live coordinator lease, ticks a criterion only with a command's evidence, and ends a `verify: manual` task in `review` with an approval request in Needs you.
+- **Sample clock.** `WF_NOW=2026-10-22T16:27+05:30` on `web/mock/sample` gives the dashboard's answers in `wf-status.sh` (a live lease with 35 minutes left, T-4 ready, nothing stale); `node plugins/workflow/scripts/check-sample-clock.mjs` checks it. Run skill evals on a copy.
+- **Accept and Reject on a proposed decision are buttons** now (`set_decision_status` op, `useSetDecisionStatus`; the one in-place edit `logging-work` allows). The card changes its status chip; there is no toast.
+- **Hints name only real things.** The eight skills of `plugins/workflow/skills` and buttons; no `wf …` command is shown as runnable (the sample's own next steps were reworded too: "Verify SC-3 with its command."). `hints.test.ts` fails on an invented skill or command in `features/issue` and `features/kit`.
+- **One confirmation per event.** A run that ends while the header strip shows it has no toast; a run from the card menu or the palette gives one toast when it ends; Open in Codex in the header has the popover's line only; the palette's Open in Codex toasts once; a cancel has none.
+- **Install panel** has two audiences for Claude Code (just me / everyone on the repository) and two steps for Codex (`install-skills.sh --codex`, then `--print-agents-md >> AGENTS.md`), and says `mudit1729/workflow_management` is the team's repository.
+- **Still open, small:** the Add work "Start in: Planned" writes `status: planned` without a `plan.md` (adding-work writes `backlog` only; planned is the result of planning-issues); a `verify: manual` criterion makes the first Do next step end in `review`
+  (the strip says "Done: T-1, waiting for a check"); the Kit's board entry counts every author's requests in `summarize(visible)`.
+
 ## How the user gives feedback
 
 Every component root carries `data-wf="<ComponentName>"`; the Kit (`/kit`) shows each element with its
@@ -113,13 +148,13 @@ component, keep the Kit in sync, re-screenshot, and republish.
 ## How to run and verify
 
 - `pnpm --dir web install`, `pnpm --dir web dev` (port 5177). The checks, in this order, all clean at the end of this pass:
-  `pnpm -s typecheck && pnpm -s exec biome check src mock && pnpm exec vitest run` (737 tests in 36 files) `&& pnpm -s build` (no chunk warning).
+  `pnpm -s typecheck && pnpm -s exec biome check src mock && pnpm exec vitest run` (845 tests in 41 files) `&& pnpm -s build` (no chunk warning); also `pnpm -s wf:lint mock/workspace` (only the known F009 warnings) and `node plugins/workflow/scripts/check-skills.mjs` (8 skills ok).
 - Screenshots: `node web/scripts/shot.mjs <route> <png> [--w 1440|1680|390] [--theme dark] [--sample] [--click "<sel>"]` (one page, clicks) and
   `node web/scripts/sweep.mjs --out <dir> --sample --sheets` (every route × width × theme, with contact sheets; the routes now include `/w?needs=me`,
   `/skills`, `/skills?skill=adding-work` and `tab=criteria`, `git`, `ci` of `wf-3k9x2`; `/inbox` is gone). Both fall back to the system Chromium at
   `/opt/pw-browsers/chromium` in cloud containers.
 - The Playwright smoke that closed this pass: empty board → **+ Add work** group path (8 clicks, 1 typed line) → 4 issues on the board; **Load sample data** →
-  `wf-3k9x2` → **Do next step** → the strip shows the phases, the tabs do not move, one toast "Codex finished T-4", and the task, the log, Git and CI show it; `/kit` renders
+  `wf-3k9x2` → keys 1 to 8 → **Do next step** → the strip shows the phases ("Claiming T-4" … "Done: T-4"), no toast beside it, and the task (Plan 2/5), the log (19), Git (7) and a new CI run show it; a second run started from a card menu is cancelled with no toast, and one that ends gives one toast; `/kit` renders
   all 142 sections without console errors. It passes on the dev server and on the static build.
 - Publish: `pnpm --dir web build:static`, strip doctype/html/head/body from `dist-static/index.html`
   for the artifact page, pass every other file of `dist-static/` as supporting files, and escape literal

@@ -11,7 +11,7 @@ Linear-like. It is also the real `web/` codebase, so write production-quality co
 
 The product goals behind the screens (plan `docs/plan/proposals/codex-workflow-plan.md`): (1) distribute skills and plugins across the team
 (Workdatabase · Skills), (2) hand anyone the full context of an issue (the Now, Goal, Criteria, Plan, Log, Git, CI and Files tabs, the Open in Codex
-button and the `wf context` bundle), (3) keep issues and tasks traceable (task ↔ commit ↔ CI run, every change a markdown diff).
+button and **Copy context**, which copies the context bundle as markdown), (3) keep issues and tasks traceable (task ↔ commit ↔ CI run, every change a markdown diff).
 
 **The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
 markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
@@ -70,7 +70,7 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
   `Workdatabase · Files · wf`, `Workdatabase · Skills · wf`, `Kit · wf`; 3 = my open needs-you requests (no count at
   zero). A view's home sub-view (Board, Library) is not named in the title; the others are.
 - **The user's rule for every control:** buttons are preferred over multiple choice, multiple choice over
-  drop-down menus, drop-down menus over typing. Add work asks one question per screen and types only one line.
+  drop-down menus, drop-down menus over typing. Add work asks one question per screen and types only one line (a lone issue's criterion is drafted by Codex and can be edited with a button).
 - **UI and skills are two doors to the same markdown.** The UI should usually work without Codex, and Codex
   must be able to replicate the flow with the `plugins/workflow` skills without the UI. Both only ever make
   minimal text edits to the workspace files, so either can continue the other's work (see `features/skills`).
@@ -110,7 +110,12 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
   28 px control height (`h-7`), 24 px small controls (`h-6`). Icons from `lucide-react`
   at 14 px (`size={14}`), stroke 1.75. Motion 100–200 ms with `ease-wf`. Hover states are
   `bg-muted`/`bg-subtle`, never color. Use `tabular` for numbers. Truncate, never wrap
-  into chaos. Empty states are quiet and name the skill or command that fills them.
+  into chaos. **Empty states are quiet and offer, in this order, a button (when the dashboard can do the job), then the one skill of the workflow plugin that does the same
+  job without the dashboard** (`SkillHint`: the skill name linking to `/skills?skill=<name>`, the prompt Codex is asked, and a copy button for `codex '<prompt>'`).
+  **UI hints name only real things**: the skills of `plugins/workflow/skills` (`using-wf`, `adding-work`, `planning-issues`, `doing-next-step`, `logging-work`,
+  `handing-off`, `checking-status`, `writing-readable-bulk-text`; `WF_SKILLS` in `features/issue/skill-hint.tsx`) and buttons that exist. Never invent a skill name
+  (`write-plan` and `log-change` were such names), and never show a `wf …` command as something to run: there is no `wf` binary. At most say "with the wf CLI later".
+  **Buttons before multiple choice before drop-downs before typing** (the user's own order) applies to every new control.
 - **Minimal scroll:** the shell is locked to `100dvh`; only inner regions scroll. Put
   `min-h-0 min-w-0` on every flex/grid child that should scroll.
 - **Handles:** data stores handles without `@`; always render `@handle` in UI text.
@@ -198,8 +203,9 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   legal moves normal; illegal moves shown muted with hint "Needs Move anyway"; picking calls `useMoveIssue().move`.
 - `RelativeTime({ ts, className?, long?: boolean })` — `relativeShort`, tooltip `absolute(ts)`, re-renders every 30 s.
 - `EmptyState({ icon?, title, hint?, skill?: string, command?: string, action?: ReactNode, compact?: boolean })`
-  — quiet; shows "Run the `write-plan` skill" and a copyable `wf …` command when given. It sizes the icon itself (14 px): callers pass the
-  bare icon.
+  — quiet; shows the skill line and a copyable command when given. `skill` must be a real skill and `command` a command that runs today (`codex '…'`),
+  never a `wf …` line. Issue screens leave both out and pass `<SkillHint skill prompt />` as `action`, which links the skill to its page and shows the
+  prompt as wrapping text. It sizes the icon itself (14 px): callers pass the bare icon.
 - `ProgressRing({ verified: number, claimed: number, total: number, size?: number (default 14), label?: boolean })`
   — solid arc = verified, hatched arc = claimed, track = border color; total 0 → dashed ring. Tooltip text
   "2 verified · 1 claimed · 5 criteria".
@@ -435,9 +441,10 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   (a term opens `/glossary?q=<term>`), Skills (a skill opens `/skills?skill=<name>`), Files (opens the file), Actions; the section that holds the best match
   goes first, so Enter runs what you typed. Actions: **Add work…** (`n`, group path) and **Add one issue…** (issue path); with an issue open:
   **Open <id> in Codex** (copies the command), **Do the next step of <id>** (a background run), move it to…, open it as a
-  full page, "Edit goal.md of <id>", copy `wf context`; then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"),
+  full page, "Edit goal.md of <id>", **Hand over <id>: copy its context** (`copyContextWithToast(id)` from `@/features/issue/handoff`: copies the bundle markdown, one toast "Copied context for wf-… (~1.9k tokens)" with **View**,
+  which opens the bundle in the issue view's dialog) and **View the context of <id>**; while a run goes on the issue the "Do the next step" row is **Cancel Codex's run on <id>**; then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"),
   "Workdatabase · Library", "· Glossary", "· Files", "· Skills", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
-  play the next live event. **The Codex actions use the same code as the buttons**: `copyCodexCommand(issue)` and `useNextStep(issue)` from
+  play the next live event. **The Codex actions use the same code as the buttons**: `copyCodexCommand(issue)` and `useNextStep(issue)` (`{ busy, start, cancel }`) from
   `@/features/codex`, so a run started from the palette, the issue header or the card menu gives exactly one toast (when it ends) and the copy
   has one wording. While a run goes the palette's action says "Codex is working on it" and is disabled.
 - `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from `SHORTCUTS` in `app/shortcuts.tsx` with `Kbd`; sections General, Go to,
@@ -503,12 +510,14 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - Keyboard: `j/k` move card focus, `h/l` move column, Enter opens drawer, `o` full page, `s` opens the status menu
   of the focused card, `/` filter, `n` Add work (shell handles), Esc closes drawer.
 
-### issue-frame builder: `src/features/issue/{index.ts, IssueDrawer.tsx, IssuePage.tsx, IssueView.tsx, IssueHeader.tsx, tabs/FilesTab.tsx, DocsList.tsx, DocView.tsx, LintPanel.tsx}`
+### issue-frame builder: `src/features/issue/{index.ts, IssueDrawer.tsx, IssuePage.tsx, IssueView.tsx, IssueHeader.tsx, tabs/FilesTab.tsx, DocsList.tsx, DocView.tsx, LintPanel.tsx, HandoffPanel.tsx, handoff.ts, skill-hint.tsx, MetaLine.tsx, delivery-focus.ts}`
 
 `index.ts` exports everything public of the issue feature: `IssueDrawer, IssuePage, IssueView, IssueHeader,
 StateSnapshot, NeedsYouList, CriteriaChecklist, CoverageStrip, PlanLanes, PlanList, TaskPill, ChangesTimeline,
-DecisionCards, LearningCards, DocsList, DocView, LintPanel` (the Criteria, Git and CI tabs are in `tabs/`; see "issue-delivery" below).
-The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `features/issue` imports it statically.
+DecisionCards, LearningCards, DocsList, DocView, LintPanel, MetaLine, HandoffButton, HandoffPanel, HandoffViewHost, SkillHint, SkillLink` and the helpers `copyContext, copyContextWithToast,
+showContext, handoffPrompt, tokenCount, tokenLabel, ASK, codexAsk, WF_SKILLS` (the Criteria, Git and CI tabs are in `tabs/`; see "issue-delivery" below).
+The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `features/issue` imports it statically. **The one exception is `features/issue/handoff.ts`** (no React, a few
+hundred bytes): the palette imports `copyContextWithToast` from that file directly, never from the barrel, so the issue chunk stays lazy.
 - `IssueDrawer({ id })` — `docked` (≥1600): a right panel inside BoardLayout's flex row, width `usePrefs().drawerWidth`,
   draggable left edge (440–760). `overlay` (768–1599): a sheet over the board with `shadow-pop`, click-outside closes.
   Esc closes (`useCloseIssue`). Contains `IssueView variant="drawer"`.
@@ -523,18 +532,31 @@ The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `feat
     on CI, files + lint on Files. Goal has no count: its criteria moved to their own tab.
   - **page, by the width of the page region** (the nav rail counts as page; `useElementWidth` on the root): from 1080 px, **three independently
     scrolling columns**: `[Now + Goal] | [Plan + Criteria] | [Log · Git · CI]`, the Plan column at least 480 px wide, the third column a row of
-    view titles (`ViewColumn`) that follows `?tab=` when it names one of its views; from 768 to 1079 px **two columns**,
-    `[Now + Goal] | [Plan · Criteria · Log · Git · CI]` (the same view row); under 768 px the tab layout above. Files and lint
+    view titles (`ViewColumn`) that follows `?tab=` when it names one of its views and draws the active one with the **same 2 px bar as the drawer's tab strip** (and `hover:bg-muted`), so
+    the control looks alike at every width; from 768 to 1079 px **two columns**,
+    `[Now + Goal] | [Plan · Criteria · Log · Git · CI]` (the same view row); under 768 px the tab layout above. **Keys 1 to 8 work in every layout** (`PageFrame` registers them from
+    768 px; the phone layout's `IssueTabs` registers them below): a section of a column (`Now`, `Goal`, and on the wide page `Plan` and `Criteria`) scrolls into view and takes focus
+    (`focusSection`; each `ColumnSection` is a `<section>` with `tabIndex={-1}`), a view of the log column switches (`?tab=`), `8` opens the Files sheet. Files and lint
     are reachable from the header (a "Files" button opening a Sheet with `FilesTab`; a tab on the phone). A link to a task (`T-n` pill) asks for
     the Plan tab: on the wide page the plan is already in its own column, so the view of the third column stays where it is.
 - `IssueHeader({ detail, variant })` — id (mono, copyable), title (16 px semibold), `StatusSelect`, priority, size,
   owner, coordinator lease (AuthorChip + "lease 34m left" or amber "lease expired"), labels, due, `LintBadge`,
-  buttons: Open in new page ↗ (`o`), Copy link, Copy `wf context` command, Close (drawer only). Under the property row sits
+  buttons: Open in new page ↗ (`o`), Copy link, **Copy context** (`HandoffButton`, below), Close (drawer only). Under the property row sits
   **`CodexActions`** (`features/codex`): **Open in Codex** and **Do next step** side by side (see "features/codex"), above the derived signals so the
   run's strip stays put when a signal appears. **While a run goes, the Q005 signal ("current_state is behind") is held back** (`useRunActive`, here
   and in the Now tab's meta line): Codex writes `current_state.md` last, so the log is ahead of it by design, and a row that came and went
   mid-run pushed the tabs down about 40 px. The signal returns, if still true, 1.5 s after the run ends.
-- `tabs/FilesTab.tsx` `FilesTab({ detail })` — `DocsList` + `LintPanel`.
+- **Hand off: `HandoffButton({ issueId, compact? })`, `HandoffPanel({ issueId, copied? })`, `HandoffViewHost({ issueId })` (`HandoffPanel.tsx`) and `handoff.ts`.** Goal 2 of the user: handing an
+  issue to someone hands over **the content, not a command**. "Copy context" reads the bundle (`api.context`, the markdown the `handing-off` skill prints: header, goal, success criteria, current
+  state, linked context, ready tasks, tasks in progress, last changes, accepted decisions, learnings, git, PRs and CI, plan approach, library, then the footer and the resume line, within
+  `[context] budget_tokens`) and puts it on the clipboard (`copyContext(id)`), then opens a popover built like Open in Codex's: its status line says "Context copied (~1.9k tokens)", the
+  bundle itself is shown as written (what you see is what you copied), **Copy context**, **Copy prompt** (`Hand wf-… over: use the handing-off skill.`, for Codex or Claude), **View all**
+  (a dialog with the whole text, mounted by the issue view as `HandoffViewHost`; `showContext(id)` opens it from anywhere, and only one host draws it), the sections the budget cut, and one faint line "With the wf CLI later: `wf context <id>`".
+  **One confirmation per event:** the popover's line is the confirmation for the header, so it has no toast; the palette has no popover, so `copyContextWithToast(id)` gives one toast with **View**.
+  **Open in Codex** stays the way to start Codex; the two sit side by side.
+- `tabs/FilesTab.tsx` `FilesTab({ detail })` — `DocsList` + `LintPanel`. `DocsList` rows are a grid: name, description, lint, meta on one line from 480 px of row width; under it the description moves to a
+  second line under the name (it used to be cut to two letters) and the meta keeps one right-aligned column. A missing issue file names the skill that writes it as a link
+  (`goal.md` → `adding-work`, `plan.md` → `planning-issues`, `current_state.md` → `handing-off`, the three logs → `logging-work`).
 - `DocsList({ docs, onOpen })`, `DocView({ doc })` (markdown via MarkdownProse; images inline; other files: size + open raw).
 - `LintPanel({ diagnostics })` — grouped by file, severity icon, rule id (mono), message, "line 12" jump link
   (copies `path:line`), fix hint, and "Edit at this line": `useEditAtLine()` calls `useFilesNav().edit(path, { line })`, so the editor opens with
@@ -548,24 +570,29 @@ The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `feat
 
 (The criteria and their coverage moved out of the Goal tab into the Criteria tab, plan D1; the components below are unchanged and now live there.)
 
-- `NowTab({ detail, variant })` — `StateSnapshot`; empty state when `state` is null (skill `write-current-state`).
+- `NowTab({ detail, variant })` — `StateSnapshot`; empty state when `state` is null (a `SkillHint` for `handing-off`: "Write current_state.md for wf-… with the handing-off skill.").
 - `StateSnapshot({ state: CurrentState, detail: IssueDetail })` — summary line (14 px, the hero); "updated 12m ago by
   @claude-opus" with staleness tint (amber when older than `issue_hours` or `summary.signals.state_behind_changes`
-  → "behind 3 changes", held back while a Codex run goes on the issue: `useRunActive`); `NeedsYouList` with inline answer box; In flight with `TaskPill`s; Blocked (danger left
+  → "behind 3 changes", held back while a Codex run goes on the issue: `useRunActive`; the meta line is a `MetaLine`, so a wrap never leaves a dot at a line edge); `NeedsYouList` with inline answer box; In flight with `TaskPill`s; Blocked (danger left
   hairline); Next steps numbered, item 1 emphasized as "Next"; Done, Handoff notes, Failed attempts collapsed
   (Collapsible, with counts). Word count warning when >400 (Q008).
 - `NeedsYouList({ items: NeedsYouItem[], issueId })` — each: kind icon, question, from → to, urgency chip
   (blocking = accent), asked time, ref link, options as buttons (approve/reject) or a textarea for question/input;
-  submit → `useAnswerRequest()`; answered items show "Answered by @shruti · waiting for `wf resolve`".
+  submit → `useAnswerRequest()`; answered items show "Answered by @shruti" and "Waiting for the agent to pick the answer up. `doing-next-step` resolves it first." **Focus
+  follows the answer:** the Approve or Reject button is gone once the request is answered, so focus moves to the next open request's main button (or its text box), and when that was the last
+  request to the Now panel (`moveFocusOn`), instead of falling to the page. The answered block is a `role="status"` region; there is no toast (the row says it).
 - `GoalTab({ detail, variant })` — Context (MarkdownProse with diagrams), Out of scope, Linked context (the `## Links` bullets, with "Add context"),
   unknown frontmatter keys (F006) as faint key/value rows. **No success criteria here**: they are the Criteria tab. When
   `goal.frontmatter_ok` is false: show the F001 finding banner and the raw file in a mono block with the error line
-  highlighted (this is SC-2 in the dogfood issue). A goal with criteria but no context says "No context yet … The success criteria are in the Criteria tab."
+  highlighted (this is SC-2 in the dogfood issue). A goal with criteria but no context says "No context yet … The success criteria are in the Criteria tab." Its empty state is a
+  **Write the context** button (opens `goal.md` in the editor, `useEditAtLine`) and a `SkillHint` for `using-wf` (the formats): `adding-work` is for new issues, not for editing one.
 - `CriteriaChecklist({ criteria, issueId })` — header with `ProgressRing` (size 28, label) and "2 verified · 1 claimed
   · 5"; each row: criterion checkbox (open/claimed hatched/verified solid), `SC-n` mono, the EARS sentence with
   keywords in faint small caps (`ears.keywords` spans), chips: `verify` (mono command or "manual"), `evidence` (link),
   freeform/not measurable warnings (S07/S08) as faint chips; toggling → `useToggleCriterion`; expanding a row
-  shows scenario and verified_by.
+  shows scenario and verified_by. A tick from the board is a claim; the "Claimed, not verified yet" popover says a criterion is verified when its verify command passes and the evidence is written
+  beside it, which `doing-next-step` does (with a `SkillHint` whose prompt names the criterion). The **evidence chip** keeps its code at 11 px (`--wf-code-size`) and draws it without a chip of its own;
+  `InlineText` code is `code-inline` (12 px, or `--wf-code-size`), never `0.9em`, so no code is smaller than 11 px. No criteria: a **Write a criterion** button (editor) and a `SkillHint`.
 - `CoverageStrip({ criteria, tasks })` — one compact row per SC: which tasks satisfy it (TaskPills); uncovered
   criteria flagged (Q006 info).
 
@@ -576,12 +603,15 @@ The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `feat
   tracked" for xs and s). When `goal.md` does not parse, it points at the Goal tab, which shows the finding. Key `3`.
 - `GitTab({ detail, variant })` — **Pull requests** and **Commits** of the issue from `useDelivery(id)`, newest first. `PullRequestRow`: state
   (draft, open, merged, closed), title, number, branch, review state (pending, approved, changes requested) and checks (passed, failed, pending) in a fixed order.
-  `CommitRow`: short sha (copy), subject, author, time, branch, pull request, and a `T-n` pill that selects the task in Plan.
+  `CommitRow`: short sha (copy), subject, author, time, branch, pull request, and a `T-n` pill that selects the task in Plan. **The reverse link works too** (`delivery-focus.ts`): a Log entry's
+  commit chip and a task's "Commits" row switch to the Git tab and mark that commit's row (`data-focused`, 1.8 s, scrolled into view); a commit the Git tab does not list still copies its sha.
   A commit that Codex just made is highlighted once (`useFreshKeys`). Empty state: "No commits mention wf-xxxxx yet", with the trailer
   `Issue: wf-xxxxx` to copy (`TrailerCopy`) and the branch name `wf-xxxxx/…` that also finds the issue. The prototype has no links out (`url` is null). Key `6`.
 - `CiTab({ detail, variant })` — **pipeline runs** (`PipelineRow`), newest first, each a collapsible with its jobs: workflow, result
   (`RunStateIcon`: green check, red cross, a turning arc while it runs, a dashed ring while it waits), duration, trigger, branch and sha; a failed run names
-  the failed job before it is opened. Empty state: "No CI runs for wf-xxxxx yet". A run that Codex starts appears without a reload. Key `7`.
+  the failed job before it is opened. Empty state: "No CI runs for wf-xxxxx yet". A run that Codex starts appears without a reload. Key `7`. The run's id leads a row of the workflow `CI` (the word
+  "CI" in the CI tab says nothing); a failed run says "test failed 1m 37s" once, in the first line; the second line is a `MetaLine` (trigger, branch, sha, time) that wraps rather than cutting the branch.
+  A task's "CI" row opens the tab on that run (it opens it and marks it).
 - `delivery-ui.tsx` — the shared bits: `RunStateIcon`, `CiDot` (the CI tab's count), `TrailerCopy`, `gitTitle`/`ciTitle` (tab tooltips),
   `deliveryCounts`, `shortBranch`, `useFreshKeys`.
 
@@ -589,17 +619,21 @@ The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `feat
 
 - `PlanTab({ detail, variant })` — Approach (MarkdownProse with diagrams), Assumptions (A-n with open/confirmed),
   Prior art (RefLinks), then the plan view with a `Segmented` toggle Lanes | List (`usePrefs().planView`) and a
-  "Ready: 2" highlight toggle. Plan header: revision, updated by/at. Empty state when `plan` is null
-  (skill `write-plan`; for size xs/s say a plan is optional).
+  "Ready: 2" highlight toggle. Plan header: revision, updated by/at. Empty state when `plan` is null: **a button, "Do next step"** (the same label at every size: the run writes the plan first, then claims T-1), which
+  starts a run (`useNextStep`; **an issue without a plan has the planning as its first step**, as in the `doing-next-step` skill), and a `SkillHint` for `planning-issues`.
 - `PlanLanes({ plan, criteria })` — rows = lanes, columns = dependency levels (`task.level`); `TaskPill`s placed in
   cells; dependency edges drawn as SVG curves **only** for the hovered/selected task (its deps and dependents);
-  ready tasks get an accent ring when the Ready highlight is on; lane labels at left (sticky). Horizontal scroll inside.
+  ready tasks get an accent ring when the Ready highlight is on; lane labels at left (sticky). Horizontal scroll inside. **Responsive by the width of its own box:** a level column is
+  `minmax(168px, 240px)` (two fit a 440 px column), the gap is 12 px, and the grid is `width: 100%` but never narrower than every level at its minimum, so a third level scrolls instead of squeezing
+  (the right-edge fade says so). **Under 520 px the lane name moves above its tasks** (two rows per lane, name sticky at the left) so two levels fit a 360 px phone column. The task in progress
+  (else in review) is scrolled into view once when the lanes open, so the task the issue is about is never the one behind the edge.
 - `PlanList({ plan })` — phase stepper: each phase a row with progress; finished phases collapsed; tasks as rows with
   status glyph, id, title, claimant, steps x/y, lane chip.
 - `TaskPill({ task: Task, size?: "sm"|"md", onClick?, selected? })` — `StatusIcon` + `T-3` mono + title (truncate) +
   claimant avatar; lease expired → amber dot; stale → amber; ready → accent dot. Used by Now and Goal too.
 - `TaskDetail({ task, issueId })` — Popover (lanes) or inline (list): brief, steps checkboxes (`useToggleStep`),
-  depends_on, owns (mono), satisfies, verify, lease, status menu (`useSetTaskStatus`).
+  depends_on, owns (mono), satisfies, verify, lease, status menu (`useSetTaskStatus`). **Commits and CI** (`DeliveryRows`): the commits whose change entry names the task and the CI runs of those commits
+  (`useDelivery`), each a button that opens its row in the Git or CI tab (`focusCommit`, `focusRun`); the popover closes when it navigates (`onNavigate`).
 
 ### issue-log builder: `src/features/issue/{tabs/LogTab.tsx, ChangesTimeline.tsx, DecisionCards.tsx, LearningCards.tsx}`
 
@@ -608,11 +642,13 @@ The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `feat
   rail with author-hue dots (agent = rounded square, human = circle); per entry: kind glyph, title (13 px medium),
   author, relative time, task/criteria chips, result pass/fail chip, commit/pr/files chips (mono), body
   (MarkdownProse compact, collapsed beyond 3 lines). `failure` entries and `result: fail` in danger tone;
-  `answer` entries show Q and A. Filter chips by author and kind at top.
+  `answer` entries show Q and A. Filter chips by author and kind at top (the bar shows only when it has a filter to offer, and the count only while a filter is on: "3 of 12"; the total is already
+  in the tab and the segmented control). The **commit chip opens the Git tab on that commit** when the tab lists it. Empty states: a `SkillHint` for `logging-work` (change, decision, learning).
 - `DecisionCards({ decisions, issueId })` — ADR cards: status chip (proposed/accepted/rejected/superseded), title,
   **Decision** first and prominent, Because, Consequences, Revisit when; Rejected collapsed; superseded decisions fold
   under their successor ("supersedes D-…" chain, expandable); topic chip; affects SC chips; decided_by authors;
-  Promote button (opens `PromoteDialog` from `@/features/library`).
+  Promote button (opens `PromoteDialog` from `@/features/library`). A **proposed** decision says its status line is the only thing accepting or rejecting changes, with a `SkillHint` for `logging-work`
+  (`ASK.decide`); real Accept and Reject buttons need an op in the data layer (see HANDOFF).
 - `LearningCards({ learnings, issueId })` — kind icon (tip/gotcha/pattern), the rule in bold, evidence (≤3 lines),
   tags; `promote: candidate` → "Promote" button (PromoteDialog); `promoted_to` → "In library ↗" link.
 
@@ -740,10 +776,15 @@ arguments of `useCreateWork`; no React), `useAddWorkFlow.ts` (the state and the 
   **"Add N issues to <group>"** (Enter). There is no separate Review screen on the group path. A split that fails says so with "Try again"; "Split again" starts over.
   The proposals stay while the outcome, name, size and context stay the same (`splitSignature`).
 - **Issue path** (`ISSUE_STEPS`, from "Add one issue…" or after picking "One issue"): What → Where → Title (typed) → Priority → Size → Status (Backlog or Planned) → Context → a short
-  Review ("Add issue to <group>"), the one place a lone issue is checked before it is written. 8 clicks as well.
-- **Where** is buttons (the top level and every group, "Inside wf / web") up to 8 places (`MAX_WHERE_BUTTONS`), a searchable list beyond. The place starts at the group the caller named,
+  Review ("Add issue to <group>"), the one place a lone issue is checked before it is written. **Codex drafts the criterion and the reason** there (about 2 s, through the split API: the proposal
+  whose title opens with the same verb as the person's title, else the second one), shows the criterion with an **Edit** button, and writes a real EARS criterion and a real `## Context` into goal.md ("<why> It belongs to wf / web."): never a placeholder.
+  7 clicks, the opener included ("Add one issue…" skips the first question).
+- **Where** is buttons (the top level and every group, "Inside wf / web") up to 12 places (`MAX_WHERE_BUTTONS`; the list scrolls inside the screen and the number keys reach the first nine), a searchable list beyond. The place starts at the group the caller named,
   then the group the board shows.
 - **Context** shows the library items and glossary terms that match what was typed as toggle chips (the most used ones when nothing matches); picks are linked under `## Links` of every created issue.
+- **Names** come from `suggestGroupNames(outcome, taken)` (`src/lib/api/names.ts`, shared with the split titles): always three noun phrases ("Board speed", "Handoff bundle", "Single sign-on"), never a fragment of the sentence.
+  The outcome is written as the group's `goal:` line in `_group.md` (adding-work step 5); each issue's context is its own reason, not a copy of the outcome.
+- **Stale proposals are never written:** `currentSplit`/`keptRows` need the split signature to match the answers, so after going back and changing one the button is disabled until the new split has loaded. A failed submit gives the primary button focus again, so Enter retries.
 - The result is one `useCreateWork` commit, a toast ("Added <group> with 4 issues", or "Added <title>" with **Open**), and the board opens on the new group with Backlog unfolded.
 
 ### features/codex: `src/features/codex/**` (plan D3, D4, + Open in Codex and Do next step)
@@ -752,14 +793,18 @@ arguments of `useCreateWork`; no React), `useAddWorkFlow.ts` (the state and the 
 copyCodexCommand, OPEN_IN_CODEX_HINT, useCodexIssue, useCardRun, useNextStep, useRunActive`. The user asked for "a way to open the codex in a button form, and
 beside it a button that in the background does the next step".
 - `CodexActions({ issue })` — the issue header's pair of buttons. **Open in Codex** copies `codexCommand(issue).command` (a `codex "Work on wf-xxxxx … Read current_state.md first, then use the wf skills (doing-next-step)"` line;
-  the toast "Copied the Codex command" says to paste it at the repo root) and opens `OpenInCodexPanel`, which shows the exact prompt, so nobody pastes a command they have not seen.
+  the popover's own line "Command copied. Paste it in a terminal at the repo root." is the confirmation, with no toast) and opens `OpenInCodexPanel`, which shows the exact prompt, so nobody pastes a command they have not seen.
   With the local daemon the same button starts Codex itself (D3). **Do next step** starts a background run; while it goes the button's slot becomes `RunStatus` (the live phase
   "Claiming T-3", "Logging the change", "Verifying: CI running", "Finishing T-3", a progress bar, Cancel), and a run with nothing to do says why on a line below with a way to the Plan tab (`RunNotice`).
   `RunsPopover` lists the issue's recent runs. The result of a run is not shown in the strip: it is markdown in the issue (the task, a change entry) plus a commit and a CI run, in the Plan, Log, Git and CI tabs.
+- **`CodexActions` has a `children` slot** for more buttons of the same row: the issue header passes `HandoffButton` (**Copy context**, `features/issue/HandoffPanel`), so the row reads `[Open in Codex] [Do next step] [Copy context] [history]`.
+  While a run shows (`data-busy` on the root, `group/codex`) Open in Codex and Copy context give way to their glyph below 640 px so the phase keeps its room. The header has no `wf context` icon and copies no CLI string.
+- **Do next step plans first.** On an issue without a plan the run's first phase is "Plan the issue, claim T-1" (`CodexRun.plans`): the strip says "Planning, claiming T-1", the card marker "Planning". The button label stays "Do next step" (the Plan tab's empty state too, at every size). A task that ends in `review` (its `verify` is `manual`) ends the run `done` with `CodexRun.review`, and the strip says "Done: T-n, waiting for a check".
+- **A run with nothing to do says why, and points where the answer is** (`reasonAction`, `RunNotice onOpen(tab)`): "Waiting on Q-…" → Open Now, "no criteria" → Open goal, tasks in flight or all done → Open plan; "Waiting on <issue>", "The issue is done" and "<author> holds the lease" have no button.
 - `CodexRunMarker({ run })` — the card's mark while a run goes (the Codex tile, the task id, one word for the phase), in the id row in place of the group path.
-- **One code path per action, so one wording and one toast whichever button started it.** `copyCodexCommand(issue)` is the copy (header, card menu, palette); `useNextStep(issue)` starts a run from a place with no strip
-  (card menu, palette); `useCodexIssue(issue)` is the header's. All three call `followRun`, which waits for the run to end and says so in **exactly one toast** ("Codex finished T-3 … Open log", or "Codex failed on T-3");
-  a cancel is the person's own act and has none. A run with nothing ready is explained at once (the header's `RunNotice`, a toast from the menu and the palette).
+- **One code path per action, so one wording and one toast whichever button started it.** `copyCodexCommand(issue, { toast?: boolean })` is the copy (header: `toast: false`, the popover's line is the confirmation; card menu and palette toast once); `useNextStep(issue)` returns `{ busy, start, cancel }` and starts a run from a place with no strip
+  (card menu, palette); `useCodexIssue(issue)` is the header's. **One confirmation per event:** a run that ends while the header's strip shows its result has no toast (the strip is the confirmation); a run started from the card menu or the palette gives one toast
+  ("Codex finished T-3 … Open log", or "Codex failed on T-3"); a cancel is the person's own act and has none (the card menu and the palette show "Cancel Codex's run" while a run goes). `follow-run.ts` keeps a counted registry of the mounted header strips (`holdStrip`/`stripShows`): `announce()` is silent while a strip of that issue is on screen. A run with nothing ready is explained at once (the header's `RunNotice`, a toast from the menu and the palette).
 - `useRunActive(issueId)` — true while a run goes on the issue and for 1.5 s after (the time the issue takes to be read again). The header's Q005 row and the Now tab's "behind" chip wait on it.
 - Run words are in `run-copy.ts` (`runLine`, `runWord`, `runProgress`, `activeRun`): the strip, the card marker, the runs list and the toasts all read a run through them.
 
@@ -768,8 +813,8 @@ beside it a button that in the background does the next step".
 `index.ts` exports `SkillsView, SkillItemView, SkillRow, SkillSource, InstallPanel, useSkillsNav, skillHref, validateSkillsSearch`. Goal 1 of the user: **distribute skills and plugins across the team**.
 - `SkillsView` (`/skills`, `g s`) — a 44 px top bar that starts with the Workdatabase tabs, then by page width (the rail counts): from 900 px the install panel and the list beside the open skill; under 900 px
   and on a phone an open skill is a screen of its own. `?skill=<name>` opens one. Esc closes it.
-- `InstallPanel` — the commands to install the repository's plugins: for Claude Code one to add the marketplace (`/plugin marketplace add <repo>`) and one install per plugin
-  (`/plugin install workflow@workflow-marketplace`), and for Codex one (`scripts/install-skills.sh --codex`, which copies the skills to `.agents/skills/`), each with a copy button. They are built from the plugin's own manifests (`claudeInstallCommands`, `codexInstallCommands`), so they do not go stale.
+- `InstallPanel` — says the repository is the team's (`SKILLS_REPO`, `mudit1729/workflow_management`: GitHub redirects the old name there, so the constant stays) and gives the commands to install its plugins, **for two audiences**: for Claude Code "Just me" (`/plugin marketplace add <repo>`, one `/plugin install` per plugin) and
+  "Everyone on the repository" (`claude plugin … --scope project`, then commit `.claude/settings.json`; `claudeTeamCommands`, `claudeInstallGroups`), and for Codex two steps (`scripts/install-skills.sh --codex`, which copies the skills to `.agents/skills/`, then `--print-agents-md >> AGENTS.md`; `CODEX_AGENTS_COMMAND`), each with a copy button. They are built from the plugin's own manifests (`claudeInstallCommands`, `codexInstallCommands`), so they do not go stale.
 - `SkillRow` — name, description and the plugin; `SkillItemView` — one skill: its plugin, where it lives, `SkillSource` (the SKILL.md read from the file, rendered, with a Rendered | Source switch).
 - Data: `useSkills()` reads `plugins/*/skills/*/SKILL.md`, the plugin manifests and `.claude-plugin/marketplace.json` (see the data layer); a saved SKILL.md updates the page in the dev server.
 - **The headless skills** are `plugins/workflow/skills/*`: `using-wf`, `adding-work`, `planning-issues`, `doing-next-step`, `logging-work`, `checking-status`, `handing-off` and `writing-readable-bulk-text`.
@@ -795,7 +840,8 @@ Workdatabase, Shared, Primitives. There is no "Workflow · Inbox" group. The Add
 `ChoiceList`, `ChoiceButton`, `ToggleChip`, `ProgressDots`, `SplitProgress`, `SplitCard`, `SplitStart`, `DiscardDialog`, `NeedsYouToggle`) sit under Shell and
 Workflow · Board; the Codex entries (`entries/codex.tsx`: `CodexActions`, `CodexRunStatus`, `CodexRunNotice`, `OpenInCodexPanel`, `CodexRunsList`, `CodexRunMarker`) under Issue · Header and
 Workflow · Board; the Skills entries (`entries/skills.tsx`) under Workdatabase; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
-`PipelineRow` and `RunStateIcon`. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
+`PipelineRow` and `RunStateIcon`; `entries/issue-header.tsx` holds `HandoffPanel` (with the button, compact, and the panel before, after and without the clipboard); `entries/shared.tsx` holds `SkillHint` and `MetaLine`.
+The Kit's `EmptyState`, `CopyButton` and `CodeBlock` examples use real skill names and real commands (`codex '…'`), never `wf …`. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
 `needsYou={{ requests, issues }}`, so the Needs you count shows (and a variant has the filter on). Foundations shows the tokens live (surfaces,
 accent and signals, readable signal text, scrim and the z scale, status colors, the hue scale). The "hover footer (forced open)" board variant
 forces the footer open with a selector on `IssueCardFooter`; the real footer is an overlay on the card's last row, and so is this one.

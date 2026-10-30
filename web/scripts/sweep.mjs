@@ -5,6 +5,7 @@
 // The board starts without issues and the default routes name sample issues: pass --sample to load
 // the sample world (26 issues) in each page before its route opens. /kit holds the sample itself.
 // Base URL: SHOT_BASE (default http://localhost:5177). For the static build use SHOT_BASE=http://host:port/#
+// Each page is also checked for text under 11 px; the first few elements are printed as a "note" and kept in report.json (`smallText`).
 // Writes <dir>/<route-slug>__<width>__<theme>.png, <dir>/report.json, and with --sheets
 // <dir>/sheets/<route-slug>.png (desktop widths) and <dir>/sheets/<route-slug>__mobile.png.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,12 +33,18 @@ export const ROUTES = [
   "/w/i/wf-7yq2m?tab=goal",
   "/i/wf-g5rx8?tab=plan",
   "/w/i/wf-h2tb7?tab=plan",
+  "/i/wf-3k9x2?tab=plan",
+  "/w/i/wf-k8dv6?tab=files",
   "/lib",
   "/lib/lib-4tz7c",
   "/lib?tab=glossary",
   "/skills",
   "/skills?skill=adding-work",
   "/kit",
+  "/kit?el=HandoffPanel",
+  "/w/i/wf-e6kc1?tab=plan",
+  "/kit?el=CodexActions",
+  "/kit?el=RunNotice",
 ];
 
 const args = process.argv.slice(2);
@@ -88,9 +95,27 @@ for (const route of routes) {
             pageScrollX: Math.max(0, d.scrollWidth - window.innerWidth),
             dataWf: document.querySelectorAll("[data-wf]").length,
             mainText: (main.textContent ?? "").trim().length,
+            // Text under the 11 px floor (the smallest step of the type scale). Hidden and screen-reader-only
+            // text does not count. A note, not a failure: it names the first few elements so a regression shows.
+            smallText: (() => {
+              const found = new Map();
+              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+              for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+                if (!n.nodeValue?.trim()) continue;
+                const el = n.parentElement;
+                // Initials in an avatar tile and the "!" of an urgent mark are glyphs, not text to read.
+                if (!el || found.has(el) || el.closest('[data-wf="AuthorAvatar"], [data-wf="PriorityGlyph"]')) continue;
+                const cs = getComputedStyle(el);
+                const box = el.getBoundingClientRect();
+                if (cs.visibility === "hidden" || cs.display === "none" || box.width <= 1 || box.height <= 1) continue;
+                const size = Number.parseFloat(cs.fontSize);
+                if (size < 10.95) found.set(el, `${el.closest("[data-wf]")?.getAttribute("data-wf") ?? el.tagName.toLowerCase()} ${size.toFixed(1)}px "${n.nodeValue.trim().slice(0, 24)}"`);
+              }
+              return [...found.values()].slice(0, 5);
+            })(),
           };
         })
-        .catch(() => ({ pageScrollY: -1, pageScrollX: -1, dataWf: 0, mainText: 0 }));
+        .catch(() => ({ pageScrollY: -1, pageScrollX: -1, dataWf: 0, mainText: 0, smallText: [] }));
       const file = join(out, `${slug(route)}__${w}__${theme}.png`);
       await page.screenshot({ path: file });
       await page.close();
@@ -102,6 +127,7 @@ for (const route of routes) {
       ];
       results.push({ route, width: w, theme, file, ...checks, problems });
       console.log(`${problems.length ? "FAIL" : "ok  "} ${route} ${w} ${theme}${problems.length ? `  ${problems.join(" | ")}` : ""}`);
+      if (checks.smallText?.length) console.log(`  note: text under 11 px: ${checks.smallText.join(" | ")}`);
     }
   }
 }
