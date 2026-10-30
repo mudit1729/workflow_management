@@ -16,7 +16,6 @@ import { type ReactNode, useMemo, useState } from "react";
 import {
   AuthorChip,
   AuthorStack,
-  CopyButton,
   EmptyState,
   MarkdownProse,
   RelativeTime,
@@ -32,11 +31,12 @@ import {
 } from "@/components/ui";
 import { PromoteDialog } from "@/features/library";
 import type { Criterion, DecisionEntry, DecisionStatus } from "@/gen/types";
-import { useIssue } from "@/lib/api";
+import { useIssue, useSetDecisionStatus } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
 import { EntryIdButton, MetaChip, TitleText } from "./ChangesTimeline";
+import { ASK, SkillHint } from "./skill-hint";
 
 type ShownStatus = DecisionStatus | "superseded";
 
@@ -73,8 +73,7 @@ export function DecisionCards({ decisions, issueId, className }: DecisionCardsPr
           icon={<Scale strokeWidth={1.75} />}
           title="No decisions logged"
           hint="Agents record each design choice as a decision, with the options they rejected and why."
-          skill="log-decision"
-          command={`wf append ${issueId} decision --title "…"`}
+          action={<SkillHint skill="logging-work" prompt={ASK.decision(issueId)} />}
         />
       </div>
     );
@@ -102,6 +101,46 @@ export function DecisionCards({ decisions, issueId, className }: DecisionCardsPr
           entry={promote.entry}
         />
       )}
+    </div>
+  );
+}
+
+/** A proposed decision: two buttons, because accepting or rejecting is one line of the entry. */
+function ProposedActions({ issueId, id }: { issueId: string; id: string }) {
+  const setStatus = useSetDecisionStatus(issueId);
+  const [busy, setBusy] = useState(false);
+  const decide = async (status: "accepted" | "rejected") => {
+    setBusy(true);
+    try {
+      await setStatus({ id, status });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      data-wf="DecisionProposed"
+      className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-fg-faint text-sm"
+    >
+      <span className="flex items-center gap-1.5">
+        <Info size={14} strokeWidth={1.75} className="shrink-0" aria-hidden />
+        Proposed. Waiting for a decision.
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => void decide("accepted")}
+        >
+          <Check size={14} strokeWidth={1.75} />
+          Accept
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void decide("rejected")}>
+          <X size={14} strokeWidth={1.75} />
+          Reject
+        </Button>
+      </span>
     </div>
   );
 }
@@ -220,17 +259,7 @@ function DecisionCard({
       </div>
 
       {!superseded && d.status === "proposed" && (
-        <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-fg-faint text-sm">
-          <Info size={14} strokeWidth={1.75} className="shrink-0" aria-hidden />
-          <span>Accept or reject it with</span>
-          <code className="rounded-sm bg-muted px-1 font-mono text-fg-muted text-xs">
-            wf decide {ctx.issueId} {d.id} accept
-          </code>
-          <CopyButton
-            text={`wf decide ${ctx.issueId} ${d.id} accept`}
-            label="Copy the wf decide command"
-          />
-        </p>
+        <ProposedActions issueId={ctx.issueId} id={d.id} />
       )}
 
       {predecessorId && (

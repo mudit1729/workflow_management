@@ -25,6 +25,7 @@ import { cn } from "@/lib/cn";
 import { useHotkey, useMediaQuery } from "@/lib/hooks";
 import { ISSUE_TABS, type IssueTab, useCloseIssue, useGo, useIssueTab } from "@/lib/nav";
 import { CiDot, ciTitle, type DeliveryCounts, deliveryCounts, gitTitle } from "./delivery-ui";
+import { HandoffViewHost } from "./HandoffPanel";
 import { IssueHeader } from "./IssueHeader";
 import { IssueSkeleton } from "./IssueSkeleton";
 import { countBySeverity } from "./LintPanel";
@@ -82,6 +83,7 @@ function DrawerFrame({ detail }: { detail: IssueDetail }) {
     <div data-wf="IssueView" data-variant="drawer" className="flex h-full min-h-0 flex-col">
       <IssueHeader detail={detail} variant="drawer" onOpenFiles={() => setTab("files")} />
       <IssueTabs detail={detail} variant="drawer" />
+      <HandoffViewHost issueId={detail.summary.id} />
     </div>
   );
 }
@@ -300,6 +302,26 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
     window.requestAnimationFrame(() => scrollToSection(rootRef.current, tab));
   };
 
+  // Keys 1-8 as in the drawer: a section scrolls into view and takes focus, a view of the log
+  // column switches, Files opens its sheet. The phone layout's tab strip registers the same keys.
+  useHotkey(
+    ["1", "2", "3", "4", "5", "6", "7", "8"],
+    (e) => {
+      const next = ISSUE_TABS[Number(e.key) - 1];
+      if (!next) return;
+      if (next === "files") {
+        setFilesOpen(true);
+        return;
+      }
+      void setTab(next);
+      // The view column switches on the next render; the section is there one frame later.
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() => focusSection(rootRef.current, next)),
+      );
+    },
+    { enabled: !narrow },
+  );
+
   return (
     <div
       ref={rootRef}
@@ -354,6 +376,7 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
           <FilesTab detail={detail} variant="page" onNavigate={showSection} />
         </div>
       </Sheet>
+      <HandoffViewHost issueId={detail.summary.id} />
     </div>
   );
 }
@@ -501,8 +524,9 @@ function ViewColumn({
       >
         <TabsList
           aria-label={label}
-          // Same height and weight as a column title; the shown view reads darker.
-          className="sticky top-0 z-raised h-10 gap-3.5 border-b-0 bg-bg px-5"
+          // Same height and weight as a column title; the shown view reads darker and carries the
+          // same 2 px bar as the drawer's tab strip, so the control looks alike at every width.
+          className="sticky top-0 z-raised h-10 gap-2 border-b-0 bg-bg px-3.5"
         >
           {views.map((v) => (
             <TabsTrigger
@@ -510,7 +534,7 @@ function ViewColumn({
               value={v}
               count={count[v]}
               title={title[v]}
-              className="border-b-0 text-fg-faint text-sm hover:text-fg-muted data-[state=active]:text-fg"
+              className="px-1.5 text-fg-faint text-sm hover:bg-muted hover:text-fg-muted data-[state=active]:text-fg"
             >
               {name[v]}
             </TabsTrigger>
@@ -555,13 +579,18 @@ function ColumnSection({
   children: ReactNode;
 }) {
   return (
-    <div data-section={section} className={className}>
+    <section
+      data-section={section}
+      aria-label={title}
+      tabIndex={-1}
+      className={cn("outline-none", className)}
+    >
       <h2 className="sticky top-0 z-raised flex h-10 items-center gap-2 bg-bg px-5 font-medium text-fg-faint text-sm">
         {title}
         {meta}
       </h2>
       <div className="px-5 pt-1 pb-8">{children}</div>
-    </div>
+    </section>
   );
 }
 
@@ -573,6 +602,14 @@ function scrollToSection(root: HTMLElement | null, tab: IssueTab) {
   const top =
     section.getBoundingClientRect().top - column.getBoundingClientRect().top + column.scrollTop;
   column.scrollTo({ top, behavior: "smooth" });
+}
+
+/** Scrolls the section of `tab` into view and moves focus to it, so the next key starts there. */
+function focusSection(root: HTMLElement | null, tab: IssueTab) {
+  const section = root?.querySelector<HTMLElement>(`[data-section="${tab}"]`);
+  if (!section) return;
+  scrollToSection(root, tab);
+  section.focus({ preventScroll: true });
 }
 
 function PlanCount({ counts }: { counts: TabCounts }) {
@@ -699,7 +736,6 @@ function IssueUnavailable({
           icon={<CircleAlert {...ICON} />}
           title={`Could not load ${id}`}
           hint={errorMessage(error)}
-          command="wf doctor"
           action={
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={onRetry}>
@@ -718,5 +754,5 @@ function IssueUnavailable({
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
-  return "The server did not answer. Check that wf serve is running.";
+  return "The server did not answer. Check that the wf server is running.";
 }

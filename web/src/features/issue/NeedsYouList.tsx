@@ -26,6 +26,8 @@ import { useAnswerRequest, useMe } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs, relativeShort } from "@/lib/format";
 import { InlineText } from "./CriteriaChecklist";
+import { MetaLine } from "./MetaLine";
+import { SkillLink } from "./skill-hint";
 
 // ---------------------------------------------------------------- time
 
@@ -72,6 +74,7 @@ export interface NeedsYouListProps {
 }
 
 export function NeedsYouList({ items, issueId, compact = false }: NeedsYouListProps) {
+  const listRef = useRef<HTMLUListElement>(null);
   // Blocking first, then oldest first. Answering never reorders a row.
   const sorted = useMemo(
     () =>
@@ -92,7 +95,7 @@ export function NeedsYouList({ items, issueId, compact = false }: NeedsYouListPr
   }
 
   return (
-    <ul data-wf="NeedsYouList" aria-label="Needs you" className="flex flex-col">
+    <ul ref={listRef} data-wf="NeedsYouList" aria-label="Needs you" className="flex flex-col">
       {sorted.map((item, i) => (
         <NeedsYouRow
           key={item.id}
@@ -100,9 +103,43 @@ export function NeedsYouList({ items, issueId, compact = false }: NeedsYouListPr
           issueId={issueId || item.issue}
           compact={compact}
           first={i === 0}
+          onAnswered={() => moveFocusOn(listRef.current)}
         />
       ))}
     </ul>
+  );
+}
+
+// ---------------------------------------------------------------- focus
+
+/**
+ * After an answer the button that sent it is gone and focus would fall to the page. Take it to
+ * the next open request's main button (or its text box), and when that was the last request, to
+ * the panel that holds the list (the Now tab or the Now section), so the next key starts there.
+ */
+function moveFocusOn(list: HTMLElement | null) {
+  if (!list) return;
+  // Twice: the answered state is committed on the next frame, the old button leaves with it.
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      const open = list.querySelectorAll<HTMLElement>(
+        '[data-wf="NeedsYouItem"]:not([data-answered])',
+      );
+      const next = open[0];
+      const target =
+        next?.querySelector<HTMLElement>("[data-primary]:not(:disabled)") ??
+        next?.querySelector<HTMLElement>("button:not(:disabled), textarea:not(:disabled)");
+      if (target) {
+        target.focus({ preventScroll: false });
+        return;
+      }
+      const panel = list.closest<HTMLElement>('[role="tabpanel"], [data-section]');
+      if (panel) {
+        if (!panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
+        panel.focus({ preventScroll: true });
+      }
+    }),
   );
 }
 
@@ -119,12 +156,16 @@ function NeedsYouRow({
   issueId,
   compact,
   first,
+  onAnswered,
 }: {
   item: NeedsYouItem;
   issueId: string;
   compact: boolean;
   first: boolean;
+  /** Called after the answer was written, when focus was inside this row (a key or a click). */
+  onAnswered: () => void;
 }) {
+  const rowRef = useRef<HTMLLIElement>(null);
   const me = useMe();
   const answerRequest = useAnswerRequest();
   const now = useNow();
@@ -151,6 +192,8 @@ function NeedsYouRow({
   const submit = async (text: string) => {
     const answer = text.trim();
     if (!answer || busy) return;
+    // The button that sent the answer goes away with the box: remember whether focus was here.
+    const hadFocus = rowRef.current?.contains(document.activeElement) ?? false;
     setBusy(true);
     setLocal({ answer, by: me || item.to, at: new Date().toISOString() });
     try {
@@ -160,8 +203,10 @@ function NeedsYouRow({
         answer,
         base_rev: item.edit.rev,
       });
-      if (result) drafts.delete(draftKey);
-      else setLocal(null);
+      if (result) {
+        drafts.delete(draftKey);
+        if (hadFocus) onAnswered();
+      } else setLocal(null);
     } catch {
       setLocal(null);
     } finally {
@@ -171,6 +216,7 @@ function NeedsYouRow({
 
   return (
     <li
+      ref={rowRef}
       data-wf="NeedsYouItem"
       data-answered={answered ? "" : undefined}
       aria-labelledby={questionId}
@@ -235,32 +281,25 @@ function NeedsYouRow({
           )}
         </div>
 
-        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-fg-faint">
-          <AuthorChip handle={item.from} size="xs" variant="text" />
-          <span aria-hidden>→</span>
-          <span className="sr-only">to</span>
-          <AuthorChip handle={item.to} size="xs" variant="text" />
-          <Sep />
+        <MetaLine className="mt-1 text-fg-faint text-sm">
+          <span className="inline-flex items-center gap-1.5">
+            <AuthorChip handle={item.from} size="xs" variant="text" />
+            <span aria-hidden>→</span>
+            <span className="sr-only">to</span>
+            <AuthorChip handle={item.to} size="xs" variant="text" />
+          </span>
           <span className={cn(overdue && "text-stale-text")}>
             asked <TimeAgo ts={item.asked} />
           </span>
-          {!compact && (
-            <>
-              <Sep />
-              <span className="font-mono text-xs">{item.id}</span>
-            </>
-          )}
+          {!compact && <span className="font-mono text-xs">{item.id}</span>}
           {refTarget && (
-            <>
-              <Sep />
-              <span className="inline-flex min-w-0 items-center gap-1">
-                <Link2 size={14} strokeWidth={1.75} aria-hidden className="shrink-0" />
-                <span className="sr-only">Related:</span>
-                <RefLink target={refTarget} issueId={issueId} />
-              </span>
-            </>
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <Link2 size={14} strokeWidth={1.75} aria-hidden className="shrink-0" />
+              <span className="sr-only">Related:</span>
+              <RefLink target={refTarget} issueId={issueId} />
+            </span>
           )}
-        </p>
+        </MetaLine>
 
         {answered ? (
           <AnsweredState answer={answered} />
@@ -302,7 +341,7 @@ function Sep() {
 
 function AnsweredState({ answer }: { answer: LocalAnswer }) {
   return (
-    <div data-wf="NeedsYouAnswered" className="mt-2 flex flex-col gap-1.5">
+    <div data-wf="NeedsYouAnswered" role="status" className="mt-2 flex flex-col gap-1.5">
       <blockquote className="border-l-2 border-border-strong pl-2.5 text-base whitespace-pre-wrap text-fg">
         {answer.answer}
       </blockquote>
@@ -314,11 +353,8 @@ function AnsweredState({ answer }: { answer: LocalAnswer }) {
         <TimeAgo ts={answer.at} />
       </p>
       <p className="text-sm text-fg-faint">
-        Waiting for the agent to run{" "}
-        <code className="rounded-sm bg-muted px-1 py-px font-mono text-xs text-fg-muted">
-          wf resolve
-        </code>
-        .
+        Waiting for the agent to pick the answer up. <SkillLink skill="doing-next-step" /> resolves
+        it first.
       </p>
     </div>
   );
@@ -371,6 +407,7 @@ function AnswerBox({
             <Button
               key={option}
               size="sm"
+              data-primary={i === primary ? "" : undefined}
               variant={i === primary ? "primary" : "secondary"}
               disabled={busy}
               onClick={() => onSubmit(note ? `${option} — ${note}` : option)}

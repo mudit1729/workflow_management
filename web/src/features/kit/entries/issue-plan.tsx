@@ -138,7 +138,11 @@ function Detail({
 function TaskDetailBody() {
   return (
     <>
-      <Detail task="T-3" label="in progress · steps 1/2, dependencies, owns" />
+      <Detail
+        task="T-3"
+        label="in progress · steps 1/2, dependencies, owns"
+        note="Commits and CI list the commits that name this task and their runs; each opens its row in the Git or CI tab."
+      />
       <Detail task="T-4" label="ready · nothing claimed yet" />
       <Detail issue={ISSUE.leaseExpired} task="T-3" label="lease expired" />
       <Detail task="T-1" label="done" />
@@ -186,6 +190,12 @@ function PlanLanesBody() {
         id={ISSUE.rich}
         label="wf-3k9x2 · drawer width"
         note="Hover or click a task to draw its dependency edges; click opens its detail."
+      />
+      <PlanLanesDemo
+        id={ISSUE.rich}
+        label="wf-3k9x2 · 360 px, lane names above their tasks"
+        note="Under 520 px the lane name moves above its tasks so two levels fit; the task in progress is scrolled into view."
+        width={360}
       />
       <PlanLanesDemo id={ISSUE.rich} label="ready highlighted" ready />
       <PlanLanesDemo id={ISSUE.crowded} label="wf-b1d7v · seven tasks, scrolls sideways" />

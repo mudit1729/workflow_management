@@ -1,7 +1,7 @@
 // Plan tab: how the goal gets done. Approach, assumptions and prior art first,
 // then the tasks as lanes (parallel work) or a phase list (sequence). In the full
 // page the context folds away so the task view gets the room.
-import { ChevronRight, Columns3, ListTree, Waypoints } from "lucide-react";
+import { ChevronRight, Columns3, ListTree, Play, Waypoints } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { AuthorChip, EmptyState, MarkdownProse, RefLink, RelativeTime } from "@/components/common";
 import {
@@ -13,11 +13,13 @@ import {
   Segmented,
   Tooltip,
 } from "@/components/ui";
+import { useNextStep } from "@/features/codex";
 import type { IssueDetail, Plan, Task, TaskStatus } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { type PlanView, usePrefs } from "@/lib/prefs";
 import { PlanLanes } from "../PlanLanes";
 import { PlanList } from "../PlanList";
+import { ASK, SkillHint } from "../skill-hint";
 import { InlineText } from "../TaskDetail";
 
 export interface PlanTabProps {
@@ -99,20 +101,35 @@ export function PlanTab({ detail, variant }: PlanTabProps) {
 // ---------------------------------------------------------------- empty
 
 function NoPlan({ detail }: { detail: IssueDetail }) {
-  const { size, signals } = detail.summary;
+  const { size, signals, id } = detail.summary;
+  const nextStep = useNextStep(detail.summary);
   const small = size === "xs" || size === "s";
   const hint = small
-    ? "Small issues may skip the plan."
+    ? "A one-task plan is enough for a small issue. Do next step writes it, then starts on T-1."
     : signals.in_progress_no_plan
-      ? "Work started without a plan. Write one so agents can claim tasks in parallel."
-      : "A plan splits the goal into tasks that agents can claim in parallel.";
+      ? "Work started without a plan. Do next step writes it first, so agents can claim tasks in parallel."
+      : "A plan splits the goal into tasks that agents can claim in parallel. Do next step writes it first.";
   return (
     <div data-wf="PlanTab" data-state="empty" className="py-6">
       <EmptyState
         icon={<Waypoints size={14} strokeWidth={1.75} />}
         title="No plan yet"
         hint={hint}
-        skill="write-plan"
+        action={
+          <div className="flex flex-col items-center gap-3">
+            {/* Do next step plans first when the issue has no plan, so the button is the plan. */}
+            <Button
+              variant="secondary"
+              onClick={() => void nextStep.start()}
+              disabled={nextStep.busy}
+              aria-busy={nextStep.busy || undefined}
+            >
+              <Play size={14} strokeWidth={1.75} className="fill-current" />
+              {nextStep.busy ? "Codex is working" : "Do next step"}
+            </Button>
+            <SkillHint skill="planning-issues" prompt={ASK.plan(id)} />
+          </div>
+        }
       />
     </div>
   );

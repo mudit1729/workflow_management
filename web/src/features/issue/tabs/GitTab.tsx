@@ -13,7 +13,7 @@ import {
   GitPullRequestDraft,
   MessageSquareWarning,
 } from "lucide-react";
-import { type ReactNode, useId, useMemo, useState } from "react";
+import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { AuthorChip, copyText, EmptyState, RelativeTime } from "@/components/common";
 import { Skeleton, Tooltip } from "@/components/ui";
 import type { IssueDetail, Task, TaskId } from "@/gen/types";
@@ -21,6 +21,7 @@ import type { Commit, PullRequest, PullRequestState, ReviewState } from "@/lib/a
 import { useDelivery } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useIssueTab } from "@/lib/nav";
+import { flashRow, useDeliveryFocusRequest } from "../delivery-focus";
 import { RunStateIcon, shortBranch, TrailerCopy, useFreshKeys } from "../delivery-ui";
 import { TaskPill } from "../TaskPill";
 import { useTaskFocus } from "../task-focus";
@@ -51,6 +52,13 @@ export function GitTab({ detail, variant }: GitTabProps) {
     focusTask(issueId, task);
     void setTab("plan");
   };
+
+  // A Log entry's commit chip or a task's "Commits and CI" row asks for this commit.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDeliveryFocusRequest(issueId, "commit", !isLoading, (sha) => {
+    const rows = rootRef.current?.querySelectorAll<HTMLElement>('[data-wf="CommitRow"]');
+    flashRow([...(rows ?? [])].find((r) => r.dataset.sha?.startsWith(sha)));
+  });
 
   let body: ReactNode;
   if (isLoading) {
@@ -112,7 +120,12 @@ export function GitTab({ detail, variant }: GitTabProps) {
   }
 
   return (
-    <div data-wf="GitTab" data-variant={variant} className="flex min-w-0 flex-col gap-6">
+    <div
+      ref={rootRef}
+      data-wf="GitTab"
+      data-variant={variant}
+      className="flex min-w-0 flex-col gap-6"
+    >
       {body}
     </div>
   );
@@ -318,7 +331,10 @@ export function CommitRow({
     <li
       data-wf="CommitRow"
       data-sha={commit.sha}
-      className={cn("flex min-w-0 flex-col gap-1 px-3 py-2", fresh && "wf-flash")}
+      className={cn(
+        "flex min-w-0 flex-col gap-1 px-3 py-2 transition-colors duration-300 data-[focused]:bg-accent-subtle",
+        fresh && "wf-flash",
+      )}
     >
       <div className="flex min-w-0 items-center gap-2">
         <ShaButton commit={commit} issueId={issueId} />

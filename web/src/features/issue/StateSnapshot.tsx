@@ -17,6 +17,7 @@ import { cn } from "@/lib/cn";
 import { hoursSince, parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
 import { InlineText } from "./CriteriaChecklist";
+import { MetaLine } from "./MetaLine";
 import { NeedsYouList, TimeAgo } from "./NeedsYouList";
 import { TaskPill } from "./TaskPill";
 
@@ -181,80 +182,60 @@ function StateMeta({ state, detail }: StateSnapshotProps) {
     : `${newer || "Some"} change ${newer === 1 ? "entry is" : "entries are"} newer than this snapshot (Q005).`;
 
   return (
-    <div
-      data-wf="StateMeta"
-      className={cn(
-        "mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm",
-        tinted ? "text-stale-text" : "text-fg-faint",
-      )}
+    <MetaLine
+      wf="StateMeta"
+      className={cn("mt-1.5 text-sm", tinted ? "text-stale-text" : "text-fg-faint")}
     >
-      {tinted && (
-        <Tooltip content={staleNote}>
-          <span className="inline-flex" role="img" aria-label={staleNote}>
-            <Clock size={14} strokeWidth={1.75} />
-          </span>
-        </Tooltip>
-      )}
-      <span className="inline-flex items-center gap-1">
-        Updated <TimeAgo ts={state.updated_at} /> by
-        <AuthorChip handle={state.updated_by} size="xs" />
+      <span className="inline-flex items-center gap-1.5">
+        {tinted && (
+          <Tooltip content={staleNote}>
+            <span className="inline-flex" role="img" aria-label={staleNote}>
+              <Clock size={14} strokeWidth={1.75} />
+            </span>
+          </Tooltip>
+        )}
+        <span className="inline-flex items-center gap-1">
+          Updated <TimeAgo ts={state.updated_at} /> by
+          <AuthorChip handle={state.updated_by} size="xs" />
+        </span>
       </span>
       {behind && (
-        <>
-          <Dot />
-          <Tooltip content="Show the newer entries in Log">
-            <button
-              type="button"
-              onClick={() => setLog("changes")}
-              className="rounded-sm font-medium underline-offset-2 hover:underline"
-            >
-              {newer > 0
-                ? `Behind ${newer} change${newer === 1 ? "" : "s"}`
-                : "Behind latest changes"}
-            </button>
-          </Tooltip>
-        </>
+        <Tooltip content="Show the newer entries in Log">
+          <button
+            type="button"
+            onClick={() => setLog("changes")}
+            className="rounded-sm font-medium underline-offset-2 hover:underline"
+          >
+            {newer > 0
+              ? `Behind ${newer} change${newer === 1 ? "" : "s"}`
+              : "Behind latest changes"}
+          </button>
+        </Tooltip>
       )}
       {state.phase && (
-        <>
-          <Dot />
-          <Chip size="sm" tone="neutral" title="Plan phase">
-            {state.phase}
-          </Chip>
-        </>
+        <Chip size="sm" tone="neutral" title="Plan phase">
+          {state.phase}
+        </Chip>
       )}
       {state.session && (
-        <>
-          <Dot />
-          <span
-            title={`Session ${state.session}`}
-            className="max-w-32 truncate font-mono text-xs text-fg-faint"
-          >
-            {state.session}
-          </span>
-        </>
-      )}
-      {overLimit && (
-        <span className="ml-auto">
-          <Chip
-            size="sm"
-            tone="stale"
-            icon={<TriangleAlert size={12} strokeWidth={1.75} />}
-            title="Q008 · current_state.md is a snapshot, not a log. Move history to changes.md."
-          >
-            {state.word_count} words · limit {WORD_LIMIT}
-          </Chip>
+        <span
+          title={`Session ${state.session}`}
+          className="max-w-32 truncate font-mono text-xs text-fg-faint"
+        >
+          {state.session}
         </span>
       )}
-    </div>
-  );
-}
-
-function Dot() {
-  return (
-    <span aria-hidden className="opacity-60">
-      ·
-    </span>
+      {overLimit && (
+        <Chip
+          size="sm"
+          tone="stale"
+          icon={<TriangleAlert size={12} strokeWidth={1.75} />}
+          title="Q008 · current_state.md is a snapshot, not a log. Move history to changes.md."
+        >
+          {state.word_count} words · limit {WORD_LIMIT}
+        </Chip>
+      )}
+    </MetaLine>
   );
 }
 

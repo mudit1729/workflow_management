@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
+import { ASK, SkillHint } from "./skill-hint";
 import { InlineText, TaskDetail } from "./TaskDetail";
 import { useTaskFocusRequest } from "./task-focus";
 
@@ -71,7 +72,9 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
               <code className="font-mono text-fg-muted">## Phase</code> heading in plan.md.
             </>
           }
-          skill="write-plan"
+          action={
+            <SkillHint skill="planning-issues" prompt={ASK.moreTasks(issueId)} align="start" />
+          }
         />
       </div>
     );

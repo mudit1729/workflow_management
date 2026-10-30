@@ -34,7 +34,6 @@ export function LintPanel({ diagnostics, basePath }: LintPanelProps) {
           icon={<CircleCheck {...ICON} className="text-status-done" />}
           title="No lint findings"
           hint="Every file in this issue passes the format, workflow and writing rules."
-          command="wf lint"
         />
       </div>
     );
@@ -148,7 +147,7 @@ export function CodeSpans({ text }: { text: string }) {
     <span data-wf="CodeSpans">
       {parts.map((part, i) =>
         i % 2 === 1 && (balanced || i < parts.length - 1) ? (
-          <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-[0.9em] text-fg">
+          <code key={i} className="code-inline rounded-sm bg-muted px-1 py-px text-fg">
             {part}
           </code>
         ) : (

@@ -45,7 +45,7 @@ export function CriteriaTab({ detail, variant }: CriteriaTabProps) {
         ) : (
           <p className="border-border border-t pt-3 text-fg-faint text-sm">
             {small
-              ? "No plan.md. Small issues may skip the plan, so task coverage is not tracked."
+              ? "No plan.md yet. Do next step writes a one-task plan first, and coverage shows here."
               : "No plan.md yet. Coverage shows here once tasks name these criteria in satisfies."}
           </p>
         ))}

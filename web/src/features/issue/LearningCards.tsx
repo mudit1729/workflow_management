@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { parseTs } from "@/lib/format";
 import { hrefFor, useGo } from "@/lib/nav";
 import { ClampedProse, EntryIdButton, TitleText } from "./ChangesTimeline";
+import { ASK, SkillHint } from "./skill-hint";
 
 const KIND_LABEL: Record<LearningKind, string> = {
   tip: "Tip",
@@ -56,8 +57,7 @@ export function LearningCards({
           icon={<Lightbulb strokeWidth={1.75} />}
           title="No learnings yet"
           hint="Agents log a learning when something surprised them: a tip, a gotcha or a pattern worth reusing."
-          skill="log-learning"
-          command={`wf append ${issueId} learning --title "…"`}
+          action={<SkillHint skill="logging-work" prompt={ASK.learning(issueId)} />}
         />
       </div>
     );

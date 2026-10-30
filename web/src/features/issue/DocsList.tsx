@@ -6,6 +6,7 @@ import { Button } from "@/components/ui";
 import type { Diagnostic, DocFile, IssueDetail, LintCounts } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
+import { SkillLink, type WfSkill } from "./skill-hint";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -17,13 +18,14 @@ export type IssueFileName =
   | "decisions.md"
   | "learnings.md";
 
-const ISSUE_FILES: { name: IssueFileName; role: string; skill: string }[] = [
-  { name: "goal.md", role: "Why, and the success criteria", skill: "write-goal" },
-  { name: "plan.md", role: "How: approach, phases and tasks", skill: "write-plan" },
-  { name: "current_state.md", role: "Where the work stands now", skill: "write-current-state" },
-  { name: "changes.md", role: "What changed, one entry each", skill: "log-change" },
-  { name: "decisions.md", role: "Decisions and the reasons", skill: "log-decision" },
-  { name: "learnings.md", role: "Lessons worth keeping", skill: "log-learning" },
+/** Each file with the skill of the workflow plugin that writes it. */
+const ISSUE_FILES: { name: IssueFileName; role: string; skill: WfSkill }[] = [
+  { name: "goal.md", role: "Why, and the success criteria", skill: "adding-work" },
+  { name: "plan.md", role: "How: approach, phases and tasks", skill: "planning-issues" },
+  { name: "current_state.md", role: "Where the work stands now", skill: "handing-off" },
+  { name: "changes.md", role: "What changed, one entry each", skill: "logging-work" },
+  { name: "decisions.md", role: "Decisions and the reasons", skill: "logging-work" },
+  { name: "learnings.md", role: "Lessons worth keeping", skill: "logging-work" },
 ];
 
 interface DocsListProps {
@@ -107,9 +109,7 @@ export function DocsList({
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
                           Not created
-                          <code className="rounded-sm bg-muted px-1 font-mono text-fg-muted text-xs">
-                            {f.skill}
-                          </code>
+                          <SkillLink skill={f.skill} className="text-fg-muted text-xs" />
                         </span>
                       )
                     }
@@ -201,24 +201,43 @@ function Row({
       <span className={cn("shrink-0", missing ? "text-fg-faint opacity-60" : "text-fg-faint")}>
         {icon}
       </span>
-      <span className={cn("shrink-0 font-mono text-sm", missing ? "text-fg-faint" : "text-fg")}>
-        {name}
+      {/* Wide: name, description, lint and meta share one line. Under 480 px the description drops
+          to a second line under the name, with the whole row to read in, instead of being cut to two
+          letters beside the meta; the meta keeps one right-aligned column. */}
+      <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2.5 @[480px]:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
+        <span
+          className={cn(
+            "col-start-1 row-start-1 min-w-0 truncate font-mono text-sm",
+            missing ? "text-fg-faint" : "text-fg",
+          )}
+        >
+          {name}
+        </span>
+        {secondary && (
+          <span className="col-span-3 col-start-1 row-start-2 min-w-0 truncate text-fg-faint text-xs @[480px]:col-span-1 @[480px]:col-start-2 @[480px]:row-start-1 @[480px]:text-sm">
+            {secondary}
+          </span>
+        )}
+        {hasLint && lint && (
+          <span className="col-start-2 row-start-1 @[480px]:col-start-3">
+            <LintBadge counts={lint} variant="dot" />
+          </span>
+        )}
+        {meta && (
+          <span className="col-start-3 row-start-1 min-w-[6.5rem] whitespace-nowrap text-right text-fg-faint text-xs tabular @[480px]:col-start-4">
+            {meta}
+          </span>
+        )}
       </span>
-      {secondary && (
-        <span className="min-w-0 flex-1 truncate text-fg-faint text-sm">{secondary}</span>
-      )}
-      {!secondary && <span className="flex-1" />}
-      {hasLint && lint && <LintBadge counts={lint} variant="dot" />}
-      {meta && <span className="shrink-0 whitespace-nowrap text-fg-faint text-xs">{meta}</span>}
     </>
   );
 
-  const main = "flex h-full min-w-0 flex-1 items-center gap-2.5 px-2.5 text-left";
+  const main = "flex min-h-9 min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1 text-left";
   return (
     <div
       data-wf="DocsListRow"
       data-missing={missing || undefined}
-      className="group @container flex h-9 w-full min-w-0 items-center transition-colors duration-100 focus-within:bg-subtle hover:bg-subtle"
+      className="group @container flex min-h-9 w-full min-w-0 items-center transition-colors duration-100 focus-within:bg-subtle hover:bg-subtle"
     >
       {onClick ? (
         <button

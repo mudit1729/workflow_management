@@ -1,3 +1,4 @@
+import { HandoffButton, HandoffPanel, HandoffViewHost } from "@/features/issue/HandoffPanel";
 import { IssueDrawer } from "@/features/issue/IssueDrawer";
 import { IssueHeader } from "@/features/issue/IssueHeader";
 import { IssuePage } from "@/features/issue/IssuePage";
@@ -46,6 +47,55 @@ function IssueHeaderBody() {
       <Header id={ISSUE.blocked} label="wf-w8vz4 · blocked by another issue" />
       <Header id={ISSUE.invalidDiagram} label="wf-g5rx8 · urgent, lint error" />
       <Header id={ISSUE.rich} label="page variant" variant="page" width={900} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- HandoffPanel
+
+function HandoffPanelBody() {
+  return (
+    <>
+      <V
+        label="the button"
+        note="One click copies the bundle and opens the panel; its line is the one confirmation, so there is no toast. Under 440 px of container the label gives way to the glyph."
+        width={420}
+      >
+        <div className="@container flex gap-2">
+          <HandoffButton issueId={ISSUE.rich} />
+        </div>
+      </V>
+      <V label="the button · compact, in a 300 px strip" width={300}>
+        <div className="@container flex gap-2">
+          <HandoffButton issueId={ISSUE.rich} compact />
+        </div>
+      </V>
+      <V
+        label="before the copy"
+        note="Opened from the Copy context button. The text under 'What you copy' is the bundle itself: the same markdown the handing-off skill prints."
+        width={420}
+      >
+        <div className="rounded-md bg-bg p-3 shadow-pop">
+          <HandoffPanel issueId={ISSUE.rich} />
+        </div>
+      </V>
+      <V label="copied" width={420}>
+        <div className="rounded-md bg-bg p-3 shadow-pop">
+          <HandoffPanel issueId={ISSUE.rich} copied />
+        </div>
+      </V>
+      <V label="the clipboard was blocked" width={420}>
+        <div className="rounded-md bg-bg p-3 shadow-pop">
+          <HandoffPanel issueId={ISSUE.rich} copied={false} />
+        </div>
+      </V>
+      <V label="a small issue" note="A short bundle: no ready tasks, no plan." width={420}>
+        <div className="rounded-md bg-bg p-3 shadow-pop">
+          <HandoffPanel issueId={ISSUE.noPlan} />
+        </div>
+      </V>
+      {/* "View all" opens the dialog that the issue view mounts; the kit mounts one for its sample. */}
+      <HandoffViewHost issueId={ISSUE.rich} />
     </>
   );
 }
@@ -134,6 +184,13 @@ export const issueHeaderEntries: KitEntry[] = [
     `${SRC}/IssueHeader.tsx`,
     "The header answers 'what is this and is it healthy' before any tab opens: id, title, status, owner, lease, due, blockers and lint in one place, with the actions that leave the view.",
     IssueHeaderBody,
+  ),
+  entry(
+    "Issue · Header",
+    "HandoffPanel",
+    `${SRC}/HandoffPanel.tsx`,
+    "Handing an issue to someone hands over its content, not a command: the button copies the whole context bundle as markdown, shows the text it copied, and offers the prompt that asks Codex or Claude to do the same with the handing-off skill.",
+    HandoffPanelBody,
   ),
   entry(
     "Issue · Header",

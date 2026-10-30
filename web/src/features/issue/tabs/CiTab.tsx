@@ -8,7 +8,7 @@ import {
   GitPullRequestArrow,
   Workflow,
 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { EmptyState, RelativeTime, useNow } from "@/components/common";
 import {
   Collapsible,
@@ -22,6 +22,7 @@ import type { PipelineJob, PipelineRun } from "@/lib/api";
 import { useDelivery } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { parseTs } from "@/lib/format";
+import { flashRow, useDeliveryFocusRequest } from "../delivery-focus";
 import {
   formatDuration,
   RUN_LABEL,
@@ -31,6 +32,7 @@ import {
   shortBranch,
   useFreshKeys,
 } from "../delivery-ui";
+import { MetaLine } from "../MetaLine";
 
 export interface CiTabProps {
   detail: IssueDetail;
@@ -48,6 +50,15 @@ export function CiTab({ detail, variant }: CiTabProps) {
     !isLoading,
   );
   const headId = useId();
+
+  // A task's "Commits and CI" row asks for this run: open it, scroll to it, mark it.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDeliveryFocusRequest(issueId, "run", !isLoading, (id) => {
+    setToggled((t) => ({ ...t, [id]: true }));
+    window.requestAnimationFrame(() =>
+      flashRow(rootRef.current?.querySelector<HTMLElement>(`[data-run="${CSS.escape(id)}"]`)),
+    );
+  });
 
   let body: ReactNode;
   if (isLoading) {
@@ -97,7 +108,12 @@ export function CiTab({ detail, variant }: CiTabProps) {
   }
 
   return (
-    <div data-wf="CiTab" data-variant={variant} className="flex min-w-0 flex-col gap-6">
+    <div
+      ref={rootRef}
+      data-wf="CiTab"
+      data-variant={variant}
+      className="flex min-w-0 flex-col gap-6"
+    >
       {body}
     </div>
   );
@@ -154,13 +170,17 @@ export function PipelineRow({
   const TriggerIcon = trigger.icon;
   const failedJob =
     state === "failure" ? run.jobs.find((j) => j.conclusion === "failure") : undefined;
+  const isPlainCi = run.workflow.trim().toLowerCase() === "ci";
 
   return (
     <li
       data-wf="PipelineRow"
       data-run={run.id}
       data-state={state}
-      className={cn("@container/run min-w-0", fresh && "wf-flash")}
+      className={cn(
+        "@container/run min-w-0 transition-colors duration-300 data-[focused]:bg-accent-subtle",
+        fresh && "wf-flash",
+      )}
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
@@ -180,25 +200,27 @@ export function PipelineRow({
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="min-w-0 truncate font-medium text-base text-fg">{run.workflow}</span>
-              <span className="shrink-0 font-mono text-fg-faint text-xs tabular">{run.id}</span>
-              <RunResult run={run} state={state} />
-            </span>
-            <span className="flex min-w-0 items-center gap-x-2 text-fg-faint text-sm">
-              {failedJob && (
+              {/* The tab is the CI tab, so the workflow named "CI" adds nothing: the run id leads. */}
+              {isPlainCi ? (
+                <span className="min-w-0 truncate font-medium font-mono text-base text-fg tabular">
+                  {run.id}
+                </span>
+              ) : (
                 <>
-                  <span className="shrink-0 whitespace-nowrap text-danger">
-                    {failedJob.name} failed
+                  <span className="min-w-0 truncate font-medium text-base text-fg">
+                    {run.workflow}
                   </span>
-                  <Dot />
+                  <span className="shrink-0 font-mono text-fg-faint text-xs tabular">{run.id}</span>
                 </>
               )}
-              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-fg-muted">
+              <RunResult run={run} state={state} failedJob={failedJob} />
+            </span>
+            <MetaLine className="text-fg-faint text-sm">
+              <span className="inline-flex items-center gap-1 text-fg-muted">
                 <TriggerIcon size={12} strokeWidth={1.75} aria-hidden className="text-fg-faint" />
                 {/* Icon only on a narrow row, so the branch keeps its room. */}
                 <span className="sr-only @[400px]/run:not-sr-only">{trigger.label}</span>
               </span>
-              <Dot />
               <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-fg-muted">
                 <GitBranch
                   size={12}
@@ -212,13 +234,9 @@ export function PipelineRow({
                   </span>
                 </Tooltip>
               </span>
-              <Dot />
-              <span className="shrink-0 font-mono text-fg-muted text-xs tabular">
-                {run.sha.slice(0, 7)}
-              </span>
-              <Dot />
+              <span className="font-mono text-fg-muted text-xs tabular">{run.sha.slice(0, 7)}</span>
               <RelativeTime ts={run.started_at} />
-            </span>
+            </MetaLine>
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -229,8 +247,16 @@ export function PipelineRow({
   );
 }
 
-/** "Passed 3m 34s", "Failed 1m 37s", "Running 2m" (counting from the start), "Queued". */
-function RunResult({ run, state }: { run: PipelineRun; state: RunState }) {
+/** "Passed 3m 34s", "test failed 1m 37s", "Running 2m" (counting from the start), "Queued". */
+function RunResult({
+  run,
+  state,
+  failedJob,
+}: {
+  run: PipelineRun;
+  state: RunState;
+  failedJob?: PipelineJob;
+}) {
   const now = useNow();
   const elapsed =
     run.status === "completed"
@@ -245,7 +271,8 @@ function RunResult({ run, state }: { run: PipelineRun; state: RunState }) {
         state === "failure" ? "text-danger" : "text-fg-muted",
       )}
     >
-      <span>{RUN_LABEL[state]}</span>
+      {/* The job that failed names the failure once, here, instead of again on the second line. */}
+      <span>{failedJob ? `${failedJob.name} failed` : RUN_LABEL[state]}</span>
       {elapsed != null && <span className="text-fg-faint tabular">{formatDuration(elapsed)}</span>}
     </span>
   );
@@ -309,13 +336,5 @@ function PipelineJobs({ run }: { run: PipelineRun }) {
         );
       })}
     </ul>
-  );
-}
-
-function Dot() {
-  return (
-    <span aria-hidden className="shrink-0 text-fg-faint">
-      ·
-    </span>
   );
 }

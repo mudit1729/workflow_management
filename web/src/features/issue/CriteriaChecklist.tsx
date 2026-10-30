@@ -1,6 +1,6 @@
 // Success criteria checklist (goal.md `## Success criteria`). Verified versus
 // claimed is the honest progress signal: a UI tick only claims a criterion,
-// evidence from `wf check` verifies it.
+// evidence written by the `doing-next-step` skill verifies it.
 import {
   ArrowUpRight,
   Check,
@@ -8,6 +8,7 @@ import {
   Hand,
   ListChecks,
   Paperclip,
+  Pencil,
   Terminal,
 } from "lucide-react";
 import {
@@ -39,6 +40,8 @@ import {
 import type { Criterion, CriterionState, DocFile, EarsInfo, Plan, Task } from "@/gen/types";
 import { useIssue, useToggleCriterion } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useEditAtLine } from "./LintPanel";
+import { ASK, SkillHint } from "./skill-hint";
 import { TaskPill } from "./TaskPill";
 
 // ---------------------------------------------------------------- inline text
@@ -164,10 +167,7 @@ export function InlineText({ text, keywords, issueId, codeClassName, className }
           return (
             <code
               key={i}
-              className={cn(
-                "rounded-sm bg-muted px-1 py-px font-mono text-[0.9em] text-fg",
-                codeClassName,
-              )}
+              className={cn("code-inline rounded-sm bg-muted px-1 py-px text-fg", codeClassName)}
             >
               {s.text}
             </code>
@@ -235,6 +235,7 @@ function effective(
 
 export function CriteriaChecklist({ criteria, issueId }: CriteriaChecklistProps) {
   const toggle = useToggleCriterion(issueId);
+  const editAtLine = useEditAtLine();
   const { data: detail } = useIssue(issueId);
   const tasks = useMemo(() => taskIndex(detail?.plan), [detail?.plan]);
   const docs = detail?.docs ?? [];
@@ -306,7 +307,20 @@ export function CriteriaChecklist({ criteria, issueId }: CriteriaChecklistProps)
           icon={<ListChecks strokeWidth={1.75} />}
           title="No success criteria"
           hint="Each criterion is one testable sentence. Evidence turns a tick into a verified result."
-          skill="write-goal"
+          action={
+            <div className="flex flex-col items-start gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void editAtLine(detail?.goal.edit.file ?? "", 1)}
+                disabled={!detail}
+              >
+                <Pencil aria-hidden />
+                Write a criterion
+              </Button>
+              <SkillHint skill="using-wf" prompt={ASK.criterion(issueId)} align="start" />
+            </div>
+          }
         />
       </div>
     );
@@ -624,7 +638,8 @@ function EvidenceChip({
     <span
       data-wf="EvidenceChip"
       title={`Evidence: ${evidence.replace(/`|\[\[|\]\]/g, "")}`}
-      className="inline-flex h-5 max-w-[min(100%,360px)] items-center gap-1 rounded-sm border border-border px-1.5 text-xs text-fg-muted"
+      // Code inside the 11 px chip stays 11 px, and loses its own chip: it sits in one already.
+      className="inline-flex h-5 max-w-[min(100%,360px)] items-center gap-1 rounded-sm border border-border px-1.5 text-xs text-fg-muted [--wf-code-size:var(--wf-text-xs)] [&_code]:bg-transparent [&_code]:px-0"
     >
       <Paperclip size={12} strokeWidth={1.75} aria-hidden className="shrink-0 text-fg-faint" />
       <span className="sr-only">Evidence: </span>
@@ -737,18 +752,14 @@ function ClaimedHint({
   issueId: string;
   onDone: () => void;
 }) {
-  const command = `wf check ${issueId} ${c.id} --evidence "…"`;
   return (
     <div data-wf="ClaimedHint" className="flex flex-col gap-2">
       <p className="font-medium text-fg">Claimed, not verified yet</p>
       <p className="text-fg-muted">
-        A tick from the board is a claim. Add evidence with{" "}
-        <code className="font-mono text-[0.9em] text-fg">wf check --evidence</code> to verify it.
+        A tick from the board is a claim. A criterion is verified when its verify command passes and
+        the evidence is written beside it.
       </p>
-      <div className="flex items-center gap-1 rounded-sm border border-border bg-subtle py-1 pr-1 pl-2">
-        <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{command}</code>
-        <CopyButton text={command} label="Copy command" />
-      </div>
+      <SkillHint skill="doing-next-step" prompt={ASK.verify(issueId, c.id)} align="start" />
       <div className="flex justify-end">
         <Button size="sm" variant="ghost" onClick={onDone}>
           Got it

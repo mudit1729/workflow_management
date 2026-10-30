@@ -98,7 +98,7 @@ function NeedsYouListBody() {
       <Needs ids={["Q-2kx9r"]} label="question, fyi (free-text answer)" />
       <Needs
         ids={["Q-9nh2e"]}
-        label="answered, waiting for wf resolve"
+        label="answered, waiting for the agent to pick it up"
         note="Q-9nh2e was asked of @mudit and already answered."
       />
       <Needs

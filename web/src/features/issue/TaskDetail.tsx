@@ -1,6 +1,6 @@
 // TaskDetail: everything about one plan task. Opens in a Popover from PlanLanes
 // and inline under a row in PlanList. Status and steps write back through ops.
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, GitCommitHorizontal } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { AuthorChip, CopyButton, MarkdownProse, StatusIcon } from "@/components/common";
 import {
@@ -15,11 +15,19 @@ import {
   Tooltip,
 } from "@/components/ui";
 import type { Criterion, IssueId, Step, Task, TaskId, TaskStatus } from "@/gen/types";
-import { useSetTaskStatus, useToggleStep } from "@/lib/api";
+import {
+  type Commit,
+  type PipelineRun,
+  useDelivery,
+  useSetTaskStatus,
+  useToggleStep,
+} from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { absolute } from "@/lib/format";
-import { useOpenIssue } from "@/lib/nav";
+import { useIssueTab, useOpenIssue } from "@/lib/nav";
 import { TASK_STATUS_LABEL } from "@/lib/status";
+import { focusCommit, focusRun } from "./delivery-focus";
+import { RUN_LABEL, RunStateIcon, runState } from "./delivery-ui";
 import { LeaseText, plainTitle, TaskPill } from "./TaskPill";
 
 const TASK_STATUSES: TaskStatus[] = [
@@ -42,6 +50,8 @@ export interface TaskDetailProps {
   criteria?: Criterion[];
   /** Called when a dependency pill is picked (PlanLanes moves the selection). */
   onSelectTask?: (id: TaskId) => void;
+  /** Called after a commit or run link switched the view (PlanLanes closes its popover). */
+  onNavigate?: () => void;
   className?: string;
 }
 
@@ -52,6 +62,7 @@ export function TaskDetail({
   tasks,
   criteria,
   onSelectTask,
+  onNavigate,
   className,
 }: TaskDetailProps) {
   const setTaskStatus = useSetTaskStatus(issueId);
@@ -179,6 +190,7 @@ export function TaskDetail({
             <VerifyCommand command={task.verify} />
           </Property>
         )}
+        <DeliveryRows task={task} issueId={issueId} onNavigate={onNavigate} />
       </dl>
 
       {task.brief_md && (
@@ -236,6 +248,82 @@ function StatusMenu({
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The commits that name this task (`task:` in their log entry) and the CI runs of those commits,
+ * each a link to its row: a commit opens the Git tab on its sha, a run opens the CI tab on the
+ * run. The Git tab's T-n pill goes the other way, so a task and its delivery are one click apart.
+ */
+function DeliveryRows({
+  task,
+  issueId,
+  onNavigate,
+}: {
+  task: Task;
+  issueId: IssueId;
+  onNavigate?: () => void;
+}) {
+  const { commits, pipelines } = useDelivery(issueId);
+  const { setTab } = useIssueTab();
+  const mine = commits.filter((c) => c.task === task.id);
+  const shas = new Set(mine.map((c) => c.sha.slice(0, 7)));
+  const runs = pipelines.filter((r) => shas.has(r.sha.slice(0, 7)));
+  if (mine.length === 0 && runs.length === 0) return null;
+
+  const openCommit = (commit: Commit) => {
+    focusCommit(issueId, commit.sha);
+    void setTab("git");
+    onNavigate?.();
+  };
+  const openRun = (run: PipelineRun) => {
+    focusRun(issueId, run.id);
+    void setTab("ci");
+    onNavigate?.();
+  };
+  const chip =
+    "inline-flex h-5 max-w-full items-center gap-1 rounded-sm bg-muted px-1.5 text-fg-muted text-xs transition-colors duration-100 ease-wf hover:bg-border hover:text-fg";
+
+  return (
+    <>
+      {mine.length > 0 && (
+        <Property label="Commits">
+          <ul aria-label={`Commits of ${task.id}`} className="flex min-w-0 flex-wrap gap-1">
+            {mine.map((commit) => (
+              <li key={commit.sha} className="min-w-0 max-w-full">
+                <Tooltip content={`${commit.subject} · Open in Git`}>
+                  <button type="button" onClick={() => openCommit(commit)} className={chip}>
+                    <GitCommitHorizontal size={12} strokeWidth={1.75} aria-hidden />
+                    <span className="font-mono tabular">{commit.sha.slice(0, 7)}</span>
+                  </button>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
+        </Property>
+      )}
+      {runs.length > 0 && (
+        <Property label="CI">
+          <ul aria-label={`CI runs of ${task.id}`} className="flex min-w-0 flex-wrap gap-1">
+            {runs.map((run) => {
+              const state = runState(run);
+              return (
+                <li key={run.id} className="min-w-0 max-w-full">
+                  <Tooltip content={`${run.workflow} ${run.id} · Open in CI`}>
+                    <button type="button" onClick={() => openRun(run)} className={chip}>
+                      <RunStateIcon state={state} size={12} label={RUN_LABEL[state]} />
+                      <span className="font-mono tabular">{run.id}</span>
+                      <span>{RUN_LABEL[state]}</span>
+                    </button>
+                  </Tooltip>
+                </li>
+              );
+            })}
+          </ul>
+        </Property>
+      )}
+    </>
   );
 }
 
@@ -377,7 +465,7 @@ export function InlineText({ text }: { text: string }) {
     <>
       {parts.map((part, i) =>
         part.length > 1 && part.startsWith("`") && part.endsWith("`") ? (
-          <code key={i} className="rounded-sm bg-muted px-1 py-px font-mono text-[0.92em]">
+          <code key={i} className="code-inline rounded-sm bg-muted px-1 py-px">
             {part.slice(1, -1)}
           </code>
         ) : (

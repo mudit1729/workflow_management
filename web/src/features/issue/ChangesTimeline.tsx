@@ -40,10 +40,12 @@ import {
   Tooltip,
 } from "@/components/ui";
 import type { Author, ChangeEntry, ChangeKind } from "@/gen/types";
-import { useAuthors, useIssue } from "@/lib/api";
+import { useAuthors, useDelivery, useIssue } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { dayLabel, parseTs } from "@/lib/format";
 import { useIssueTab } from "@/lib/nav";
+import { focusCommit } from "./delivery-focus";
+import { ASK, SkillHint } from "./skill-hint";
 
 const CHANGE_KIND_LABEL: Record<ChangeKind, string> = {
   progress: "Progress",
@@ -96,6 +98,13 @@ export function ChangesTimeline({
   const authors = useAuthors();
   const refs = useRefTitles(issueId);
   const { setTab } = useIssueTab();
+  // Short shas the Git tab lists: a commit chip opens its row there, and copies the sha otherwise.
+  const { commits } = useDelivery(issueId);
+  const listedShas = useMemo(() => new Set(commits.map((c) => c.sha.slice(0, 7))), [commits]);
+  const openCommit = (sha: string) => {
+    focusCommit(issueId, sha);
+    void setTab("git");
+  };
   const [authorSel, setAuthorSel] = useState<ReadonlySet<string>>(
     () => new Set(authorsFilter ?? []),
   );
@@ -127,8 +136,7 @@ export function ChangesTimeline({
           icon={<Logs strokeWidth={1.75} />}
           title="No changes logged"
           hint="Agents append one change after each step of work, with its task, files and commit."
-          skill="log-change"
-          command={`wf append ${issueId} change --title "…"`}
+          action={<SkillHint skill="logging-work" prompt={ASK.change(issueId)} />}
         />
       </div>
     );
@@ -172,7 +180,10 @@ export function ChangesTimeline({
         data-wf="TimelineFilters"
         role="toolbar"
         aria-label="Filter changes"
-        className="flex flex-wrap items-center gap-1 pt-1 pb-3"
+        className={cn(
+          "flex flex-wrap items-center gap-1 pt-1 pb-3",
+          !(showAuthors || showKinds || filtering) && "hidden",
+        )}
       >
         {(showAuthors || showKinds) && (
           <Popover>
@@ -220,11 +231,12 @@ export function ChangesTimeline({
             Clear
           </Button>
         )}
-        <span className="ml-auto pl-2 text-fg-faint text-xs tabular" aria-live="polite">
-          {filtering
-            ? `${visible.length} of ${changes.length}`
-            : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
-        </span>
+        {/* The total is already in the segmented control and the tab; only a filter needs a count. */}
+        {filtering && (
+          <span className="ml-auto pl-2 text-fg-faint text-xs tabular" aria-live="polite">
+            {visible.length} of {changes.length}
+          </span>
+        )}
       </div>
 
       {days.length === 0 ? (
@@ -264,6 +276,11 @@ export function ChangesTimeline({
                   criteriaText={refs.criteria}
                   onOpenTask={() => setTab("plan")}
                   onOpenCriterion={() => setTab("criteria")}
+                  onOpenCommit={
+                    entry.commit && listedShas.has(entry.commit.slice(0, 7))
+                      ? () => openCommit(entry.commit as string)
+                      : undefined
+                  }
                 />
               ))}
             </ol>
@@ -287,6 +304,8 @@ interface ChangeItemProps {
   criteriaText: Map<string, string>;
   onOpenTask: () => void;
   onOpenCriterion: () => void;
+  /** Set when the Git tab lists the commit. */
+  onOpenCommit?: () => void;
 }
 
 function ChangeItem({
@@ -300,6 +319,7 @@ function ChangeItem({
   criteriaText,
   onOpenTask,
   onOpenCriterion,
+  onOpenCommit,
 }: ChangeItemProps) {
   const titleId = useId();
   const danger = entry.kind === "failure" || entry.result === "fail";
@@ -358,6 +378,7 @@ function ChangeItem({
             criteriaText={criteriaText}
             onOpenTask={onOpenTask}
             onOpenCriterion={onOpenCriterion}
+            onOpenCommit={onOpenCommit}
           />
         </div>
 
@@ -421,12 +442,14 @@ function EntryChips({
   criteriaText,
   onOpenTask,
   onOpenCriterion,
+  onOpenCommit,
 }: {
   entry: ChangeEntry;
   taskTitle: string | undefined;
   criteriaText: Map<string, string>;
   onOpenTask: () => void;
   onOpenCriterion: () => void;
+  onOpenCommit?: () => void;
 }) {
   const chips: ReactNode[] = [];
   if (entry.task) {
@@ -479,8 +502,8 @@ function EntryChips({
         key="commit"
         mono
         icon={<GitCommitHorizontal size={12} strokeWidth={1.75} aria-hidden />}
-        onClick={() => copyWithToast(sha, `commit ${sha.slice(0, 7)}`)}
-        tooltip={`Commit ${sha} · Click to copy`}
+        onClick={onOpenCommit ?? (() => copyWithToast(sha, `commit ${sha.slice(0, 7)}`))}
+        tooltip={onOpenCommit ? `Commit ${sha} · Open in Git` : `Commit ${sha} · Click to copy`}
       >
         {sha.slice(0, 7)}
       </MetaChip>,
@@ -760,10 +783,7 @@ export function TitleText({ text }: { text: string }) {
     <span data-wf="TitleText">
       {parts.map((part, i) =>
         i % 2 === 1 && i < parts.length - 1 ? (
-          <code
-            key={i}
-            className="rounded-sm bg-muted px-1 py-px font-mono text-[0.9em] font-normal"
-          >
+          <code key={i} className="code-inline rounded-sm bg-muted px-1 py-px font-normal">
             {part}
           </code>
         ) : (
@@ -884,7 +904,7 @@ const QA_LINE =
   /^\s*(?:>\s*)?(?:\*\*|__)?(q|a|question|answer)(?:\*\*|__)?\s*:(?:\*\*|__)?\s*(.*)$/i;
 
 /**
- * An `answer` entry holds the question and the answer (written by `wf resolve`).
+ * An `answer` entry holds the question and the answer (written by the `doing-next-step` skill when it resolves the request).
  * Reads `question`/`answer` meta keys first, then `Q:` / `A:` lines in the body.
  */
 function parseQA(entry: ChangeEntry): {

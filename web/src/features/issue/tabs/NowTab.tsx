@@ -3,6 +3,7 @@ import { NotebookPen } from "lucide-react";
 import { EmptyState } from "@/components/common";
 import type { IssueDetail } from "@/gen/types";
 import { StateSnapshot } from "../StateSnapshot";
+import { ASK, SkillHint } from "../skill-hint";
 
 export interface NowTabProps {
   detail: IssueDetail;
@@ -25,8 +26,7 @@ export function NowTab({ detail, variant }: NowTabProps) {
               ? "The next agent reads this first. Write a snapshot at the end of each session."
               : "An agent writes a short snapshot here at the end of each session."
           }
-          skill="write-current-state"
-          command={`wf state ${summary.id} --from -`}
+          action={<SkillHint skill="handing-off" prompt={ASK.state(summary.id)} />}
         />
       )}
     </div>

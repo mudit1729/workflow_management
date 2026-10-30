@@ -5,6 +5,7 @@ import {
   Fragment,
   type RefObject,
   useCallback,
+  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -15,12 +16,18 @@ import { EmptyState } from "@/components/common";
 import { Popover, PopoverContent, PopoverTrigger, Tooltip } from "@/components/ui";
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
+import { ASK, SkillHint } from "./skill-hint";
 import { TaskDetail } from "./TaskDetail";
 import { plainTitle, TaskPill } from "./TaskPill";
 import { useTaskFocusRequest } from "./task-focus";
 
 const LANE_W = 96;
+/** A level column grows from 168 px (two fit a 440 px column once the lane name stacks) up to 240 px. */
+const LEVEL_MIN = 168;
 const LEVEL_W = 240;
+/** Under this width of the plan region the lane name moves above its tasks instead of beside them. */
+const STACK_BELOW = 520;
+const COLUMN_GAP = 12;
 const FADE_RIGHT = "linear-gradient(to right, black calc(100% - 40px), transparent)";
 
 export interface PlanLanesProps {
@@ -49,6 +56,7 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
   // ---- measuring pills for the edge overlay
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreRight = useMoreToTheRight(scrollRef);
+  const stacked = useWidthBelow(scrollRef, STACK_BELOW);
   const gridRef = useRef<HTMLDivElement>(null);
   const pillEls = useRef(new Map<TaskId, HTMLElement>());
   const refFns = useRef(new Map<TaskId, (el: HTMLElement | null) => void>());
@@ -88,6 +96,32 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
     return () => ro.disconnect();
   }, [measure, tasks]);
 
+  // The task the issue is about must be on screen when the lanes open: when its column sits
+  // behind the right edge, scroll it in once (the lane names are sticky over the left edge).
+  // Read from the live layout one frame later, after the stacked layout has settled.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (revealed.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      const grid = gridRef.current;
+      const flight =
+        tasks.find((t) => t.status === "in_progress") ?? tasks.find((t) => t.status === "review");
+      const pill = flight && pillEls.current.get(flight.id);
+      const box = el && grid && pill ? boxWithin(pill, grid) : null;
+      if (!el || !box) return;
+      revealed.current = true;
+      const covered = stacked ? 0 : LANE_W + COLUMN_GAP;
+      const inView =
+        box.x >= el.scrollLeft + covered && box.x + box.w <= el.scrollLeft + el.clientWidth;
+      if (inView) return;
+      const toEnd = box.x + box.w - el.clientWidth + 8;
+      const toStart = box.x - covered - 8;
+      el.scrollLeft = Math.max(0, Math.min(toEnd, toStart));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [stacked, tasks]);
+
   // ---- chains
   const selectedChain = useMemo(
     () => (selected && layout.byId.has(selected) ? chainOf(selected, layout) : null),
@@ -119,14 +153,23 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
               <code className="font-mono text-fg-muted">## Phase</code> heading in plan.md.
             </>
           }
-          skill="write-plan"
+          action={
+            <SkillHint skill="planning-issues" prompt={ASK.moreTasks(issueId)} align="start" />
+          }
         />
       </div>
     );
   }
 
-  // A trailing 1fr track lets the row lines reach the edge when the grid is narrower than its box.
-  const gridColumns = `${LANE_W}px repeat(${layout.levels}, ${LEVEL_W}px) minmax(0, 1fr)`;
+  // Wide: a lane column, then the levels. A trailing 1fr track lets the row lines reach the edge
+  // when the grid is narrower than its box. Stacked: levels only, each lane's name has its own row.
+  const gridColumns = stacked
+    ? `repeat(${layout.levels}, minmax(${LEVEL_MIN}px, 1fr))`
+    : `${LANE_W}px repeat(${layout.levels}, minmax(${LEVEL_MIN}px, ${LEVEL_W}px)) minmax(0, 1fr)`;
+  const firstLevelColumn = stacked ? 1 : 2;
+  const columnCount = layout.levels + (stacked ? 0 : 1);
+  const minWidth =
+    (stacked ? 0 : LANE_W) + layout.levels * LEVEL_MIN + (columnCount - 1) * COLUMN_GAP;
 
   return (
     <div data-wf="PlanLanes" className="flex min-w-0 flex-col gap-2">
@@ -139,39 +182,65 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
       >
         <div
           ref={gridRef}
-          className="relative grid w-max min-w-full gap-x-6"
-          style={{ gridTemplateColumns: gridColumns }}
+          data-layout={stacked ? "stacked" : "wide"}
+          className="relative grid w-full"
+          // Full width of the box, but never narrower than every level at its minimum, so a third
+          // level scrolls instead of squeezing.
+          style={{ gridTemplateColumns: gridColumns, columnGap: COLUMN_GAP, minWidth }}
         >
           {/* header row */}
-          <div className="sticky left-0 z-[3] bg-bg" style={{ gridRow: 1, gridColumn: 1 }} />
+          {!stacked && (
+            <div className="sticky left-0 z-[3] bg-bg" style={{ gridRow: 1, gridColumn: 1 }} />
+          )}
           {Array.from({ length: layout.levels }, (_, level) => (
             <div
               key={`h-${level}`}
-              className="flex h-8 items-center"
-              style={{ gridRow: 1, gridColumn: level + 2 }}
+              className={cn("flex h-8 items-center", stacked && "pl-3")}
+              style={{ gridRow: 1, gridColumn: level + firstLevelColumn }}
             >
               <LevelHeader level={level} count={layout.levelCounts[level] ?? 0} />
             </div>
           ))}
 
           {layout.lanes.map((lane, i) => {
-            const row = i + 2;
+            // Stacked, a lane is two rows: its name, then its tasks.
+            const labelRow = stacked ? i * 2 + 2 : i + 2;
+            const row = stacked ? labelRow + 1 : labelRow;
             return (
               <Fragment key={lane}>
                 {/* full-width row line, under everything */}
                 <div
                   aria-hidden
                   className="border-border border-t"
-                  style={{ gridRow: row, gridColumn: "1 / -1" }}
+                  style={{ gridRow: labelRow, gridColumn: "1 / -1" }}
                 />
                 <div
-                  className="sticky left-0 z-[3] flex min-w-0 items-start gap-1.5 border-border border-t border-r bg-bg py-3 pr-2 pl-3"
-                  style={{ gridRow: row, gridColumn: 1 }}
+                  className={cn(
+                    "sticky left-0 z-[3] flex min-w-0 items-start gap-1.5 border-border bg-bg",
+                    stacked ? "items-center px-3 pt-2" : "border-t border-r py-3 pr-2 pl-3",
+                  )}
+                  // Stacked, the name shrinks to its text so it can stay at the left edge (sticky)
+                  // while a third level scrolls by.
+                  style={{
+                    gridRow: labelRow,
+                    gridColumn: stacked ? "1 / -1" : 1,
+                    justifySelf: stacked ? "start" : undefined,
+                  }}
                 >
-                  <span className="min-w-0 truncate font-medium text-fg text-sm leading-6">
+                  <span
+                    className={cn(
+                      "min-w-0 truncate font-medium text-fg text-sm",
+                      stacked ? "leading-5" : "leading-6",
+                    )}
+                  >
                     {lane}
                   </span>
-                  <span className="text-fg-faint text-xs tabular leading-6">
+                  <span
+                    className={cn(
+                      "text-fg-faint text-xs tabular",
+                      stacked ? "leading-5" : "leading-6",
+                    )}
+                  >
                     {layout.laneCounts.get(lane) ?? 0}
                   </span>
                 </div>
@@ -181,8 +250,11 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
                   return (
                     <div
                       key={`${lane}-${level}`}
-                      className="relative z-[2] flex min-w-0 flex-col gap-1.5 py-3"
-                      style={{ gridRow: row, gridColumn: level + 2 }}
+                      className={cn(
+                        "relative z-[2] flex min-w-0 flex-col gap-1.5",
+                        stacked ? "pt-1.5 pb-3" : "py-3",
+                      )}
+                      style={{ gridRow: row, gridColumn: level + firstLevelColumn }}
                     >
                       {cell.map((task) => (
                         <LanePill
@@ -220,6 +292,21 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
       </div>
     </div>
   );
+}
+
+/** True while the element is measured and narrower than `px`. */
+function useWidthBelow(ref: RefObject<HTMLElement | null>, px: number): boolean {
+  const [below, setBelow] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setBelow(el.clientWidth > 0 && el.clientWidth < px);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return below;
 }
 
 /** True while the scroller has content hidden past its right edge. */
@@ -301,6 +388,7 @@ function LanePill({
           tasks={tasks}
           criteria={criteria}
           onSelectTask={onSelectTask}
+          onNavigate={() => onOpenChange(false)}
         />
       </PopoverContent>
     </Popover>

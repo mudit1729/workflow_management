@@ -10,6 +10,7 @@ import { AddContextButton, LinkedContext, LinkedPreview, linkKeys } from "@/feat
 import type { Diagnostic, IssueDetail } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { CodeSpans, useEditAtLine } from "../LintPanel";
+import { ASK, SkillHint, SkillLink } from "../skill-hint";
 
 export interface GoalTabProps {
   detail: IssueDetail;
@@ -18,6 +19,7 @@ export interface GoalTabProps {
 
 export function GoalTab({ detail, variant }: GoalTabProps) {
   const { goal, criteria, summary } = detail;
+  const editAtLine = useEditAtLine();
   const extra = Object.entries(goal.extra ?? {});
   const context = goal.context_md?.trim();
   const outOfScope = goal.out_of_scope_md?.trim();
@@ -43,7 +45,28 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
               ? "Context says why the issue matters. The success criteria are in the Criteria tab."
               : "Context says why the issue matters. Success criteria say how we know it is done."
           }
-          skill="write-goal"
+          action={
+            <div
+              className={cn(
+                "flex flex-col gap-3",
+                criteria.length > 0 ? "items-start" : "items-center",
+              )}
+            >
+              <Button
+                variant="secondary"
+                size={criteria.length > 0 ? "sm" : "md"}
+                onClick={() => void editAtLine(goal.edit.file, 1)}
+              >
+                <Pencil aria-hidden />
+                Write the context
+              </Button>
+              <SkillHint
+                skill="using-wf"
+                prompt={ASK.goal(summary.id)}
+                align={criteria.length > 0 ? "start" : "center"}
+              />
+            </div>
+          }
         />
       )}
 
@@ -218,11 +241,9 @@ function FrontmatterError({
       {raw !== undefined && <RawFile text={raw} fileName={fileName} errorLine={finding?.line} />}
 
       <p className="text-sm text-fg-faint">
-        Fix the YAML in the editor, or ask an agent to run{" "}
-        <code className="rounded-sm bg-muted px-1 py-px font-mono text-xs text-fg-muted">
-          write-goal
-        </code>
-        . The sections below come from the parts wf could still read.
+        Fix the YAML in the editor, or ask Codex to repair it with the formats of the{" "}
+        <SkillLink skill="using-wf" /> skill. The sections below come from the parts wf could still
+        read.
       </p>
     </section>
   );

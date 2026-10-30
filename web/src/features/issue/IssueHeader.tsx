@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   CircleX,
-  ClipboardCopy,
   FileText,
   Link2,
   Timer,
@@ -31,7 +30,9 @@ import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs } from "@/lib/format";
 import { useHotkey } from "@/lib/hooks";
 import { hrefFor, useCloseIssue, useGo, useOpenIssue } from "@/lib/nav";
+import { HandoffButton } from "./HandoffPanel";
 import { countBySeverity } from "./LintPanel";
+import { SkillLink } from "./skill-hint";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -60,7 +61,6 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
 
   const copyLink = () =>
     copyWithToast(new URL(hrefFor(`/i/${s.id}`), window.location.href).href, "Link copied");
-  const copyContext = () => copyWithToast(`wf context ${s.id}`, `Copied wf context ${s.id}`);
 
   const metas: { key: string; always?: boolean; node: ReactNode }[] = [];
   if (s.priority !== "none") {
@@ -106,16 +106,10 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
   // The board page already owns the h1 ("Workflow · Board"), so the drawer title is an h2.
   const Title = drawer ? "h2" : "h1";
 
+  // Handing an issue over hands over its content (goal 2): that button is `HandoffButton`, in the
+  // row of the Codex buttons below. The icon buttons up here only point at the issue.
   const actions = (
-    <>
-      <HeaderAction label="Copy link" icon={<Link2 {...ICON} />} onClick={copyLink} copies />
-      <HeaderAction
-        label="Copy the handoff command for an agent"
-        icon={<ClipboardCopy {...ICON} />}
-        onClick={copyContext}
-        copies
-      />
-    </>
+    <HeaderAction label="Copy link" icon={<Link2 {...ICON} />} onClick={copyLink} copies />
   );
 
   return (
@@ -246,9 +240,12 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
         </Button>
       </div>
 
-      {/* Work with Codex without leaving the board: hand the issue over, or let it do the next step.
-          Above the signals, so the run's strip stays put when a signal appears mid-run. */}
-      <CodexActions issue={s} className={drawer ? "mt-3" : "mt-3.5"} />
+      {/* Work with Codex without leaving the board, or hand the issue over: start Codex on it, let
+          it do the next step, or copy the whole context as markdown (with a view of it). Above the
+          signals, so the run's strip stays put when a signal appears mid-run. */}
+      <CodexActions issue={s} className={drawer ? "mt-3" : "mt-3.5"}>
+        <HandoffButton issueId={s.id} compact />
+      </CodexActions>
 
       <IssueSignals detail={detail} />
     </header>
@@ -419,7 +416,7 @@ function LeasePill({ lease }: { lease: Lease }) {
   const tip = none
     ? "Coordinator without a lease"
     : expired
-      ? `Coordinator lease expired. It ended ${absolute(lease.until)}. Take it over with wf claim --steal.`
+      ? `Coordinator lease expired. It ended ${absolute(lease.until)}. The next step Codex does takes it over.`
       : `Coordinator lease until ${absolute(lease.until)}`;
 
   return (
@@ -537,8 +534,8 @@ function IssueSignals({ detail }: { detail: IssueDetail }) {
       ruleTitle: "In progress without a plan",
       text: (
         <>
-          In progress without a plan — run{" "}
-          <code className="font-mono text-[0.95em]">write-plan</code>
+          In progress without a plan. Do next step writes it with{" "}
+          <SkillLink skill="planning-issues" />
         </>
       ),
     });
