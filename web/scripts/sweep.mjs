@@ -1,9 +1,11 @@
 // Screenshot every route at several widths and themes in one browser session, check each page for
 // runtime errors and page-level scroll, and optionally build contact sheets for quick review.
 // usage: node scripts/sweep.mjs --out <dir> [--routes "/w,/skills"] [--widths 1440,1680,390]
-//          [--themes light,dark] [--sheets] [--wait 600] [--sample]
+//          [--themes light,dark] [--sheets] [--wait 600] [--sample] [--agent codex|claude]
 // The board starts without issues and the default routes name sample issues: pass --sample to load
 // the sample world (26 issues) in each page before its route opens. /kit holds the sample itself.
+// --agent connects that agent in each page first (window.__wf.connectAgent), for a route whose frame needs a connected
+// agent; the default routes do not (the Kit shows the connect flow and the Agent panel on fixed connections).
 // Base URL: SHOT_BASE (default http://localhost:5177). For the static build use SHOT_BASE=http://host:port/#
 // Each page is also checked for text under 11 px; the first few elements are printed as a "note" and kept in report.json (`smallText`).
 // Writes <dir>/<route-slug>__<width>__<theme>.png, <dir>/report.json, and with --sheets
@@ -15,7 +17,6 @@ import { gotoRoute } from "./goto.mjs";
 
 export const ROUTES = [
   "/w",
-  "/w?swim=none",
   "/w?group=g-web01",
   "/w?show=cancelled",
   "/w?needs=me",
@@ -45,6 +46,9 @@ export const ROUTES = [
   "/w/i/wf-e6kc1?tab=plan",
   "/kit?el=CodexActions",
   "/kit?el=RunNotice",
+  "/kit?el=AgentStatus",
+  "/kit?el=ConnectAgentPanel",
+  "/kit?el=AgentPanel",
 ];
 
 const args = process.argv.slice(2);
@@ -84,7 +88,7 @@ for (const route of routes) {
       const errors = [];
       page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
       page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
-      await gotoRoute(page, base, route, { sample: args.includes("--sample") }).catch((e) => errors.push(`goto: ${e.message}`));
+      await gotoRoute(page, base, route, { sample: args.includes("--sample"), agent: opt("agent") }).catch((e) => errors.push(`goto: ${e.message}`));
       await page.waitForTimeout(wait);
       const checks = await page
         .evaluate(() => {

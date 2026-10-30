@@ -6,16 +6,22 @@
 // then opened from inside the app, so the in-memory sample stays. `/kit` needs no flag: it holds the
 // sample itself while it is open.
 //
+// A run (Do next step) needs a connected agent; without one the button opens the connect flow. With
+// `agent: "codex" | "claude"` the page connects that agent first (`window.__wf.connectAgent`), as a
+// finished pairing would, so a script can click Do next step and get a run.
+//
 // base: http://localhost:5177 (dev server) or http://host:port/# (static build, hash router).
 
 /** @param {import("@playwright/test").Page} page */
-export async function gotoRoute(page, base, route, { sample = false } = {}) {
+export async function gotoRoute(page, base, route, { sample = false, agent } = {}) {
   if (!sample) {
     await page.goto(base + route, { waitUntil: "networkidle" });
+    if (agent) await connectAgent(page, agent);
     return;
   }
   await page.goto(`${base}/w`, { waitUntil: "networkidle" });
   await page.waitForFunction(() => typeof window.__wf?.loadSample === "function", null, { timeout: 15000 });
+  if (agent) await connectAgent(page, agent);
   await page.evaluate((to) => {
     window.__wf.loadSample();
     if (location.hash.startsWith("#/")) {
@@ -26,4 +32,10 @@ export async function gotoRoute(page, base, route, { sample = false } = {}) {
     }
   }, route);
   await page.waitForLoadState("networkidle");
+}
+
+/** Connect the simulated agent, as the connect flow's Done would. */
+async function connectAgent(page, agent) {
+  await page.waitForFunction(() => typeof window.__wf?.connectAgent === "function", null, { timeout: 15000 });
+  await page.evaluate((kind) => window.__wf.connectAgent(kind), agent);
 }
