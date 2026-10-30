@@ -38,8 +38,8 @@ function DrawerSkeleton() {
           <Skeleton className="h-6 w-28 rounded-md" />
         </div>
       </div>
-      <div className="flex h-9 shrink-0 items-center gap-6 border-border border-b px-4">
-        {["w-8", "w-9", "w-8", "w-7", "w-8"].map((w, i) => (
+      <div className="flex h-9 shrink-0 items-center gap-3 overflow-hidden border-border border-b px-4">
+        {["w-7", "w-8", "w-12", "w-7", "w-6", "w-6", "w-4", "w-8"].map((w, i) => (
           <Skeleton key={i} className={`h-3 ${w}`} />
         ))}
       </div>

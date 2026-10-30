@@ -21,6 +21,8 @@ export interface TaskPillProps extends Omit<ComponentProps<"button">, "children"
   selected?: boolean;
   /** Default true. False shows only the glyph, the id and the markers. */
   showTitle?: boolean;
+  /** Default true. False leaves out the claimant's avatar (a commit row already names its author). */
+  showClaimant?: boolean;
   /** The plan's "Ready" highlight: ready tasks get an accent hairline. */
   highlightReady?: boolean;
   /** Lets the title run to two lines (the id, glyph and claimant stay on the first). Size md only. */
@@ -34,6 +36,7 @@ export function TaskPill({
   onClick,
   selected = false,
   showTitle = true,
+  showClaimant = true,
   highlightReady = false,
   wrap = false,
   className,
@@ -99,7 +102,12 @@ export function TaskPill({
           {title}
         </span>
       )}
-      <PillMarkers task={task} leaseExpired={leaseExpired} wrapped={wrapped} />
+      <PillMarkers
+        task={task}
+        leaseExpired={leaseExpired}
+        wrapped={wrapped}
+        showClaimant={showClaimant}
+      />
       <span className="sr-only">
         {!showTitle && ` ${title}`}
         {`, ${TASK_STATUS_LABEL[task.status]}`}
@@ -150,21 +158,24 @@ function PillMarkers({
   task,
   leaseExpired,
   wrapped,
+  showClaimant,
 }: {
   task: Task;
   leaseExpired: boolean;
   wrapped: boolean;
+  showClaimant: boolean;
 }) {
-  if (!task.ready && !leaseExpired && !task.claimed_by) return null;
+  const claimant = showClaimant ? task.claimed_by : undefined;
+  if (!task.ready && !leaseExpired && !claimant) return null;
   return (
     <span className={cn("ml-auto flex shrink-0 items-center gap-1 pl-0.5", wrapped && "h-[18px]")}>
       {task.ready && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
       {leaseExpired && <span aria-hidden className="size-1.5 rounded-full bg-stale" />}
-      {task.claimed_by && (
+      {claimant && (
         // The pill's own tooltip names the claimant; the avatar's hover card would
         // stack a second overlay on top, so the avatar ignores the pointer here.
         <span className="pointer-events-none flex">
-          <AuthorChip handle={task.claimed_by} variant="avatar" size="xs" />
+          <AuthorChip handle={claimant} variant="avatar" size="xs" />
         </span>
       )}
     </span>

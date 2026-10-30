@@ -67,7 +67,7 @@ const drafts = new Map<string, string>();
 export interface NeedsYouListProps {
   items: NeedsYouItem[];
   issueId: string;
-  /** Tighter rows for side panels and the inbox. */
+  /** Tighter rows for side panels. */
   compact?: boolean;
 }
 

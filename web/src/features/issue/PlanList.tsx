@@ -13,6 +13,7 @@ import {
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { InlineText, TaskDetail } from "./TaskDetail";
+import { useTaskFocusRequest } from "./task-focus";
 
 export interface PlanListProps {
   plan: Plan;
@@ -54,6 +55,9 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
     },
     [plan.phases, setPhaseOpen],
   );
+
+  // A commit's T-n pill in the Git tab asks for this task.
+  useTaskFocusRequest(issueId, reveal);
 
   if (tasks.length === 0) {
     return (

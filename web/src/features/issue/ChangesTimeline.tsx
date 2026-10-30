@@ -263,7 +263,7 @@ export function ChangesTimeline({
                   taskTitle={entry.task ? refs.tasks.get(entry.task) : undefined}
                   criteriaText={refs.criteria}
                   onOpenTask={() => setTab("plan")}
-                  onOpenCriterion={() => setTab("goal")}
+                  onOpenCriterion={() => setTab("criteria")}
                 />
               ))}
             </ol>

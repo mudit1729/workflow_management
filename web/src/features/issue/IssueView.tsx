@@ -1,11 +1,18 @@
 // The issue frame: header plus tabs (drawer, narrow page) or columns (page).
 import { CircleAlert, FileX, X } from "lucide-react";
-import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { EmptyState, LintBadge } from "@/components/common";
 import {
   Button,
   IconButton,
-  Segmented,
   Sheet,
   Tabs,
   TabsContent,
@@ -13,14 +20,18 @@ import {
   TabsTrigger,
 } from "@/components/ui";
 import type { IssueDetail, IssueId, LintCounts } from "@/gen/types";
-import { NotFoundError, useIssue, useIssueSummary, useSnapshot } from "@/lib/api";
+import { NotFoundError, useDelivery, useIssue, useIssueSummary, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useHotkey, useMediaQuery } from "@/lib/hooks";
 import { ISSUE_TABS, type IssueTab, useCloseIssue, useGo, useIssueTab } from "@/lib/nav";
+import { CiDot, ciTitle, type DeliveryCounts, deliveryCounts, gitTitle } from "./delivery-ui";
 import { IssueHeader } from "./IssueHeader";
 import { IssueSkeleton } from "./IssueSkeleton";
 import { countBySeverity } from "./LintPanel";
+import { CiTab } from "./tabs/CiTab";
+import { CriteriaTab } from "./tabs/CriteriaTab";
 import { FilesTab } from "./tabs/FilesTab";
+import { GitTab } from "./tabs/GitTab";
 import { GoalTab } from "./tabs/GoalTab";
 import { LogTab } from "./tabs/LogTab";
 import { NowTab } from "./tabs/NowTab";
@@ -75,12 +86,16 @@ function DrawerFrame({ detail }: { detail: IssueDetail }) {
   );
 }
 
-/** Now · Goal · Plan · Log · Files, each panel its own scroll region. Keys 1–5 switch. */
+/**
+ * Now · Goal · Criteria · Plan · Log · Git · CI · Files, each panel its own scroll region. Keys 1–8
+ * switch. Eight labels do not always fit a 440 px drawer or a phone, so the strip scrolls sideways
+ * there and keeps the active tab in view.
+ */
 function IssueTabs({ detail, variant }: { detail: IssueDetail; variant: IssueVariant }) {
   const { tab, setTab } = useIssueTab();
-  const counts = tabCounts(detail);
+  const counts = useTabCounts(detail);
 
-  useHotkey(["1", "2", "3", "4", "5"], (e) => {
+  useHotkey(["1", "2", "3", "4", "5", "6", "7", "8"], (e) => {
     const next = ISSUE_TABS[Number(e.key) - 1];
     if (next) setTab(next);
   });
@@ -95,63 +110,85 @@ function IssueTabs({ detail, variant }: { detail: IssueDetail; variant: IssueVar
       onValueChange={(v: string) => setTab(v as IssueTab)}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <TabsList aria-label="Issue sections" className="px-4">
-        <TabsTrigger
-          value="now"
-          count={counts.needsYou > 0 ? counts.needsYou : undefined}
-          countTone="accent"
-          title={counts.needsYou > 0 ? `${counts.needsYou} needs you` : undefined}
-        >
-          Now
-        </TabsTrigger>
-        <TabsTrigger
-          value="goal"
-          count={
-            counts.criteria.total > 0
-              ? `${counts.criteria.verified}/${counts.criteria.total}`
-              : undefined
-          }
-          title={
-            counts.criteria.total > 0
-              ? `${counts.criteria.verified} of ${counts.criteria.total} criteria verified`
-              : undefined
-          }
-        >
-          Goal
-        </TabsTrigger>
-        <TabsTrigger
-          value="plan"
-          count={counts.tasks.total > 0 ? `${counts.tasks.done}/${counts.tasks.total}` : undefined}
-          title={
-            counts.tasks.total > 0
-              ? `${counts.tasks.done} of ${counts.tasks.total} tasks done`
-              : undefined
-          }
-        >
-          Plan
-        </TabsTrigger>
-        <TabsTrigger value="log" count={counts.log > 0 ? counts.log : undefined}>
-          Log
-        </TabsTrigger>
-        <TabsTrigger
-          value="files"
-          count={
-            counts.docs > 0 || counts.lintTotal > 0 ? (
-              <span className="inline-flex items-center gap-1.5">
-                {counts.docs > 0 && counts.docs}
-                {counts.lintTotal > 0 && <LintBadge counts={counts.lint} variant="dot" />}
-              </span>
-            ) : undefined
-          }
-        >
-          Files
-        </TabsTrigger>
-      </TabsList>
+      <TabStrip active={tab}>
+        <TabsList aria-label="Issue sections" className="min-w-max gap-3 px-4">
+          <TabsTrigger
+            value="now"
+            count={counts.needsYou > 0 ? counts.needsYou : undefined}
+            countTone="accent"
+            title={counts.needsYou > 0 ? `${counts.needsYou} needs you` : undefined}
+          >
+            Now
+          </TabsTrigger>
+          <TabsTrigger value="goal">Goal</TabsTrigger>
+          <TabsTrigger
+            value="criteria"
+            count={
+              counts.criteria.total > 0
+                ? `${counts.criteria.verified}/${counts.criteria.total}`
+                : undefined
+            }
+            title={
+              counts.criteria.total > 0
+                ? `${counts.criteria.verified} of ${counts.criteria.total} criteria verified`
+                : undefined
+            }
+          >
+            Criteria
+          </TabsTrigger>
+          <TabsTrigger
+            value="plan"
+            count={
+              counts.tasks.total > 0 ? `${counts.tasks.done}/${counts.tasks.total}` : undefined
+            }
+            title={
+              counts.tasks.total > 0
+                ? `${counts.tasks.done} of ${counts.tasks.total} tasks done`
+                : undefined
+            }
+          >
+            Plan
+          </TabsTrigger>
+          <TabsTrigger value="log" count={counts.log > 0 ? counts.log : undefined}>
+            Log
+          </TabsTrigger>
+          <TabsTrigger
+            value="git"
+            count={counts.delivery.commits > 0 ? counts.delivery.commits : undefined}
+            title={gitTitle(counts.delivery)}
+          >
+            Git
+          </TabsTrigger>
+          <TabsTrigger
+            value="ci"
+            count={counts.delivery.latest ? <CiDot state={counts.delivery.latest} /> : undefined}
+            title={ciTitle(counts.delivery.latest)}
+          >
+            CI
+          </TabsTrigger>
+          <TabsTrigger
+            value="files"
+            count={
+              counts.docs > 0 || counts.lintTotal > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  {counts.docs > 0 && counts.docs}
+                  {counts.lintTotal > 0 && <LintBadge counts={counts.lint} variant="dot" />}
+                </span>
+              ) : undefined
+            }
+          >
+            Files
+          </TabsTrigger>
+        </TabsList>
+      </TabStrip>
       <TabsContent value="now" className={panel}>
         <NowTab detail={detail} variant={variant} />
       </TabsContent>
       <TabsContent value="goal" className={panel}>
         <GoalTab detail={detail} variant={variant} />
+      </TabsContent>
+      <TabsContent value="criteria" className={panel}>
+        <CriteriaTab detail={detail} variant={variant} />
       </TabsContent>
       <TabsContent value="plan" className={panel}>
         <PlanTab detail={detail} variant={variant} />
@@ -159,11 +196,91 @@ function IssueTabs({ detail, variant }: { detail: IssueDetail; variant: IssueVar
       <TabsContent value="log" className={panel}>
         <LogTab detail={detail} variant={variant} />
       </TabsContent>
+      <TabsContent value="git" className={panel}>
+        <GitTab detail={detail} variant={variant} />
+      </TabsContent>
+      <TabsContent value="ci" className={panel}>
+        <CiTab detail={detail} variant={variant} />
+      </TabsContent>
       <TabsContent value="files" className={panel}>
         <FilesTab detail={detail} variant={variant} />
       </TabsContent>
     </Tabs>
   );
+}
+
+/**
+ * Scrolls the tab list sideways when its labels do not fit, with the scrollbar hidden and a fade
+ * on the side that has more. The active tab is brought into view when it changes (keys 1–8, a
+ * link from another tab).
+ */
+function TabStrip({ active, children }: { active: IssueTab; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const activeRef = useRef(active);
+  activeRef.current = active;
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    // A count or a dot that arrives later widens a tab: keep the active one in view then too.
+    const list = el.firstElementChild;
+    let listWidth = list?.getBoundingClientRect().width;
+    const ro = new ResizeObserver(() => {
+      read();
+      const width = list?.getBoundingClientRect().width;
+      if (width !== listWidth) {
+        listWidth = width;
+        revealActive(el);
+      }
+    });
+    ro.observe(el);
+    if (list) ro.observe(list);
+    return () => {
+      el.removeEventListener("scroll", read);
+      ro.disconnect();
+    };
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the active tab changes
+  useEffect(() => {
+    if (ref.current) revealActive(ref.current);
+  }, [active]);
+
+  const fade = "24px";
+  const mask: CSSProperties["maskImage"] =
+    edges.left && edges.right
+      ? `linear-gradient(to right, transparent, black ${fade}, black calc(100% - ${fade}), transparent)`
+      : edges.right
+        ? `linear-gradient(to right, black calc(100% - ${fade}), transparent)`
+        : edges.left
+          ? `linear-gradient(to left, black calc(100% - ${fade}), transparent)`
+          : undefined;
+
+  return (
+    <div
+      ref={ref}
+      data-wf="TabStrip"
+      className="shrink-0 scroll-px-6 overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+      style={{ maskImage: mask }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Scrolls the strip so the active tab is fully in view (scroll-padding keeps it off the fades). */
+function revealActive(strip: HTMLElement) {
+  strip
+    .querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+    ?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 // ---------------------------------------------------------------- page
@@ -175,7 +292,7 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
   const narrow = useMediaQuery("(max-width: 767px)");
   // Three columns by the width of the page region, not the viewport: the nav rail takes 232 px.
   const wide = useElementWidth(rootRef) >= THREE_COLUMNS_MIN;
-  const counts = tabCounts(detail);
+  const counts = useTabCounts(detail);
 
   // A file picked in the Files sheet: close the sheet and bring its section into view.
   const showSection = (tab: IssueTab) => {
@@ -198,6 +315,7 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
       {narrow ? (
         <IssueTabs detail={detail} variant="page" />
       ) : wide ? (
+        // Now and Goal | Plan and Criteria | Log, Git and CI. Files sits behind the header button.
         <div
           data-wf="IssueColumns"
           className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(480px,1.3fr)_minmax(0,1fr)] divide-x divide-border"
@@ -205,29 +323,30 @@ function PageFrame({ detail }: { detail: IssueDetail }) {
           <Column label="Now and goal">
             <NowGoalSections detail={detail} counts={counts} />
           </Column>
-          <Column label="Plan">
+          <Column label="Plan and criteria">
             <ColumnSection section="plan" title="Plan" meta={<PlanCount counts={counts} />}>
               <PlanTab detail={detail} variant="page" />
             </ColumnSection>
+            <CriteriaSection detail={detail} counts={counts} className="border-border border-t" />
           </Column>
-          <Column label="Log">
-            <ColumnSection
-              section="log"
-              title="Log"
-              meta={
-                counts.log > 0 && <TabCount label={`${counts.log} entries`}>{counts.log}</TabCount>
-              }
-            >
-              <LogTab detail={detail} variant="page" />
-            </ColumnSection>
-          </Column>
+          <ViewColumn
+            label="Log, git and CI"
+            views={["log", "git", "ci"]}
+            detail={detail}
+            counts={counts}
+          />
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-border">
           <Column label="Now and goal">
             <NowGoalSections detail={detail} counts={counts} />
           </Column>
-          <PlanOrLogColumn detail={detail} counts={counts} />
+          <ViewColumn
+            label="Plan, criteria, log, git and CI"
+            views={["plan", "criteria", "log", "git", "ci"]}
+            detail={detail}
+            counts={counts}
+          />
         </div>
       )}
       <Sheet open={filesOpen} onOpenChange={setFilesOpen} side="right" width={560} title="Files">
@@ -273,64 +392,138 @@ function NowGoalSections({ detail, counts }: { detail: IssueDetail; counts: TabC
       >
         <NowTab detail={detail} variant="page" />
       </ColumnSection>
-      <ColumnSection
-        section="goal"
-        title="Goal"
-        className="border-t border-border"
-        meta={
-          counts.criteria.total > 0 && (
-            <TabCount
-              label={`${counts.criteria.verified} of ${counts.criteria.total} criteria verified`}
-            >
-              {counts.criteria.verified}/{counts.criteria.total}
-            </TabCount>
-          )
-        }
-      >
+      <ColumnSection section="goal" title="Goal" className="border-border border-t">
         <GoalTab detail={detail} variant="page" />
       </ColumnSection>
     </>
   );
 }
 
-/** Medium widths: Plan and Log share the second column behind a Segmented. */
-function PlanOrLogColumn({ detail, counts }: { detail: IssueDetail; counts: TabCounts }) {
-  const { tab, setTab } = useIssueTab();
-  const view: "plan" | "log" = tab === "log" ? "log" : "plan";
+function CriteriaSection({
+  detail,
+  counts,
+  className,
+}: {
+  detail: IssueDetail;
+  counts: TabCounts;
+  className?: string;
+}) {
   return (
-    <Column label="Plan and log">
-      <div className="sticky top-0 z-raised flex h-10 items-center bg-bg px-5">
-        <Segmented<"plan" | "log">
-          size="sm"
-          aria-label="Show plan or log"
-          value={view}
-          onChange={(v: "plan" | "log") => setTab(v)}
-          options={[
-            {
-              value: "plan",
-              label:
-                counts.tasks.total > 0 ? (
-                  <>
-                    Plan
-                    <span className="font-normal text-fg-faint tabular">
-                      {counts.tasks.done}/{counts.tasks.total}
-                    </span>
-                  </>
-                ) : (
-                  "Plan"
-                ),
-            },
-            { value: "log", label: "Log", count: counts.log > 0 ? counts.log : undefined },
-          ]}
-        />
-      </div>
-      <div className="px-5 pt-1 pb-8">
-        {view === "plan" ? (
-          <PlanTab detail={detail} variant="page" />
-        ) : (
-          <LogTab detail={detail} variant="page" />
-        )}
-      </div>
+    <ColumnSection
+      section="criteria"
+      title="Criteria"
+      className={className}
+      meta={
+        counts.criteria.total > 0 && (
+          <TabCount
+            label={`${counts.criteria.verified} of ${counts.criteria.total} criteria verified`}
+          >
+            {counts.criteria.verified}/{counts.criteria.total}
+          </TabCount>
+        )
+      }
+    >
+      <CriteriaTab detail={detail} variant="page" />
+    </ColumnSection>
+  );
+}
+
+type ColumnView = "plan" | "criteria" | "log" | "git" | "ci";
+
+/**
+ * A column whose body is one of several views, picked from a row of titles that looks like the
+ * other columns' section titles: Plan · Criteria · Log · Git · CI at medium widths, Log · Git · CI
+ * in the third column of the wide page. The view follows the `tab` search param when it names one
+ * of the column's views; any other tab (a T-n pill asks for Plan while the wide page shows the
+ * plan in its own column) leaves the view where it is.
+ */
+function ViewColumn({
+  label,
+  views,
+  detail,
+  counts,
+}: {
+  label: string;
+  views: ColumnView[];
+  detail: IssueDetail;
+  counts: TabCounts;
+}) {
+  const { tab, setTab } = useIssueTab();
+  const [view, setView] = useState<ColumnView>(() =>
+    views.includes(tab as ColumnView) ? (tab as ColumnView) : views[0],
+  );
+  const [lastTab, setLastTab] = useState(tab);
+  // Follow the search param during render (no flash of the old view).
+  if (tab !== lastTab) {
+    setLastTab(tab);
+    if (views.includes(tab as ColumnView) && tab !== view) setView(tab as ColumnView);
+  }
+
+  const count: Record<ColumnView, ReactNode> = {
+    plan: counts.tasks.total > 0 ? `${counts.tasks.done}/${counts.tasks.total}` : undefined,
+    criteria:
+      counts.criteria.total > 0
+        ? `${counts.criteria.verified}/${counts.criteria.total}`
+        : undefined,
+    log: counts.log > 0 ? counts.log : undefined,
+    git: counts.delivery.commits > 0 ? counts.delivery.commits : undefined,
+    ci: counts.delivery.latest ? <CiDot state={counts.delivery.latest} /> : undefined,
+  };
+  const title: Record<ColumnView, string | undefined> = {
+    plan:
+      counts.tasks.total > 0
+        ? `${counts.tasks.done} of ${counts.tasks.total} tasks done`
+        : undefined,
+    criteria:
+      counts.criteria.total > 0
+        ? `${counts.criteria.verified} of ${counts.criteria.total} criteria verified`
+        : undefined,
+    log: undefined,
+    git: gitTitle(counts.delivery),
+    ci: ciTitle(counts.delivery.latest),
+  };
+  const name: Record<ColumnView, string> = {
+    plan: "Plan",
+    criteria: "Criteria",
+    log: "Log",
+    git: "Git",
+    ci: "CI",
+  };
+
+  return (
+    <Column label={label}>
+      <Tabs
+        value={view}
+        onValueChange={(v: string) => {
+          setView(v as ColumnView);
+          void setTab(v as IssueTab);
+        }}
+      >
+        <TabsList
+          aria-label={label}
+          // Same height and weight as a column title; the shown view reads darker.
+          className="sticky top-0 z-raised h-10 gap-3.5 border-b-0 bg-bg px-5"
+        >
+          {views.map((v) => (
+            <TabsTrigger
+              key={v}
+              value={v}
+              count={count[v]}
+              title={title[v]}
+              className="border-b-0 text-fg-faint text-sm hover:text-fg-muted data-[state=active]:text-fg"
+            >
+              {name[v]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={view} data-section={view} className="px-5 pt-1 pb-8">
+          {view === "plan" && <PlanTab detail={detail} variant="page" />}
+          {view === "criteria" && <CriteriaTab detail={detail} variant="page" />}
+          {view === "log" && <LogTab detail={detail} variant="page" />}
+          {view === "git" && <GitTab detail={detail} variant="page" />}
+          {view === "ci" && <CiTab detail={detail} variant="page" />}
+        </TabsContent>
+      </Tabs>
     </Column>
   );
 }
@@ -398,12 +591,16 @@ interface TabCounts {
   criteria: { verified: number; total: number };
   tasks: { done: number; total: number };
   log: number;
+  delivery: DeliveryCounts;
   docs: number;
   lint: LintCounts;
   lintTotal: number;
 }
 
-function tabCounts(detail: IssueDetail): TabCounts {
+/** What the tab strip, the column titles and the segmented controls count. */
+function useTabCounts(detail: IssueDetail): TabCounts {
+  const { commits, prs, pipelines } = useDelivery(detail.summary.id);
+  const delivery = deliveryCounts({ commits, prs, pipelines });
   const tasks = detail.plan?.phases.flatMap((p) => p.tasks) ?? [];
   const openRequests = detail.state?.needs_you.filter((n) => !n.answered).length;
   const lint = countBySeverity(detail.diagnostics);
@@ -415,6 +612,7 @@ function tabCounts(detail: IssueDetail): TabCounts {
     },
     tasks: { done: tasks.filter((t) => t.status === "done").length, total: tasks.length },
     log: detail.changes.length + detail.decisions.length + detail.learnings.length,
+    delivery,
     docs: detail.docs.length,
     lint,
     lintTotal: lint.error + lint.warn + lint.info,

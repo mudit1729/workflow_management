@@ -85,7 +85,7 @@ export function DecisionCards({ decisions, issueId, className }: DecisionCardsPr
     chains,
     clashes,
     criteria,
-    onOpenCriterion: () => setTab("goal"),
+    onOpenCriterion: () => setTab("criteria"),
     onPromote: (entry) => setPromote({ open: true, entry }),
   };
 

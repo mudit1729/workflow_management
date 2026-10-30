@@ -1,6 +1,7 @@
-// Goal tab: goal.md. Why the issue exists, how we know it is done, and what it
-// leaves out. A file with broken frontmatter still shows: the finding, the raw
-// file with the bad line marked, and whatever body the tolerant reader salvaged.
+// Goal tab: goal.md. Why the issue exists, the context linked from the Workdatabase and what it
+// leaves out. The success criteria have their own tab (Criteria). A file with broken frontmatter
+// still shows: the finding, the raw file with the bad line marked, and whatever body the tolerant
+// reader salvaged.
 import { FileText, OctagonAlert, Pencil, Target } from "lucide-react";
 import { Fragment, type ReactNode, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { CopyButton, EmptyState, MarkdownProse } from "@/components/common";
@@ -8,8 +9,6 @@ import { Button } from "@/components/ui";
 import { AddContextButton, LinkedContext, LinkedPreview, linkKeys } from "@/features/context";
 import type { Diagnostic, IssueDetail } from "@/gen/types";
 import { cn } from "@/lib/cn";
-import { CoverageStrip } from "../CoverageStrip";
-import { CriteriaChecklist } from "../CriteriaChecklist";
 import { CodeSpans, useEditAtLine } from "../LintPanel";
 
 export interface GoalTabProps {
@@ -19,12 +18,13 @@ export interface GoalTabProps {
 
 export function GoalTab({ detail, variant }: GoalTabProps) {
   const { goal, criteria, summary } = detail;
-  const tasks = useMemo(() => detail.plan?.phases.flatMap((p) => p.tasks) ?? [], [detail.plan]);
   const extra = Object.entries(goal.extra ?? {});
   const context = goal.context_md?.trim();
   const outOfScope = goal.out_of_scope_md?.trim();
   const links = goal.links_md?.trim();
-  const hasBody = Boolean(context || outOfScope || links) || criteria.length > 0;
+  const hasText = Boolean(context || outOfScope || links);
+  // A goal with only criteria still offers "Add context" below.
+  const hasBody = hasText || criteria.length > 0;
 
   return (
     // The frame (IssueView) owns padding and scrolling for both variants.
@@ -33,11 +33,16 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
         <FrontmatterError raw={goal.raw} file={goal.edit.file} diagnostics={detail.diagnostics} />
       )}
 
-      {!hasBody && goal.frontmatter_ok && (
+      {!hasText && goal.frontmatter_ok && (
         <EmptyState
+          compact={criteria.length > 0}
           icon={<Target strokeWidth={1.75} />}
-          title="No goal yet"
-          hint="Context says why the issue matters. Success criteria say how we know it is done."
+          title={criteria.length > 0 ? "No context yet" : "No goal yet"}
+          hint={
+            criteria.length > 0
+              ? "Context says why the issue matters. The success criteria are in the Criteria tab."
+              : "Context says why the issue matters. Success criteria say how we know it is done."
+          }
           skill="write-goal"
         />
       )}
@@ -45,24 +50,6 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
       {context && (
         <GoalSection title="Context" wf="GoalContext">
           <MarkdownProse md={goal.context_md} diagrams={detail.diagrams} issueId={summary.id} />
-        </GoalSection>
-      )}
-
-      {hasBody && (
-        <GoalSection title={goal.criteria_heading || "Success criteria"} wf="GoalCriteria">
-          <CriteriaChecklist criteria={criteria} issueId={summary.id} />
-          {criteria.length > 0 &&
-            (detail.plan ? (
-              <div className="mt-3 border-t border-border pt-2">
-                <CoverageStrip criteria={criteria} tasks={tasks} />
-              </div>
-            ) : (
-              <p className="mt-3 border-t border-border pt-3 text-sm text-fg-faint">
-                {summary.size === "xs" || summary.size === "s"
-                  ? "No plan.md. Small issues may skip the plan, so task coverage is not tracked."
-                  : "No plan.md yet. Coverage shows here once tasks name these criteria in satisfies."}
-              </p>
-            ))}
         </GoalSection>
       )}
 
@@ -76,7 +63,7 @@ export function GoalTab({ detail, variant }: GoalTabProps) {
 
       {(links || hasBody) && (
         <GoalSection
-          title="Links"
+          title="Linked context"
           wf="GoalLinks"
           meta={<AddContextButton issueId={summary.id} linked={linkKeys(links, summary.path)} />}
         >

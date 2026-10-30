@@ -17,6 +17,7 @@ import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types"
 import { cn } from "@/lib/cn";
 import { TaskDetail } from "./TaskDetail";
 import { plainTitle, TaskPill } from "./TaskPill";
+import { useTaskFocusRequest } from "./task-focus";
 
 const LANE_W = 96;
 const LEVEL_W = 240;
@@ -102,6 +103,9 @@ export function PlanLanes({ plan, criteria, issueId, highlightReady = false }: P
     setSelected(id);
     pillEls.current.get(id)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, []);
+
+  // A commit's T-n pill in the Git tab asks for this task.
+  useTaskFocusRequest(issueId, select);
 
   if (tasks.length === 0) {
     return (
