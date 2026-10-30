@@ -28,6 +28,7 @@ import {
   RelativeTime,
 } from "@/components/common";
 import { Chip } from "@/components/ui";
+import { CodexRunMarker, useCardRun } from "@/features/codex";
 import type { IssueSummary, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { hoursSince } from "@/lib/format";
@@ -70,6 +71,8 @@ export function IssueCard({
   const board = useContext(BoardCardContext);
   const openIssue = useOpenIssue();
   const flash = useRecentlyChanged(issue.id);
+  // Codex at work on this issue: its mark takes the group path's place in the id row.
+  const codexRun = useCardRun(issue.id);
   const rootRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ open: boolean; view: IssueCardMenuView }>({
     open: false,
@@ -201,7 +204,11 @@ export function IssueCard({
       </div>
 
       <div className="mt-1 flex min-w-0 items-center gap-2 text-fg-faint text-xs">
-        {path.length > 0 && <GroupPath path={path} className="min-w-0 truncate" />}
+        {codexRun ? (
+          <CodexRunMarker run={codexRun} />
+        ) : (
+          path.length > 0 && <GroupPath path={path} className="min-w-0 truncate" />
+        )}
         {blockedBy && (
           <span
             data-wf="BlockedBy"

@@ -6,9 +6,9 @@ import {
   Check,
   ChevronDown,
   CircleX,
+  ClipboardCopy,
   FileText,
   Link2,
-  SquareTerminal,
   Timer,
   TriangleAlert,
   X,
@@ -25,6 +25,7 @@ import {
   useNow,
 } from "@/components/common";
 import { Button, IconButton, Tooltip } from "@/components/ui";
+import { CodexActions } from "@/features/codex";
 import type { IssueDetail, Lease, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs } from "@/lib/format";
@@ -110,7 +111,7 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
       <HeaderAction label="Copy link" icon={<Link2 {...ICON} />} onClick={copyLink} copies />
       <HeaderAction
         label="Copy the handoff command for an agent"
-        icon={<SquareTerminal {...ICON} />}
+        icon={<ClipboardCopy {...ICON} />}
         onClick={copyContext}
         copies
       />
@@ -244,6 +245,10 @@ export function IssueHeader({ detail, variant, onClose, onOpenFiles }: IssueHead
           />
         </Button>
       </div>
+
+      {/* Work with Codex without leaving the board: hand the issue over, or let it do the next step.
+          Above the signals, so the run's strip stays put when a signal appears mid-run. */}
+      <CodexActions issue={s} className={drawer ? "mt-3" : "mt-3.5"} />
 
       <IssueSignals detail={detail} />
     </header>

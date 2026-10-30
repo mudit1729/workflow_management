@@ -1,6 +1,6 @@
 // The card's "…" and right-click menu. `view="move"` (the `s` key) opens straight
 // into the status list; `view="all"` shows Move to…, Open in new page and copy actions.
-import { ArrowRightLeft, Copy, Link2, SquareArrowOutUpRight } from "lucide-react";
+import { ArrowRightLeft, Copy, Link2, Play, SquareArrowOutUpRight, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { StatusIcon } from "@/components/common";
@@ -15,6 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui";
+import { copyCodexCommand, useNextStep } from "@/features/codex";
 import type { IssueStatus, IssueSummary } from "@/gen/types";
 import { useMoveIssue } from "@/lib/api";
 import { hrefFor, useOpenIssue } from "@/lib/nav";
@@ -122,6 +123,8 @@ export function IssueCardMenu({
               <DropdownMenuSubContent className="w-52">{statusItems}</DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
+            <CodexItems issue={issue} />
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               icon={<SquareArrowOutUpRight {...ICON} />}
               shortcut="o"
@@ -147,5 +150,28 @@ export function IssueCardMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Open in Codex and Do next step. A component of its own so the run state is read only while the
+ * menu is open (its content mounts then), not by every card on the board.
+ */
+function CodexItems({ issue }: { issue: IssueSummary }) {
+  const next = useNextStep(issue);
+  return (
+    <>
+      <DropdownMenuItem icon={<Terminal {...ICON} />} onSelect={() => void copyCodexCommand(issue)}>
+        Open in Codex
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        icon={<Play {...ICON} />}
+        disabled={next.busy}
+        hint={next.busy ? "Codex is working on it" : undefined}
+        onSelect={() => void next.start()}
+      >
+        Do next step
+      </DropdownMenuItem>
+    </>
   );
 }
