@@ -1,9 +1,9 @@
 // The 44 px board toolbar, the one top bar of the Board. Left: the Workflow view tabs, then the
-// scope breadcrumb and a faint count summary. Right: text filter, author filter, swimlanes,
-// cancelled, and New issue.
-import { CircleX, Plus, Rows3, UsersRound, X } from "lucide-react";
+// scope breadcrumb and a faint count summary. Right: text filter, "Needs you", author filter,
+// swimlanes, cancelled, and Add work.
+import { CircleX, MessageCircleQuestionMark, Plus, Rows3, UsersRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { openNewIssue } from "@/app/shell-store";
+import { openAddWork } from "@/app/shell-store";
 import { AuthorChip, AuthorStack, ViewTabs } from "@/components/common";
 import {
   Button,
@@ -44,9 +44,12 @@ export interface BoardToolbarProps {
   canSwim: boolean;
   swim: "child" | "none";
   cancelledCount: number;
+  /** Open requests for the acting person across the workspace, and the issues they sit in. */
+  needsYou?: { requests: number; issues: number };
 }
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
+const NO_REQUESTS = { requests: 0, issues: 0 } as const;
 
 export function BoardToolbar({
   chain,
@@ -58,6 +61,7 @@ export function BoardToolbar({
   canSwim,
   swim,
   cancelledCount,
+  needsYou = NO_REQUESTS,
 }: BoardToolbarProps) {
   const [search, setSearch] = useBoardSearch();
   const selected = chain[chain.length - 1];
@@ -77,7 +81,9 @@ export function BoardToolbar({
     setSearch({ q: value.trim() ? value : undefined });
   };
 
-  const newIssue = () => openNewIssue(chain.length > 1 ? selected?.id : undefined);
+  // Add work asks where it goes; the group on show is only the starting answer.
+  const addWork = () =>
+    openAddWork(chain.length > 1 && selected ? { group: selected.id } : undefined);
 
   return (
     <header
@@ -106,6 +112,13 @@ export function BoardToolbar({
           aria-label="Filter issues by id, title or label"
           shortcut="/"
           className="w-24 max-md:w-28 max-md:min-[380px]:w-36 @3xl/board:w-40 @6xl/board:w-52"
+        />
+
+        <NeedsYouToggle
+          active={search.needs === "me"}
+          requests={needsYou.requests}
+          issues={needsYou.issues}
+          onChange={(on) => setSearch({ needs: on ? "me" : undefined })}
         />
 
         <AuthorFilter
@@ -137,10 +150,16 @@ export function BoardToolbar({
           </Button>
         </Tooltip>
 
-        <Tooltip content="New issue" shortcut="n">
-          <Button variant="primary" size="sm" onClick={newIssue} aria-label="New issue">
+        <Tooltip content="Add work" shortcut="n">
+          <Button
+            data-wf="AddWorkButton"
+            variant="primary"
+            size="sm"
+            onClick={addWork}
+            aria-label="Add work"
+          >
             <Plus {...ICON} />
-            <span className="hidden @lg/board:inline">New issue</span>
+            <span className="hidden @lg/board:inline">Add work</span>
           </Button>
         </Tooltip>
       </div>
@@ -263,6 +282,61 @@ function SummaryLine({
     >
       {parts.join(" · ")}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------- needs you
+
+/**
+ * "Needs you 3": shows only the issues with an open request for the person (`?needs=me`). It is
+ * the inbox's job on the board: the count is the person's open requests across the workspace,
+ * so it also tells them when the group on show has none and the requests are elsewhere.
+ */
+export function NeedsYouToggle({
+  active,
+  requests,
+  issues,
+  onChange,
+}: {
+  active: boolean;
+  requests: number;
+  issues: number;
+  onChange: (on: boolean) => void;
+}) {
+  const tip = active
+    ? "Show all issues"
+    : requests === 0
+      ? "Nothing needs you right now"
+      : `${requests} open request${requests === 1 ? "" : "s"} for you in ${issues} issue${issues === 1 ? "" : "s"}. Show only those.`;
+  return (
+    <Tooltip content={tip}>
+      <Button
+        data-wf="NeedsYouToggle"
+        variant="secondary"
+        size="sm"
+        aria-pressed={active}
+        aria-label={`Needs you, ${requests} open request${requests === 1 ? "" : "s"}`}
+        onClick={() => onChange(!active)}
+        className={cn(
+          // Accent means "waits on you": the pressed state and a count above zero use it.
+          active && "border-accent/40 bg-accent-subtle text-accent hover:bg-accent-subtle",
+        )}
+      >
+        <MessageCircleQuestionMark
+          {...ICON}
+          className={cn(!active && requests > 0 && "text-accent")}
+        />
+        <span className="hidden @2xl/board:inline">Needs you</span>
+        <span
+          className={cn(
+            "tabular",
+            active ? "text-accent" : requests > 0 ? "text-accent" : "text-fg-faint",
+          )}
+        >
+          {requests}
+        </span>
+      </Button>
+    </Tooltip>
   );
 }
 

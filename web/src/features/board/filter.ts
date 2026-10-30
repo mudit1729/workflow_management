@@ -1,6 +1,6 @@
 // Board filtering, ordering and lane building. Pure functions over the snapshot,
 // so the board, the keyboard model and the toolbar summary agree on one view.
-import type { GroupNode, IssueStatus, IssueSummary, Priority } from "@/gen/types";
+import type { GroupNode, IssueStatus, IssueSummary, NeedsYouItem, Priority } from "@/gen/types";
 import { issuesInGroup } from "@/lib/api";
 import { parseTs } from "@/lib/format";
 import type { BoardSearch } from "@/lib/nav";
@@ -46,6 +46,8 @@ export interface BoardFilter {
   authors: string[]; // handles without "@"
   q: string;
   showCancelled: boolean;
+  /** Only issues with an open request for the acting person (`?needs=me`). */
+  needsMe: boolean;
 }
 
 /** `author` travels as a comma-separated list of handles: "shruti,codex". */
@@ -68,11 +70,31 @@ export function filterFromSearch(search: BoardSearch): BoardFilter {
     authors: parseAuthorParam(search.author),
     q: (search.q ?? "").trim(),
     showCancelled: search.show === "cancelled",
+    needsMe: search.needs === "me",
   };
 }
 
 export function hasActiveFilter(f: BoardFilter): boolean {
-  return f.authors.length > 0 || f.q !== "";
+  return f.authors.length > 0 || f.q !== "" || f.needsMe;
+}
+
+// ---------------------------------------------------------------- needs you
+
+/** Requests that wait on `me`: addressed to them and not yet answered. */
+export function openRequestsFor(inbox: readonly NeedsYouItem[], me: string): NeedsYouItem[] {
+  return inbox.filter((r) => r.to === me && !r.answered);
+}
+
+export interface NeedsYou {
+  /** Open requests for the person, across the workspace. */
+  requests: number;
+  /** The issues those requests sit in. */
+  issues: ReadonlySet<string>;
+}
+
+export function needsYou(inbox: readonly NeedsYouItem[], me: string): NeedsYou {
+  const open = openRequestsFor(inbox, me);
+  return { requests: open.length, issues: new Set(open.map((r) => r.issue)) };
 }
 
 /** Everyone attached to an issue: owner, coordinator, lease holders, last actor. */
@@ -93,9 +115,18 @@ export function matchesQuery(issue: IssueSummary, q: string): boolean {
   return terms.every((t) => hay.includes(t.replace(/^#/, "")));
 }
 
-export function applyFilter(issues: IssueSummary[], f: BoardFilter): IssueSummary[] {
+/**
+ * `needs` is the set of issue ids that have an open request for the person; the filter's
+ * `needsMe` keeps only those. Without the set the flag has nothing to match and keeps nothing.
+ */
+export function applyFilter(
+  issues: IssueSummary[],
+  f: BoardFilter,
+  needs?: ReadonlySet<string>,
+): IssueSummary[] {
   return issues.filter((issue) => {
     if (issue.status === "cancelled" && !f.showCancelled) return false;
+    if (f.needsMe && !needs?.has(issue.id)) return false;
     if (f.authors.length > 0) {
       const people = issueAuthors(issue);
       if (!f.authors.some((h) => people.includes(h))) return false;

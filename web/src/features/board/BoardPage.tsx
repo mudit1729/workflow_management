@@ -1,12 +1,12 @@
 // /w: the board. Builds one view model from the snapshot and the URL search
 // (group, swim, author, q, show) and hands it to the toolbar and the board.
-import { FolderPlus, FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
+import { BellOff, FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { openNewGroup, openNewIssue } from "@/app/shell-store";
+import { openAddWork } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
 import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
-import { issuesInGroup, useMe, useSnapshot } from "@/lib/api";
+import { issuesInGroup, useInbox, useMe, useSnapshot } from "@/lib/api";
 import { type BoardSearch, useBoardSearch } from "@/lib/nav";
 import { BoardToolbar, BoardToolbarSkeleton } from "./BoardToolbar";
 import {
@@ -19,6 +19,8 @@ import {
   groupSlugPath,
   hasActiveFilter,
   issueAuthors,
+  type NeedsYou,
+  needsYou,
   singleLane,
   summarize,
 } from "./filter";
@@ -26,7 +28,7 @@ import { BoardSkeleton, KanbanBoard } from "./KanbanBoard";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
-function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
+function buildModel(data: WorkspaceSnapshot, search: BoardSearch, needs: ReadonlySet<string>) {
   const root = data.groups;
   const chain = search.group ? groupChain(root, search.group) : [root];
   const missing = chain.length === 0;
@@ -38,8 +40,13 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
   const scoped = filter.showCancelled
     ? inScope
     : inScope.filter((i: IssueSummary) => i.status !== "cancelled");
-  const visible = applyFilter(inScope, filter);
+  const visible = applyFilter(inScope, filter, needs);
   const filtered = hasActiveFilter(filter);
+  // What "Needs you" would show here and elsewhere, for the empty state's hint.
+  const needsHere = scoped.filter((i: IssueSummary) => needs.has(i.id)).length;
+  const needsAnywhere = data.issues.filter(
+    (i: IssueSummary) => needs.has(i.id) && (filter.showCancelled || i.status !== "cancelled"),
+  ).length;
 
   const canSwim = selected.children.length > 0;
   const swim: "child" | "none" = canSwim ? (search.swim ?? "child") : "none";
@@ -73,6 +80,8 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
     visible,
     filtered,
     cancelledCount,
+    needsHere,
+    needsElsewhere: Math.max(0, needsAnywhere - needsHere),
     canSwim,
     swim,
     lanes,
@@ -88,12 +97,16 @@ export function BoardPage() {
   const snapshot = useSnapshot();
   const me = useMe();
   const [search, setSearch] = useBoardSearch();
+  const inbox = useInbox();
   const data = snapshot.data;
-  const { group, swim, author, q, show } = search;
+  const { group, swim, author, q, show, needs } = search;
+
+  // Open requests for the acting person: the toolbar's count and the "Needs you" filter.
+  const mine: NeedsYou = useMemo(() => needsYou(inbox.all, me), [inbox.all, me]);
 
   const model = useMemo(
-    () => (data ? buildModel(data, { group, swim, author, q, show }) : null),
-    [data, group, swim, author, q, show],
+    () => (data ? buildModel(data, { group, swim, author, q, show, needs }, mine.issues) : null),
+    [data, group, swim, author, q, show, needs, mine.issues],
   );
 
   if (snapshot.isError && !data) {
@@ -139,11 +152,25 @@ export function BoardPage() {
       canSwim={model.canSwim}
       swim={model.swim}
       cancelledCount={model.cancelledCount}
+      needsYou={{ requests: mine.requests, issues: mine.issues.size }}
     />
   );
 
   const scopeGroup = model.chain.length > 1 ? model.selected.id : undefined;
-  const newIssue = () => openNewIssue(scopeGroup);
+  // "Add work" opens at the first question; "Add one issue" skips it.
+  const addWork = () => openAddWork(scopeGroup ? { group: scopeGroup } : undefined);
+  const addIssue = () => openAddWork({ kind: "issue", group: scopeGroup });
+  const addActions = (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <Button variant="primary" size="sm" onClick={addWork}>
+        <Plus size={14} strokeWidth={1.75} />
+        Add work
+      </Button>
+      <Button variant="secondary" size="sm" onClick={addIssue}>
+        Add one issue
+      </Button>
+    </div>
+  );
 
   let body: ReactNode;
   if (model.missing) {
@@ -167,18 +194,40 @@ export function BoardPage() {
       <Centered>
         <EmptyState
           title="No work yet"
-          hint="Add a group or an issue to start."
+          hint="Add a group of work and Codex splits it into issues, or add one issue."
+          action={addActions}
+        />
+      </Centered>
+    );
+  } else if (search.needs === "me" && model.visible.length === 0) {
+    body = (
+      <Centered>
+        <EmptyState
+          icon={<BellOff {...ICON} />}
+          title="Nothing needs you"
+          hint={needsHint({
+            here: model.needsHere,
+            elsewhere: model.needsElsewhere,
+            scope: model.chain.length > 1 ? model.selected.title : undefined,
+          })}
           action={
-            <div className="flex items-center gap-2">
-              <Button variant="primary" size="sm" onClick={newIssue}>
-                <Plus size={14} strokeWidth={1.75} />
-                New issue
+            model.needsHere > 0 ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSearch({ q: undefined, author: undefined })}
+              >
+                Clear filters
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => openNewGroup(scopeGroup)}>
-                <FolderPlus size={14} strokeWidth={1.75} />
-                New group
+            ) : model.needsElsewhere > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => setSearch({ group: undefined })}>
+                Show all groups
               </Button>
-            </div>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => setSearch({ needs: undefined })}>
+                Show all issues
+              </Button>
+            )
           }
         />
       </Centered>
@@ -205,15 +254,10 @@ export function BoardPage() {
         ) : (
           <EmptyState
             title={`No issues in ${title} yet`}
-            hint="Create one here, or let an agent write the goal."
+            hint="Add work here, or let an agent write the goal."
             skill="write-goal"
             command={`wf new issue ${model.slugPath || "<group-path>"}/<slug> --title "…"`}
-            action={
-              <Button variant="primary" size="sm" onClick={newIssue}>
-                <Plus size={14} strokeWidth={1.75} />
-                New issue
-              </Button>
-            }
+            action={addActions}
           />
         )}
       </Centered>
@@ -249,6 +293,22 @@ export function BoardPage() {
   }
 
   return <Frame toolbar={toolbar}>{body}</Frame>;
+}
+
+/** What "Nothing needs you" says: why, and where the requests are when they are elsewhere. */
+function needsHint({
+  here,
+  elsewhere,
+  scope,
+}: {
+  here: number;
+  elsewhere: number;
+  scope?: string;
+}): string {
+  if (here > 0) return "Nothing here needs you with the filters you set.";
+  if (elsewhere > 0)
+    return `${elsewhere} issue${elsewhere === 1 ? "" : "s"} outside ${scope ?? "this view"} ${elsewhere === 1 ? "needs" : "need"} you.`;
+  return "You have no open requests. Agents ask here when they need a decision.";
 }
 
 function filterHint(q?: string, author?: string): string {
