@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SUBVIEWS, subViewForPath, VIEWS, type WfSubView, type WfView } from "@/components/common";
 import { validateGlossarySearch, validateLibrarySearch } from "./search";
+import { SHORTCUTS } from "./shortcuts";
 import { tabTitle } from "./tab-title";
 
 describe("which sub-view a route belongs to", () => {
@@ -11,17 +12,22 @@ describe("which sub-view a route belongs to", () => {
   });
 
   it("maps the other pages, with or without a child path", () => {
-    expect(subViewForPath("/inbox")).toBe("inbox");
     expect(subViewForPath("/lib")).toBe("library");
     expect(subViewForPath("/lib/lib-4tz7c")).toBe("library");
     expect(subViewForPath("/glossary")).toBe("glossary");
     expect(subViewForPath("/files")).toBe("files");
+    expect(subViewForPath("/skills")).toBe("skills");
+  });
+
+  it("has no inbox: /inbox belongs to no view (the router sends it to the board)", () => {
+    expect(subViewForPath("/inbox")).toBeUndefined();
+    expect(subViewForPath("/inbox/anything")).toBeUndefined();
   });
 
   it("does not match a longer word that only starts the same way", () => {
     expect(subViewForPath("/workshop")).toBeUndefined();
     expect(subViewForPath("/library")).toBeUndefined();
-    expect(subViewForPath("/inbox-old")).toBeUndefined();
+    expect(subViewForPath("/skills-old")).toBeUndefined();
     expect(subViewForPath("/kit")).toBeUndefined();
     expect(subViewForPath("/")).toBeUndefined();
   });
@@ -49,9 +55,17 @@ describe("the view tables", () => {
     expect(SUBVIEWS[VIEWS.workdatabase.home].to).toBe("/lib");
   });
 
-  it("says Workflow holds Board and Inbox, Workdatabase Library, Glossary and Files", () => {
-    expect(VIEWS.workflow.subs).toEqual(["board", "inbox"]);
-    expect(VIEWS.workdatabase.subs).toEqual(["library", "glossary", "files"]);
+  it("says Workflow holds Board, Workdatabase Library, Glossary, Files and Skills", () => {
+    expect(VIEWS.workflow.subs).toEqual(["board"]);
+    expect(VIEWS.workdatabase.subs).toEqual(["library", "glossary", "files", "skills"]);
+  });
+
+  it("gives Skills the route /skills and the shortcut g s, which nothing else uses", () => {
+    expect(SUBVIEWS.skills).toMatchObject({ view: "workdatabase", to: "/skills", shortcut: "g s" });
+    const taken = SHORTCUTS.flatMap((s) => s.items.flatMap((i) => i.combos)).filter(
+      (c) => c === "g s",
+    );
+    expect(taken).toHaveLength(1);
   });
 });
 
@@ -63,7 +77,7 @@ describe("tab title", () => {
   });
 
   it("names a sub-view that is not its view's home", () => {
-    expect(tabTitle("/inbox", "wf", 2)).toBe("(2) Workflow · Inbox · wf");
+    expect(tabTitle("/skills", "wf", 0)).toBe("Workdatabase · Skills · wf");
     expect(tabTitle("/lib", "wf", 0)).toBe("Workdatabase · wf");
     expect(tabTitle("/glossary", "wf", 0)).toBe("Workdatabase · Glossary · wf");
     expect(tabTitle("/files", "wf", 0)).toBe("Workdatabase · Files · wf");
@@ -73,6 +87,22 @@ describe("tab title", () => {
     expect(tabTitle("/kit", "wf", 0)).toBe("Kit · wf");
     expect(tabTitle("/nope", "wf", 0)).toBe("wf");
     expect(tabTitle("/w", undefined, 0)).toBe("Workflow · wf");
+  });
+});
+
+describe("the shortcuts", () => {
+  const combos = SHORTCUTS.flatMap((s) => s.items.flatMap((i) => i.combos));
+
+  it("lists no inbox shortcut and opens Add work with n", () => {
+    expect(combos).not.toContain("g i");
+    const general = SHORTCUTS.find((s) => s.title === "General");
+    expect(general?.items.find((i) => i.combos.includes("n"))?.label).toBe("Add work");
+  });
+
+  it("names the eight issue tabs", () => {
+    const tabs = SHORTCUTS.find((s) => s.title === "Issue")?.items.find((i) => i.range);
+    expect(tabs?.combos).toEqual(["1", "8"]);
+    expect(tabs?.label).toBe("Switch tab: Now, Goal, Criteria, Plan, Log, Git, CI, Files");
   });
 });
 

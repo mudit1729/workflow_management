@@ -1,17 +1,17 @@
-// The sub-view tabs of one view, as real links: Workflow (Board · Inbox) and Workdatabase
-// (Library · Glossary · Files). Every page puts them at the left of its one 44 px top bar, after
+// The sub-view tabs of one view, as real links: Workflow (Board) and Workdatabase (Library ·
+// Glossary · Files · Skills). Every page puts them at the left of its one 44 px top bar, after
 // the view's name. The active tab follows the route, so the board, its drawer and the full issue
 // page all count as Board. Underline style, like Tabs, so the page's own filters (pills,
 // segmented controls) stay visually secondary.
 import { Link } from "@tanstack/react-router";
 import { Database, LayoutGrid, type LucideIcon } from "lucide-react";
-import { useGlossary, useInbox, useSnapshot, useWorkspaceFiles } from "@/lib/api";
+import { allSkills, useGlossary, useSkills, useSnapshot, useWorkspaceFiles } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { usePathname } from "@/lib/nav";
 import { LintBadge } from "./LintBadge";
 
 export type WfView = "workflow" | "workdatabase";
-export type WfSubView = "board" | "inbox" | "library" | "glossary" | "files";
+export type WfSubView = "board" | "library" | "glossary" | "files" | "skills";
 
 export interface ViewDef {
   label: string;
@@ -26,7 +26,7 @@ export interface ViewDef {
 export interface SubViewDef {
   view: WfView;
   label: string;
-  to: "/w" | "/inbox" | "/lib" | "/glossary" | "/files";
+  to: "/w" | "/lib" | "/glossary" | "/files" | "/skills";
   /** Two-key sequence, as `useHotkey` and `Kbd` take it. */
   shortcut: string;
 }
@@ -37,33 +37,36 @@ export const VIEWS: Record<WfView, ViewDef> = {
     label: "Workflow",
     icon: LayoutGrid,
     home: "board",
-    subs: ["board", "inbox"],
+    subs: ["board"],
     shortcut: "g w",
   },
   workdatabase: {
     label: "Workdatabase",
     icon: Database,
     home: "library",
-    subs: ["library", "glossary", "files"],
+    subs: ["library", "glossary", "files", "skills"],
     shortcut: "g d",
   },
 };
 
 export const SUBVIEWS: Record<WfSubView, SubViewDef> = {
   board: { view: "workflow", label: "Board", to: "/w", shortcut: "g w" },
-  inbox: { view: "workflow", label: "Inbox", to: "/inbox", shortcut: "g i" },
   library: { view: "workdatabase", label: "Library", to: "/lib", shortcut: "g l" },
   glossary: { view: "workdatabase", label: "Glossary", to: "/glossary", shortcut: "g g" },
   files: { view: "workdatabase", label: "Files", to: "/files", shortcut: "g f" },
+  skills: { view: "workdatabase", label: "Skills", to: "/skills", shortcut: "g s" },
 };
 
-/** Which sub-view a pathname belongs to. The board, its drawer and `/i/$id` are all Board. */
+/**
+ * Which sub-view a pathname belongs to. The board, its drawer and `/i/$id` are all Board. `/inbox`
+ * is gone: the router redirects it to the board's Needs you filter before anything renders.
+ */
 export function subViewForPath(path: string): WfSubView | undefined {
   if (path === "/w" || path.startsWith("/w/") || path.startsWith("/i/")) return "board";
-  if (path === "/inbox" || path.startsWith("/inbox/")) return "inbox";
   if (path === "/lib" || path.startsWith("/lib/")) return "library";
   if (path === "/glossary" || path.startsWith("/glossary/")) return "glossary";
   if (path === "/files" || path.startsWith("/files/")) return "files";
+  if (path === "/skills" || path.startsWith("/skills/")) return "skills";
   return undefined;
 }
 
@@ -73,29 +76,29 @@ export function useActiveSubView(): WfSubView | undefined {
 }
 
 export interface ViewCounts {
-  /** My open needs-you requests. */
-  inbox: number;
   /** Library items (every status). */
   library?: number;
   /** Glossary terms. */
   glossary?: number;
   /** Workdatabase · Files. */
   files?: number;
+  /** Skills across the repository's plugins. */
+  skills?: number;
   /** Errors across all workspace files (a lint dot shows when above zero). */
   fileErrors: number;
 }
 
 /** The counts shown after the tabs and in the nav. Undefined while a list is still loading. */
 export function useViewCounts(): ViewCounts {
-  const { count: inbox } = useInbox();
   const library = useSnapshot().data?.library.length;
   const glossary = useGlossary().data?.length;
   const files = useWorkspaceFiles().data;
+  const catalog = useSkills().data;
   return {
-    inbox,
     library,
     glossary,
     files: files?.length,
+    skills: catalog ? allSkills(catalog).length : undefined,
     fileErrors: files?.reduce((n, f) => n + f.errors, 0) ?? 0,
   };
 }
@@ -161,28 +164,23 @@ function ViewTab({
   );
 }
 
+/** What a sub-view's count counts, for a screen reader. */
+const COUNT_NOUN: Record<Exclude<WfSubView, "board">, string> = {
+  library: " items",
+  glossary: " terms",
+  files: " files",
+  skills: " skills",
+};
+
 function TabCount({ sub, counts }: { sub: WfSubView; counts: ViewCounts }) {
   if (sub === "board") return null;
-  if (sub === "inbox") {
-    // Quiet at zero; the accent means something is waiting on you.
-    if (counts.inbox <= 0) return null;
-    return (
-      <span className="tabular font-medium text-accent text-sm">
-        {counts.inbox}
-        <span className="sr-only"> need you</span>
-      </span>
-    );
-  }
-  const n =
-    sub === "library" ? counts.library : sub === "glossary" ? counts.glossary : counts.files;
+  const n = counts[sub];
   if (n === undefined) return null;
   return (
     <>
       <span className="tabular font-normal text-fg-faint text-sm">
         {n}
-        <span className="sr-only">
-          {sub === "glossary" ? " terms" : sub === "files" ? " files" : " items"}
-        </span>
+        <span className="sr-only">{COUNT_NOUN[sub]}</span>
       </span>
       {sub === "files" && counts.fileErrors > 0 && (
         <LintBadge counts={{ error: counts.fileErrors, warn: 0, info: 0 }} variant="dot" />

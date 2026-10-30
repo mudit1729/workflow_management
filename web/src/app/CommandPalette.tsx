@@ -1,4 +1,4 @@
-// ⌘K — search issues, groups, library items, glossary terms and files, and run actions. Filters the
+// ⌘K — search issues, groups, library items, glossary terms, skills and files, and run actions. Filters the
 // snapshot on the client (cmdk's scorer, capped per section). "Move … to…" opens
 // a second page listing statuses; Esc or Backspace on an empty field goes back.
 import { useNavigate } from "@tanstack/react-router";
@@ -9,17 +9,20 @@ import {
   BookText,
   Component,
   FilePenLine,
+  FilePlus,
   FileText,
   FolderPlus,
   FolderTree,
-  Inbox,
   Keyboard,
   LayoutGrid,
   Library,
+  MessageCircleQuestionMark,
   PanelLeft,
   Play,
-  Plus,
   Rows3,
+  ScrollText,
+  SquareTerminal,
+  StepForward,
   SunMoon,
   Terminal,
   Zap,
@@ -44,13 +47,17 @@ import type {
   IssueSummary,
   LibrarySummary,
 } from "@/gen/types";
-import type { WorkspaceFileInfo } from "@/lib/api";
+import type { CodexRunControls, Skill, WorkspaceFileInfo } from "@/lib/api";
 import {
+  allSkills,
+  codexCommand,
   useGlossary,
   useGroupTree,
   useIssueMap,
   useMoveIssue,
+  useSkills,
   useSnapshot,
+  useStartCodexRun,
   useWorkspaceFiles,
 } from "@/lib/api";
 import { parseTs } from "@/lib/format";
@@ -59,12 +66,12 @@ import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { copyText } from "./clipboard";
 import { playNextEvent, withMockControls } from "./mock-controls";
-import { useShell } from "./shell-store";
+import { openAddWork, useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
-const LIMIT = { issues: 8, groups: 5, library: 5, glossary: 4, files: 5, recent: 6 };
+const LIMIT = { issues: 8, groups: 5, library: 5, glossary: 4, skills: 4, files: 5, recent: 6 };
 
 type Page = "root" | "move";
 
@@ -312,6 +319,24 @@ function RootPage({
     [glossaryTerms, q],
   );
 
+  const skillList = useSkills().data;
+  const skills = useMemo(
+    () =>
+      rankBy(
+        allSkills(skillList),
+        q,
+        (k: Skill) => {
+          if (k.name.toLowerCase() === q.toLowerCase()) return EXACT_NAME_SCORE;
+          // A description is long enough for scattered letters to match anything, so only a
+          // phrase of the query that it really contains counts.
+          const inDescription = k.description.toLowerCase().includes(q.toLowerCase());
+          return Math.max(LOOSE_NAME_WEIGHT * defaultFilter(k.name, q), inDescription ? 0.45 : 0);
+        },
+        LIMIT.skills,
+      ),
+    [skillList, q],
+  );
+
   const workspaceFiles = useWorkspaceFiles().data;
   const issueTitles = useMemo(
     () => new Map((snapshot?.issues ?? []).map((i) => [i.id, i.title])),
@@ -351,7 +376,7 @@ function RootPage({
     a.run();
   };
 
-  type SectionKey = "issues" | "groups" | "library" | "glossary" | "files" | "actions";
+  type SectionKey = "issues" | "groups" | "library" | "glossary" | "skills" | "files" | "actions";
   const sections: Record<SectionKey, ReactNode> = {
     issues: issues.items.length > 0 && (
       <CommandGroup key="issues" heading={q ? "Issues" : "Recent issues"}>
@@ -434,6 +459,24 @@ function RootPage({
         ))}
       </CommandGroup>
     ),
+    skills: skills.items.length > 0 && (
+      <CommandGroup key="skills" heading="Skills">
+        {skills.items.map((k: Skill) => (
+          <CommandItem
+            key={k.path}
+            value={`skill:${k.name}`}
+            icon={<ScrollText {...ICON} />}
+            hint={k.plugin}
+            onSelect={() => {
+              close();
+              void navigate({ to: "/skills", search: { skill: k.name } });
+            }}
+          >
+            {k.name}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ),
     files: files.items.length > 0 && (
       <CommandGroup key="files" heading="Files">
         {files.items.map((f: WorkspaceFileInfo) => (
@@ -476,12 +519,20 @@ function RootPage({
   // merely contains the word. Other ties keep the default order. Without a query: recent issues,
   // then actions.
   const tier = (score: number) => Math.round(score * 20);
-  const order = (["issues", "groups", "library", "glossary", "files", "actions"] as const)
+  const order = (["issues", "groups", "library", "glossary", "skills", "files", "actions"] as const)
     .map((key, i) => ({
       key,
       i,
       best: tier(
-        { issues, groups, library, glossary: terms, files, actions: matchedActions }[key].best,
+        {
+          issues,
+          groups,
+          library,
+          glossary: terms,
+          skills,
+          files,
+          actions: matchedActions,
+        }[key].best,
       ),
     }))
     .sort(
@@ -514,28 +565,59 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   const setDensity = usePrefs((s) => s.setDensity);
   const { collapsed: navCollapsed, toggle: toggleNav } = useNavRail();
   const shell = useShell();
+  const { start: startRun } = useStartCodexRun();
 
   const dark = resolveTheme(theme) === "dark";
   const actions: Action[] = [
     {
-      id: "new-issue",
-      label: "New issue…",
-      icon: <Plus {...ICON} />,
+      id: "add-work",
+      label: "Add work…",
+      icon: <FolderPlus {...ICON} />,
       shortcut: "n",
-      keywords: ["create", "add"],
-      run: () => shell.setNewIssueOpen(true),
+      hint: "Split into issues",
+      keywords: ["create", "new", "group", "split", "issues", "outcome"],
+      run: () => openAddWork({ kind: "group" }),
     },
     {
-      id: "new-group",
-      label: "New group…",
-      icon: <FolderPlus {...ICON} />,
-      keywords: ["create", "add", "folder"],
-      run: () => shell.setNewGroupOpen(true),
+      id: "add-issue",
+      label: "Add one issue…",
+      icon: <FilePlus {...ICON} />,
+      keywords: ["create", "new issue", "single", "task"],
+      run: () => openAddWork({ kind: "issue" }),
     },
   ];
 
   if (openIssue) {
+    // Codex first: it is what an open issue is most often opened for.
     actions.push(
+      {
+        id: "open-codex",
+        label: `Open ${openIssue.id} in Codex`,
+        icon: <SquareTerminal {...ICON} />,
+        hint: "Copies the command",
+        keywords: [
+          "open in codex",
+          "codex",
+          "agent",
+          "terminal",
+          "cli",
+          "handoff",
+          openIssue.title,
+        ],
+        run: () =>
+          void copyText(
+            codexCommand(openIssue).command,
+            `Codex command copied for ${openIssue.id}. Paste it in a terminal.`,
+          ),
+      },
+      {
+        id: "next-step",
+        label: `Do the next step of ${openIssue.id}`,
+        icon: <StepForward {...ICON} />,
+        hint: "Codex, in the background",
+        keywords: ["codex", "run", "continue", "agent", "do next step", openIssue.title],
+        run: () => void doNextStep(openIssue, startRun),
+      },
       {
         id: "move",
         label: `Move ${openIssue.id} to…`,
@@ -579,12 +661,12 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       run: () => go.board(),
     },
     {
-      id: "go-inbox",
-      label: "Workflow · Inbox",
-      icon: <Inbox {...ICON} />,
-      shortcut: "g i",
-      keywords: ["go to inbox", "needs you", "requests"],
-      run: () => go.inbox(),
+      id: "go-needs-you",
+      label: "Workflow · Needs you",
+      icon: <MessageCircleQuestionMark {...ICON} />,
+      hint: "Board filter",
+      keywords: ["inbox", "go to inbox", "requests", "questions", "blocked on me", "waiting"],
+      run: () => go.needsYou(),
     },
     {
       id: "go-library",
@@ -609,6 +691,14 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       shortcut: "g f",
       keywords: ["go to files", "open workspace files", "source", "markdown", "edit", "tree"],
       run: () => void files.open(),
+    },
+    {
+      id: "go-skills",
+      label: "Workdatabase · Skills",
+      icon: <ScrollText {...ICON} />,
+      shortcut: "g s",
+      keywords: ["go to skills", "plugins", "install", "codex", "claude", "marketplace"],
+      run: () => void navigate({ to: "/skills" }),
     },
     {
       id: "go-kit",
@@ -673,6 +763,21 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   );
 
   return actions;
+}
+
+// ---------------------------------------------------------------- Codex
+
+/** Start a Codex run on the next ready task and say what happened. */
+async function doNextStep(issue: IssueSummary, start: CodexRunControls["start"]) {
+  const run = await start(issue.id, "next_step");
+  if (!run) return; // The hook has already said why.
+  if (run.status === "nothing_ready") {
+    toast(run.reason ?? "No task is ready.", { description: issue.id });
+    return;
+  }
+  toast(`Codex started${run.task ? ` ${run.task}` : ""} on ${issue.id}`, {
+    description: run.task_title,
+  });
 }
 
 // ---------------------------------------------------------------- move page

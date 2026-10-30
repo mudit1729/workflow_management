@@ -9,10 +9,10 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { WorkspaceView } from "@/features/files";
-import { InboxView } from "@/features/inbox";
 import { IssueDrawer, IssuePage } from "@/features/issue";
 import { KitPage } from "@/features/kit";
 import { GlossaryPage, LibraryView } from "@/features/library";
+import { SkillsView, validateSkillsSearch } from "@/features/skills";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
 import { RouteError, RouteNotFound, RoutePending } from "./RouteStates";
@@ -107,10 +107,21 @@ const glossaryRoute = createRoute({
   component: GlossaryPage,
 });
 
+// /skills — the plugins and skills of this repository, and how to install them. `?skill=` opens one.
+const skillsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "skills",
+  validateSearch: validateSkillsSearch,
+  component: SkillsView,
+});
+
+// /inbox is gone (plan D5): what needs you is a filter of the board. Old links still land there.
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inbox",
-  component: InboxView,
+  beforeLoad: () => {
+    throw redirect({ to: "/w", search: { needs: "me" }, replace: true });
+  },
 });
 
 // /files — the workspace as the markdown files it is. `?path=` selects a file.
@@ -136,6 +147,7 @@ const routeTree = rootRoute.addChildren([
   issueRoute,
   libraryRoute.addChildren([libraryIndexRoute, libraryItemRoute]),
   glossaryRoute,
+  skillsRoute,
   inboxRoute,
   filesRoute,
   kitRoute,

@@ -4,7 +4,8 @@
 //   /w/i/$id      board + drawer   search: board search + tab, log
 //   /i/$id        full issue page  search: tab, log (tab used below 768 px only)
 //   /lib, /lib/$id                 search: tab (items | glossary), kind, q
-//   /inbox
+//   /skills       Workdatabase · Skills        search: skill (the open skill)
+//   /inbox        gone: redirects to /w?needs=me
 //   /kit          component gallery (prototype only)
 import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
@@ -142,7 +143,8 @@ export function useGo() {
     board: (search: BoardSearch = {}) => nav({ to: "/w", search }),
     library: (search: LibrarySearch = {}) => nav({ to: "/lib", search }),
     libraryItem: (id: LibId) => nav({ to: "/lib/$id", params: { id } }),
-    inbox: () => nav({ to: "/inbox" }),
+    /** The board with only the issues that wait on me (replaces the inbox). */
+    needsYou: (search: BoardSearch = {}) => nav({ to: "/w", search: { ...search, needs: "me" } }),
     kit: () => nav({ to: "/kit" }),
     issuePage: (id: IssueId, search: IssueSearch = {}) =>
       nav({ to: "/i/$id", params: { id }, search }),

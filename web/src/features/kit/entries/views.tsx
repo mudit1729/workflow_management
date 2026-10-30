@@ -33,15 +33,9 @@ function ViewTabsBody() {
     <>
       <Bar
         label="Workflow · Board"
-        note="The board, its drawer (/w/i/$id) and the full issue page (/i/$id) all count as Board. Under 900 px the view name gives way to its icon, under 420 px the icon goes too."
+        note="The board, its drawer (/w/i/$id) and the full issue page (/i/$id) all count as Board. Workflow has the one tab: what needs you is a filter of the board, not a page. Under 900 px the view name gives way to its icon, under 420 px the icon goes too."
         view="workflow"
         path="/w"
-      />
-      <Bar
-        label="Workflow · Inbox"
-        note="The count is your open requests. It turns accent when something waits on you and hides at zero."
-        view="workflow"
-        path="/inbox"
       />
       <Bar label="Workdatabase · Library" view="workdatabase" path="/lib" />
       <Bar label="Workdatabase · Glossary" view="workdatabase" path="/glossary" />
@@ -50,6 +44,12 @@ function ViewTabsBody() {
         note="A red dot shows when any file has an error finding."
         view="workdatabase"
         path="/files"
+      />
+      <Bar
+        label="Workdatabase · Skills"
+        note="The count is the skills of every plugin in the repository."
+        view="workdatabase"
+        path="/skills"
       />
     </>
   );
@@ -60,7 +60,7 @@ export const viewsEntries: KitEntry[] = [
     "Shell",
     "ViewTabs",
     `${SRC}/ViewTabs.tsx`,
-    "Workflow (Board, Inbox) and Workdatabase (Library, Glossary, Files) each have sub-views, so every page opens its top bar with them as real links, and the active tab and the counts say where you are and what waits.",
+    "Workflow (Board) and Workdatabase (Library, Glossary, Files, Skills) each have sub-views, so every page opens its top bar with them as real links, and the active tab and the counts say where you are and what it holds.",
     ViewTabsBody,
   ),
 ];

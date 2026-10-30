@@ -13,6 +13,7 @@ import type {
   WorkspaceSnapshot,
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "@/lib/api/error";
+import type { SkillsCatalog } from "@/lib/api/skills";
 import type {
   CodexRun,
   CodexRunKind,
@@ -30,6 +31,7 @@ import { createEventPlayer } from "./events";
 import { listFiles, readFile } from "./files";
 import { applyOp } from "./ops";
 import { search as searchCorpus } from "./search";
+import { skillsCatalog } from "./skills";
 import {
   type Connection,
   checkPath,
@@ -101,6 +103,8 @@ export interface MockServer {
   cancelCodexRun(id: string): Promise<CodexRun>;
   /** Hear every move of a Codex run and every change of an issue's git and CI data. */
   subscribeCodex(fn: (e: CodexEvent) => void): () => void;
+  /** The plugins and skills of the repository, read from its files (Workdatabase · Skills). */
+  skills(): Promise<SkillsCatalog>;
   health(): Promise<Health>;
   /** Every file of the workspace, sorted by path. */
   files(): Promise<WorkspaceFileInfo[]>;
@@ -271,6 +275,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         offDelivery();
       };
     },
+    skills: () => read(skillsCatalog),
     health: () =>
       read(() => ({
         version: "0.1.0-mock",
@@ -392,6 +397,7 @@ export const codexRuns = server.codexRuns;
 export const startCodexRun = server.startCodexRun;
 export const cancelCodexRun = server.cancelCodexRun;
 export const subscribeCodex = server.subscribeCodex;
+export const skills = server.skills;
 export const health = server.health;
 export const files = server.files;
 export const file = server.file;

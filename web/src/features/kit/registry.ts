@@ -4,7 +4,6 @@ import { contextEntries } from "./entries/context";
 import { diagramEntries } from "./entries/diagrams";
 import { filesEntries } from "./entries/files";
 import { foundationEntries } from "./entries/foundations";
-import { inboxEntries } from "./entries/inbox";
 import { issueFilesEntries } from "./entries/issue-files";
 import { issueGoalEntries } from "./entries/issue-goal";
 import { issueHeaderEntries } from "./entries/issue-header";
@@ -35,7 +34,6 @@ const ALL: KitEntry[] = [
   ...libraryViewerEntries,
   ...contextEntries,
   ...filesEntries,
-  ...inboxEntries,
   ...sharedEntries,
   ...primitiveEntries,
 ];

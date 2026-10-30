@@ -14,4 +14,6 @@ export const qk = {
   delivery: (issue: string) => ["delivery", issue] as const,
   /** Codex runs of one issue, or of all. */
   codexRuns: (issue?: string) => ["codex", "runs", issue ?? "all"] as const,
+  /** The plugins and skills of the repository (Workdatabase · Skills). */
+  skills: () => ["skills"] as const,
 };

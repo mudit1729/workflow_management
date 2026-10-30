@@ -4,9 +4,11 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, searchForWorkspaceRoot } from "vite";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
+/** The repository root: the skills view reads `plugins/**` and `.claude-plugin/` from it. */
+const REPO = fileURLToPath(new URL("..", import.meta.url));
 /** The shipped workspace (groups, library, glossary, no issues) and the sample world (a fixture). */
 const WORKSPACE = `${ROOT}mock/workspace/`;
 const SAMPLE = `${ROOT}mock/sample/`;
@@ -213,6 +215,8 @@ export default defineConfig({
   server: {
     port: 5177,
     strictPort: true,
+    // mock/skills.ts reads plugins/** and .claude-plugin/marketplace.json, which sit above web/.
+    fs: { allow: [searchForWorkspaceRoot(ROOT), REPO] },
     // `wf serve --dev` answers /api when VITE_API=real.
     proxy: { "/api": "http://127.0.0.1:7777" },
   },

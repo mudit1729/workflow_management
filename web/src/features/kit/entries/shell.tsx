@@ -3,6 +3,9 @@ import { toast } from "sonner";
 import { GroupTree } from "@/app/GroupTree";
 import { getMockControls } from "@/app/mock-controls";
 import { LiveBadge, NavRail } from "@/app/NavRail";
+import { NewGroupDialog } from "@/app/NewGroupDialog";
+import { NewIssueDialog } from "@/app/NewIssueDialog";
+import { NotifyBanner } from "@/app/NotifyBanner";
 import { RouteError, RouteNotFound, RoutePending } from "@/app/RouteStates";
 import {
   openCommandPalette,
@@ -54,7 +57,7 @@ function NavRailBody() {
         width={52}
         height={640}
       >
-        <Sandbox path="/inbox">
+        <Sandbox path="/skills">
           <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
             <NavRail collapsed />
           </div>
@@ -110,9 +113,11 @@ function ShortcutsDialogBody() {
   );
 }
 
+// The shell no longer mounts the two old dialogs (Add work replaced them), so the entries do.
 function NewIssueDialogBody() {
   return (
     <>
+      <NewIssueDialog />
       <V label="open" note="Creating one writes to the mock data and opens the new issue.">
         <Button variant="secondary" size="sm" onClick={() => openNewIssue()}>
           New issue
@@ -130,6 +135,7 @@ function NewIssueDialogBody() {
 function NewGroupDialogBody() {
   return (
     <>
+      <NewGroupDialog />
       <V label="open">
         <Button variant="secondary" size="sm" onClick={() => openNewGroup()}>
           New group
@@ -141,6 +147,20 @@ function NewGroupDialogBody() {
         </Button>
       </V>
     </>
+  );
+}
+
+function NotifyBannerBody() {
+  return (
+    <V
+      label="two blocking requests · in the nav"
+      note="Shows only while a blocking request waits on you, notifications are off, the browser supports them and you have not said Not now. It lives in the nav now that the inbox is gone."
+      width={232}
+    >
+      <div className="bg-subtle py-2">
+        <NotifyBanner blocking={2} className="mx-2" />
+      </div>
+    </V>
   );
 }
 
@@ -367,7 +387,7 @@ export const shellEntries: KitEntry[] = [
     "Shell",
     "NavRail",
     `${SRC}/NavRail.tsx`,
-    "One rail holds the workspace and its two views (Workflow: Board and Inbox; Workdatabase: Library, Glossary and Files), what needs you (the Inbox count), the Groups tree that filters the board, and Kit; it folds to one icon per view at 52 px when the board needs the room.",
+    "One rail holds the workspace and its two views (Workflow: Board; Workdatabase: Library, Glossary, Files and Skills), the Groups tree that filters the board, and Kit; it folds to one icon per view at 52 px when the board needs the room. What needs you is a filter of the board, not an item here.",
     NavRailBody,
   ),
   entry(
@@ -390,6 +410,13 @@ export const shellEntries: KitEntry[] = [
     `${SRC}/ShortcutsDialog.tsx`,
     "Single-key shortcuts are only usable if they can be looked up in one keystroke, so the list is always one ? away.",
     ShortcutsDialogBody,
+  ),
+  entry(
+    "Shell",
+    "NotifyBanner",
+    "src/app/NotifyBanner.tsx",
+    "Blocking requests are worth a browser notification, but only if you ask for them; the banner asks once, in the nav, and then gets out of the way.",
+    NotifyBannerBody,
   ),
   entry(
     "Shell",

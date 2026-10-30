@@ -1,6 +1,7 @@
-// The left navigation. Workspace "wf" holds two views: Workflow (work in motion: Board, Inbox) and
-// Workdatabase (everything stored: Library, Glossary, Files). Below them the Groups tree, which
-// filters the Workflow board, then Kit (prototype tools) and the display controls. 232 px, or a
+// The left navigation. Workspace "wf" holds two views: Workflow (work in motion: Board) and
+// Workdatabase (everything stored: Library, Glossary, Files, Skills). Below them the Groups tree,
+// which filters the Workflow board, then Kit (prototype tools) and the display controls. What needs
+// you is a filter of the board, not a place in the nav. 232 px, or a
 // 52 px icon rail when collapsed (⌘B or [): one icon per view, tooltips list the sub-views.
 // Below 768 px AppShell shows it inside a sheet (variant "sheet").
 import { Link } from "@tanstack/react-router";
@@ -38,6 +39,7 @@ import { usePathname } from "@/lib/nav";
 import { type Density, type ThemePref, usePrefs } from "@/lib/prefs";
 import { DevPanel } from "./DevPanel";
 import { GroupTree } from "./GroupTree";
+import { NotifyBanner, useBlockingForMe } from "./NotifyBanner";
 import { useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 
@@ -126,6 +128,8 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-1 pb-3">
         <GroupTree collapsed={isCollapsed} onSelect={onNavigate} />
       </div>
+
+      {!isCollapsed && <NavNotifyBanner />}
 
       <div
         className={cn(
@@ -272,7 +276,6 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
               view={view}
               current={activeView === view}
               active={active}
-              counts={counts}
               onNavigate={onNavigate}
             />
           ) : (
@@ -290,27 +293,27 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
   );
 }
 
-/** What a sub-view shows after its name: the Inbox count, an item count, or nothing. */
+/** What a sub-view shows after its name: how many things it holds, or nothing. */
 function subCount(sub: WfSubView, counts: ViewCounts): number | undefined {
   switch (sub) {
-    case "inbox":
-      return counts.inbox > 0 ? counts.inbox : undefined;
     case "library":
       return counts.library;
     case "glossary":
       return counts.glossary;
     case "files":
       return counts.files;
+    case "skills":
+      return counts.skills;
     default:
       return undefined;
   }
 }
 
 const SUB_COUNT_LABEL: Partial<Record<WfSubView, string>> = {
-  inbox: "need you",
   library: "items",
   glossary: "terms",
   files: "files",
+  skills: "skills",
 };
 
 function ExpandedView({
@@ -330,7 +333,6 @@ function ExpandedView({
   const def = VIEWS[view];
   const Icon = def.icon;
   const home = SUBVIEWS[def.home];
-  const needsYou = view === "workflow" ? counts.inbox : 0;
 
   return (
     <>
@@ -346,12 +348,6 @@ function ExpandedView({
           className={cn("shrink-0", current ? "text-fg" : "text-fg-faint")}
         />
         <span className="min-w-0 flex-1 truncate">{def.label}</span>
-        {needsYou > 0 && (
-          <span className="tabular flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-medium text-accent-fg text-xs leading-none">
-            {needsYou}
-            <span className="sr-only"> need you</span>
-          </span>
-        )}
       </Link>
       <ul
         aria-label={`${def.label} views`}
@@ -395,19 +391,16 @@ function CollapsedView({
   view,
   current,
   active,
-  counts,
   onNavigate,
 }: {
   view: WfView;
   current: boolean;
   active: WfSubView | undefined;
-  counts: ViewCounts;
   onNavigate?: () => void;
 }) {
   const def = VIEWS[view];
   const Icon = def.icon;
   const home = SUBVIEWS[def.home];
-  const needsYou = view === "workflow" && counts.inbox > 0;
 
   return (
     <Tooltip
@@ -416,39 +409,32 @@ function CollapsedView({
       content={
         <span className="flex flex-col gap-0.5">
           <span className="font-semibold">{def.label}</span>
-          <span>
-            {def.subs
-              .map((sub) => {
-                const n = subCount(sub, counts);
-                return n !== undefined && sub === "inbox"
-                  ? `${SUBVIEWS[sub].label} ${n}`
-                  : SUBVIEWS[sub].label;
-              })
-              .join(" · ")}
-          </span>
+          <span>{def.subs.map((sub) => SUBVIEWS[sub].label).join(" · ")}</span>
         </span>
       }
     >
       <Link
         to={home.to}
         onClick={onNavigate}
-        aria-label={needsYou ? `${def.label}, ${counts.inbox} need you` : def.label}
+        aria-label={def.label}
         aria-current={active === def.home ? "page" : undefined}
         className={cn(
-          "relative flex size-7 items-center justify-center rounded-md transition-colors duration-100 ease-wf",
+          "flex size-7 items-center justify-center rounded-md transition-colors duration-100 ease-wf",
           current ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
         )}
       >
         <Icon size={14} strokeWidth={1.75} aria-hidden />
-        {needsYou && (
-          <span
-            aria-hidden
-            className="absolute top-1 right-1 size-1.5 rounded-full bg-accent ring-2 ring-subtle"
-          />
-        )}
       </Link>
     </Tooltip>
   );
+}
+
+// ---------------------------------------------------------------- notifications
+
+/** The opt-in for browser notifications, shown while a blocking request waits on me. */
+function NavNotifyBanner() {
+  const blocking = useBlockingForMe();
+  return <NotifyBanner blocking={blocking} className="mx-2 mb-2 shrink-0" />;
 }
 
 // ---------------------------------------------------------------- Kit

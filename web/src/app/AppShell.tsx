@@ -7,14 +7,13 @@ import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
 import { useEffect, useRef } from "react";
 import { MoveGateDialog } from "@/components/common";
 import { Button } from "@/components/ui";
-import { useInbox, useSnapshot } from "@/lib/api";
+import { AddWorkDialog } from "@/features/add-work";
+import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
 import { LiveBadge, NavRail } from "./NavRail";
-import { NewGroupDialog } from "./NewGroupDialog";
-import { NewIssueDialog } from "./NewIssueDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
 import { GlobalShortcuts } from "./shortcuts";
@@ -64,8 +63,7 @@ export function AppShell() {
 
       <CommandPalette />
       <ShortcutsDialog />
-      <NewIssueDialog />
-      <NewGroupDialog />
+      <AddWorkDialog />
       <MoveGateDialog />
       <GlobalShortcuts />
     </div>
@@ -103,7 +101,6 @@ function RailSlot() {
 
 function MobileTopBar() {
   const name = useSnapshot().data?.config.name ?? "wf";
-  const { count } = useInbox();
   const setMobileNavOpen = useShell((s) => s.setMobileNavOpen);
   const setPaletteOpen = useShell((s) => s.setPaletteOpen);
 
@@ -116,17 +113,10 @@ function MobileTopBar() {
         id={OPEN_NAV_ID}
         variant="ghost"
         size="icon"
-        aria-label={count > 0 ? `Open navigation, ${count} need you` : "Open navigation"}
+        aria-label="Open navigation"
         onClick={() => setMobileNavOpen(true)}
-        className="relative"
       >
         <Menu {...ICON} />
-        {count > 0 && (
-          <span
-            aria-hidden
-            className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-accent ring-2 ring-subtle"
-          />
-        )}
       </Button>
       <span className="min-w-0 truncate font-medium text-base">{name}</span>
       <LiveBadge />

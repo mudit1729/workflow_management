@@ -42,8 +42,8 @@ export function ShortcutsDialog() {
 function ShortcutRow({ item }: { item: ShortcutDef }) {
   const joiner = item.range ? "–" : "or";
   return (
-    <div className="flex h-8 items-center justify-between gap-4 border-border border-b last:border-b-0">
-      <dt className="min-w-0 truncate text-fg-muted">{item.label}</dt>
+    <div className="flex min-h-8 items-center justify-between gap-4 border-border border-b py-1 last:border-b-0">
+      <dt className="min-w-0 text-fg-muted">{item.label}</dt>
       <dd className="flex shrink-0 items-center gap-1">
         {item.combos.map((combo, i) => (
           <Fragment key={combo}>
