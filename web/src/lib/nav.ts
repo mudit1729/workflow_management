@@ -1,6 +1,6 @@
 // Navigation helpers. Features use these instead of raw router calls, so route
 // paths live in one place. Paths (contract 1.11):
-//   /w            board            search: group, swim, author, q, show
+//   /w            board            search: group, swim, author, q, show, needs
 //   /w/i/$id      board + drawer   search: board search + tab, log
 //   /i/$id        full issue page  search: tab, log (tab used below 768 px only)
 //   /lib, /lib/$id                 search: tab (items | glossary), kind, q
@@ -10,9 +10,18 @@ import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/rea
 import { useCallback } from "react";
 import type { IssueId, LibId } from "@/gen/types";
 
-export type IssueTab = "now" | "goal" | "plan" | "log" | "files";
+export type IssueTab = "now" | "goal" | "criteria" | "plan" | "log" | "git" | "ci" | "files";
 export type LogView = "changes" | "decisions" | "learnings";
-export const ISSUE_TABS: IssueTab[] = ["now", "goal", "plan", "log", "files"];
+export const ISSUE_TABS: IssueTab[] = [
+  "now",
+  "goal",
+  "criteria",
+  "plan",
+  "log",
+  "git",
+  "ci",
+  "files",
+];
 
 export interface BoardSearch {
   group?: string; // group id; the board shows that subtree
@@ -20,6 +29,7 @@ export interface BoardSearch {
   author?: string; // handle filter
   q?: string; // text filter
   show?: "cancelled";
+  needs?: "me"; // only issues with an open request for the person (replaces the inbox)
 }
 
 export interface IssueSearch {
@@ -49,7 +59,7 @@ export function usePathname(): string {
   return useRouterState({ select: (s) => s.location.pathname });
 }
 
-const BOARD_KEYS: (keyof BoardSearch)[] = ["group", "swim", "author", "q", "show"];
+const BOARD_KEYS: (keyof BoardSearch)[] = ["group", "swim", "author", "q", "show", "needs"];
 function pickBoard(s: Record<string, unknown>): BoardSearch {
   const out: Record<string, unknown> = {};
   for (const k of BOARD_KEYS) if (s[k] !== undefined) out[k] = s[k];

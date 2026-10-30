@@ -48,6 +48,7 @@ export function validateBoardSearch(raw: Raw): BoardSearch {
     author: author?.replace(/^@/, ""),
     q: text(raw.q),
     show: oneOf(raw.show, ["cancelled"] as const),
+    needs: oneOf(raw.needs, ["me"] as const),
   };
 }
 
