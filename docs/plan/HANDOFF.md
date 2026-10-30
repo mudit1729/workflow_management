@@ -24,6 +24,15 @@ element. It is built, reviewed, verified and published.
    with Rendered | Source, file:line on hover, and inline Edit.
 5. **Archify** is not installed in the cloud, so diagrams ship as "unavailable" with their JSON sources
    (user instruction). A prototype button on the card, or the DevPanel switch, shows a stand-in preview.
+6. **The board starts empty.** "Empty out all the issues." The shipped workspace (`web/mock/workspace/`) keeps
+   workflow.toml, authors, glossary, the library and the six groups (`wf`, `core`, `web`, `skills`, `platform`,
+   `auth`), and has no issues. The sample world (26 issues, every signal, diagrams, evidence) lives in
+   `web/mock/sample/` as a fixture. The DevPanel's **Load sample data** puts it on the board in one commit (**Reset
+   data** returns to empty), the Kit shows it while `/kit` is open and gives the user's own working copy back on
+   leaving, and the tests read it. The scripted live events belong to sample issues, so on the empty board they are
+   skipped silently. The library items still point at sample issues: the empty workspace shows 18 dangling
+   references (F009, warnings) until the sample is loaded. This clears the board for the add-work flow (add a
+   group, an agent splits it into issues), which is built next.
 
 ## Open items for the user
 
@@ -42,7 +51,7 @@ component, keep the Kit in sync, re-screenshot, and republish.
 ## How to run and publish
 
 - `pnpm --dir web install`, `pnpm --dir web dev` (port 5177). Checks: `pnpm -s typecheck`,
-  `pnpm -s exec biome check src mock`, `pnpm exec vitest run` (460 tests), `pnpm -s build`.
+  `pnpm -s exec biome check src mock`, `pnpm exec vitest run` (490 tests), `pnpm -s build`.
 - Screenshots: `node web/scripts/shot.mjs <route> <png>` (one page, clicks) and
   `node web/scripts/sweep.mjs --out <dir> --sheets` (every route × width × theme, with contact sheets).
   Both fall back to the system Chromium at `/opt/pw-browsers/chromium` in cloud containers.

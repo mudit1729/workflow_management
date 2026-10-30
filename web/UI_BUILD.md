@@ -22,6 +22,14 @@ markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" be
 what the board shows, edit a file there, or open **Workdatabase · Files** in the UI. Never add a
 TypeScript object that holds content.
 
+**The shipped workspace is empty of issues.** `web/mock/workspace/` holds the config, authors,
+glossary, the library and the six groups (`wf`, `core`, `web`, `skills`, `platform`, `auth`), and no
+issues: the board starts as a clean slate. The sample world (26 issues, every signal, the diagrams
+and the files the Kit and the tests name) is kept in `web/mock/sample/`, a fixture and not shipped
+content. **Load sample data** (DevPanel, or `window.__wf.loadSample()`) puts it on the board; **Reset
+data** goes back to the empty workspace; the **Kit** shows it while `/kit` is open. Every example id
+in this file (`wf-3k9x2` and so on) is an issue of the sample.
+
 ## Naming: workspace, workflow, workdatabase
 
 The words below are the product's vocabulary. Use them in UI copy, code comments, the Kit and
@@ -235,7 +243,8 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 
 #### Markdown first: how `web/mock/` works
 
-**The files are the source of truth.** `web/mock/workspace/` is a real `wf` workspace (`wf_format = 1`): `workflow.toml`,
+**The files are the source of truth.** `web/mock/workspace/` (shipped: groups, library, glossary, no issues) and
+`web/mock/sample/` (the sample world, a full copy of the former workspace) are real `wf` workspaces (`wf_format = 1`): `workflow.toml`,
 `authors.md`, `glossary.md`, `issues/<group path>/<slug>/{goal,plan,current_state,changes,decisions,learnings}.md` with
 docs and assets, `issues/**/_group.md`, `library/<kind>s/<slug>.md`. The grammar is `docs/plan/contract.md` §1.2–1.7.
 Diagrams are archify blocks inside `goal.md` / `plan.md` (` ```archify <type> id=<id> `). Read the folder's own
@@ -243,10 +252,12 @@ Diagrams are archify blocks inside `goal.md` / `plan.md` (` ```archify <type> id
 `mock/diagrams.ts` and `mock/serialize.ts` no longer exist.
 
 ```
-mock/workspace/**  ──(Vite glob ?raw / ?wf-asset)──▶  workspace-files.ts  DISK (recording-frame files)
-                                                         │  HMR: self-accepting, publishDisk()
+mock/workspace/**  ──(Vite glob ?raw / ?wf-asset)──▶  workspace-files.ts  DISK   (shipped, recording-frame files)
+mock/sample/**     ──(same globs)────────────────▶  sample-files.ts     SAMPLE (fixture)
+                                                         │  HMR: self-accepting, publishDisk() / publishSample()
                                                          ▼  workspace-bus.ts
-store.ts  working copy: Record<path, text>  ◀── applyDisk(): shift by the store's clock, skip echoes
+store.ts  working copy: Record<path, text>  ◀── applyDisk() / applySample(): shift by the store's clock, skip echoes
+          reset() = back to DISK · loadSample() = SAMPLE in one commit · holdSample() = SAMPLE now, the working copy back later
    │ every commit:  rebaseWorkspace (at load/reset)  →  md/loadWorkspace(files)  →  derive(source)  →  delta + activity
    ▼
 server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files, file, writeFile, deleteFile, events)
@@ -266,16 +277,25 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - **`store.ts`** keeps the working copy of the files (path → text) in memory. `mutate(by, issue, fn)` hands the caller a draft;
   the caller edits text; only when the edited files load and derive does the store swap them in, bump the rev and emit a
   `delta` plus the `activity` events the write declared. 409 checks use the anchor's rev (`guard`) or the file's rev
-  (`guardFile`). A write that throws leaves the store untouched. `reset()` goes back to the files as they are on disk now.
+  (`guardFile`). A write that throws leaves the store untouched. `reset()` goes back to the shipped files as they are on disk
+  now (empty of issues). `loadSample()` replaces the working copy with the sample files as one commit: a single `resync`, no
+  activity line per file, nothing of the old copy kept. `holdSample()` is for a screen that needs the sample (the Kit): the
+  first hold saves the working copy (texts, assets, activity log, file history) and loads the sample, nested or repeated holds
+  only count, and the last release puts the saved copy back exactly. `reset()` during a hold gives the pristine sample.
 - **Every write is a minimal text edit** (`md/edit.ts`, like `wf-edit`'s splice). `ops.ts` maps each Op to edits and `events.ts`
-  does the same for the 8 scripted live events (`SCRIPT`, one every ~20 s, played from the DevPanel too). Ticking SC-3 flips
+  does the same for the 8 scripted live events (`SCRIPT`, one every ~20 s, played from the DevPanel too). The events target
+  sample issues (`EVENT_TARGETS`), so on the empty shipped workspace every one is skipped without a sound (no edit, no activity,
+  no toast) and the DevPanel's "Play next event" says so quietly. Ticking SC-3 flips
   `[ ]` to `[x]` on that line of `goal.md` and changes nothing else; unticking also drops that criterion's `evidence` and
   `verified_by` lines; `set_status` changes one `status:` line; `answer_request` ticks the box and adds `answer:`,
   `answered_by`, `answered_at`; `new_issue` creates one `goal.md`; `promote` creates a library file and appends the review
   request to `current_state.md`. Files are never re-serialized (two contract-defined overwrites aside). `mock/ops.test.ts`
   asserts the line diff of every Op.
 - **The watcher (dev server).** `mock/workspace-files.ts` globs the folder and accepts its own HMR update. When a file under
-  `mock/workspace/` is saved, added or removed, it hands the new file set to `store.applyDisk` through `workspace-bus.ts`.
+  `mock/workspace/` is saved, added or removed, it hands the new file set to `store.applyDisk` through `workspace-bus.ts`
+  (while the sample is on screen the shipped files only wait for `reset()`). `mock/sample-files.ts` does the same for
+  `mock/sample/` through `store.applySample`, which applies it only while the sample is loaded and otherwise keeps it for the
+  next "Load sample data".
   The store applies only what differs from its working copy, as one commit: re-parse, delta, card fade, and an activity line
   `@<author or disk> edited goal.md` (the author is taken from a new entry heading when there is one). A file whose text the
   store already holds is an echo and is ignored. A change to `authors.md`, `glossary.md` or `workflow.toml` also emits
@@ -302,7 +322,8 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   first thing a diagram card shows is the honest unavailable state). Two controls turn it on and off: the DevPanel's "Archify
   available" switch, and the unavailable card's own "Prototype: show the stand-in preview" button (it calls
   `setArchifyAvailable(true)`; the DevPanel switch follows the snapshot). `mock/store.ts` `archify` option: default `false`. `node scripts/render-diagram-previews.mjs` redraws the pages from
-  the workspace's blocks, writing only what differs; the dev server runs it again when a file with a block changes.
+  the archify blocks of both folders (the shipped workspace first, then the sample; the diagrams live in the sample, so the
+  three previews stay), writing only what differs; the dev server runs it again when a file with a block changes in either.
 - **Lint.** Findings carry the file, line and column of the text. Implemented: F001–F014, F016, F017, S01–S03, S05–S09, S11,
   S13 (see `md/lint.ts`, `md/checks.ts`, the parsers), plus an inline `<!-- wf-lint-disable S06 -->`. `[lint] disable = ["S09"]`
   in `workflow.toml` is on purpose (the web issues say "card"); delete it to see S09 appear.
@@ -358,8 +379,10 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   `RouteNotFound`.
 - `app/DevPanel.tsx` — a small "Prototype" pill bottom-left (expanded nav; an icon in the icon rail and the phone bar); opens controls:
   play next live event, connection state, simulate conflict on next write, **archify available** (off by default; the unavailable
-  diagram card's "Prototype" button turns it on and the switch follows), reset data (back to the files on disk), open
-  Workdatabase · Files, jump to Kit. Toggled by the `.` key too.
+  diagram card's "Prototype" button turns it on and the switch follows), **Reset data** (back to the shipped files: groups,
+  library, no issues), **Load sample data** (the 26 sample issues in one commit; toast "Loaded 26 sample issues"), open
+  Workdatabase · Files, jump to Kit. "Play next event" says "No live events apply here. Load sample data to play them." when
+  no scripted event fits the workspace. Toggled by the `.` key too.
 - `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g i` Inbox, `g d` Workdatabase (Library),
   `g l` Library, `g g` Glossary, `g f` Files, `g k` Kit, `n`, `?`, `.`.
 
@@ -407,7 +430,9 @@ before the other files exist.)
   draggable left edge (440–760). `overlay` (768–1599): a sheet over the board with `shadow-pop`, click-outside closes.
   Esc closes (`useCloseIssue`). Contains `IssueView variant="drawer"`.
 - `IssuePage({ id })` — full page: top bar with breadcrumb + back to board; `IssueView variant="page"`.
-- `IssueView({ id, variant })` — loads `useIssue(id)`; skeleton while loading; header; then:
+- `IssueView({ id, variant })` — loads `useIssue(id)`; skeleton while loading; "Issue <id> not found" (with "Back to board") when
+  the read is a 404, also when the issue was open and then vanished (Reset data, leaving the Kit, a deleted folder): a failed
+  background refetch keeps the cached copy on screen, except a `NotFoundError`; header; then:
   - drawer: `Tabs` `Now · Goal · Plan · Log · Files` (`useIssueTab`), each tab panel scrolls independently;
     counts on tabs (needs-you on Now, criteria verified/total on Goal, tasks done/total on Plan, entries on Log,
     files + lint on Files). Number keys 1–5 switch tabs.
@@ -519,7 +544,9 @@ before the other files exist.)
 - `LibraryItemView({ id, variant?: "pane" | "screen" })` — a toolbar (kind, status chip, **Rendered | Source** switch, **Edit**, Close), a
   path row, the draft / retired / overdue banners ("Draft — not injected into agent context until reviewed"), then the page: the file
   rendered from its markdown (`MarkdownDocument`: frontmatter as properties, every section in file order, each block tied to its
-  source line with a `SourceLineMarker`), where it came from (RefLinks), "Used by N issues", Approve (draft → reviewed via
+  source line with a `SourceLineMarker`), where it came from (RefLinks; a `source:` entry the server could not resolve, such as a
+  sample issue in the empty workspace, still shows from the file's own frontmatter as a dangling reference with "Not in this
+  workspace", never as "No source recorded"), "Used by N issues", Approve (draft → reviewed via
   `useApproveLibrary`), Retire (disabled stub). **Source** shows `SourceView embedded` edge to edge under the toolbar, with lint
   markers. **Edit edits inline, in either view**: it calls `requestFileEdit({ path })` (the source view starts its editor in place; the
   person never leaves the Library), shows Edit as taken while the editor is open (`onEditingChange`), returns focus to the Edit button after
@@ -603,10 +630,17 @@ as "ElementName: change". `?el=<ComponentName>` opens the page at that element's
 light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name. Foundations shows the tokens live (surfaces,
 accent and signals, readable signal text, scrim and the z scale, status colors, the hue scale). The "hover footer (forced open)" board variant
 forces the footer open with a selector on `IssueCardFooter`; the real footer is an overlay on the card's last row, and so is this one.
+The kit names real issues by id (`wf-3k9x2` and so on), and the shipped workspace has none, so `KitPage` holds the sample while the
+route is open: on mount it saves the user's working copy and loads the sample (`mockControls.holdSample()`), on unmount it puts the
+saved copy back exactly. The hold is counted in the store, so StrictMode and repeated visits cannot corrupt it. What an element
+writes in the kit (Edit, Create, Delete) goes to the sample copy and is gone when the kit closes. The user's saved prefs are not touched.
 
-## Mock world (the workspace folder; others may rely on these ids)
+## Mock world (the sample folder; others may rely on these ids)
 
-These are the files under `web/mock/workspace/` (not objects in code). Workspace "wf" (`id_prefix = "wf"`), acting
+These are the files under `web/mock/sample/` (not objects in code): the sample world. The shipped `web/mock/workspace/` keeps
+its config, authors, glossary, library and `_group.md` files and has none of the issues below (Library items there point at
+sample entries, so each shows a dangling reference, F009, until the sample is loaded: 18 F009 warnings and one Q013 info, no
+error). Workspace "wf" (`id_prefix = "wf"`), acting
 author **shruti**. Authors (`authors.md`):
 - `shruti` human, Shruti Joshi, color 1, lanes web, skills
 - `claude-opus` agent, claude-code, model claude-opus-5-5, color 7, coordinator
@@ -618,10 +652,10 @@ author **shruti**. Authors (`authors.md`):
 Groups (root = `issues/`, implicit title "Issues"):
 - `g-wf001` **wf** (owner shruti, color 7) → children `g-core1` **core** (color 2), `g-web01` **web** (color 1),
   `g-skl01` **skills** (color 3); plus issue `wf-b1d7v` "Build v1" directly in wf.
-- `g-plat1` **platform** (color 4) → `g-auth1` **auth** (color 8, nested) → issue `wf-ss0lo` "SSO login".
+- `g-plat1` **platform** (color 4) → `g-auth1` **auth** (color 8, nested) → issue `wf-ss0lo` "Add SSO login".
 - `docs/` implicit group (no `_group.md`, color by hash) with non-code issues (user guide, research notes).
 
-The rich dogfood issue **`wf-3k9x2` "Live board updates"** in `issues/wf/web/live-board-updates`: status
+The rich dogfood issue **`wf-3k9x2` "Push board updates over SSE"** in `issues/wf/web/live-board-updates`: status
 in_progress, priority high, size m, owner shruti, coordinator claude-opus (live lease). Criteria SC-1…SC-5 (SC-1, SC-2
 verified, SC-3 claimed, SC-4, SC-5 open). Tasks T-1…T-5 across lanes core, server, web in 3 phases (T-1 done, T-2
 review, T-3 in_progress claimed by codex with steps 1/2, T-4 todo + ready, T-5 todo blocked by deps). current_state
