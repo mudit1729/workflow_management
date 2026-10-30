@@ -1,5 +1,14 @@
 export { type Api, api } from "./client";
 export {
+  type CodexRunControls,
+  codexCommand,
+  connectCodexLive,
+  useCodexLive,
+  useCodexRuns,
+  useStartCodexRun,
+} from "./codex";
+export { type DeliveryState, useDelivery } from "./delivery";
+export {
   ApiError,
   type ConflictError,
   isConflictError,
@@ -48,11 +57,35 @@ export {
   useIssueSummary,
   useMe,
 } from "./selectors";
-export type {
-  NewIssueOp,
-  OpArgs,
-  SearchScope,
-  WfOp,
-  WorkspaceFile,
-  WorkspaceFileInfo,
+export {
+  type CodexPhase,
+  type CodexPhaseId,
+  type CodexRun,
+  type CodexRunKind,
+  type CodexRunStatus,
+  type Commit,
+  type CreateWorkOp,
+  type CreateWorkResult,
+  type Delivery,
+  type NewIssueOp,
+  type OpArgs,
+  type PipelineConclusion,
+  type PipelineJob,
+  type PipelineRun,
+  type PipelineStatus,
+  type Proposal,
+  type PullRequest,
+  type PullRequestState,
+  type ReviewState,
+  type SearchScope,
+  SPLIT_STEPS,
+  type SplitInput,
+  type SplitResult,
+  type WfOp,
+  type WorkGroup,
+  type WorkIssueInput,
+  type WorkOpResult,
+  type WorkspaceFile,
+  type WorkspaceFileInfo,
 } from "./types";
+export { type SplitWork, useCreateWork, useSplitWork } from "./work";

@@ -4,7 +4,7 @@
 // move or value is not allowed → edit the text through `store.mutate`, which loads the result.
 import type { ContextLink, IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
-import type { NewIssueOp, WfOp } from "@/lib/api/types";
+import type { CreateWorkOp, NewIssueOp, WfOp, WorkOpResult } from "@/lib/api/types";
 import {
   doneGaps,
   illegalReason,
@@ -30,8 +30,12 @@ import type { IssueSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./sour
 import type { Applied, Draft, Mutation, Store } from "./store";
 import { dateIn, toTs } from "./time";
 import { hashColor, slugify } from "./util";
+import { workIssueGoal } from "./work";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The most issues one `create_work` adds. */
+export const MAX_WORK_ISSUES = 8;
 
 // ---------------------------------------------------------------- errors
 
@@ -115,6 +119,8 @@ export function applyOp(store: Store, op: WfOp): OpResult {
       return newIssue(store, op);
     case "new_group":
       return newGroup(store, op);
+    case "create_work":
+      return createWork(store, op);
     case "approve_library":
       return approveLibrary(store, op);
     case "add_links":
@@ -687,4 +693,151 @@ function newGroup(store: Store, op: Of<"new_group">): OpResult {
     };
   });
   return { rev: m.rev, file_rev: m.file_rev, created: m.created };
+}
+
+// ---------------------------------------------------------------- add work
+
+const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
+const SIZES = ["xs", "s", "m", "l"];
+
+/** A folder name for a title: the slug, never ending in a hyphen, `fallback` when empty. */
+function slugFor(title: string, fallback: string): string {
+  return slugify(title).replace(/-+$/, "") || fallback;
+}
+
+/** The first of `base`, `base-2`, `base-3`… that `taken` does not hold. */
+function freeSlug(base: string, taken: Set<string>): string {
+  let slug = base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+  return slug;
+}
+
+/**
+ * Add work: an existing group, or a new one, and 1 to 8 issues, written as `_group.md` and
+ * `goal.md` files in ONE commit with one activity entry. The checks are those of `new_group` and
+ * `new_issue`; an issue whose slug is taken gets `-2`, `-3` instead of an error, because the
+ * person never typed a slug.
+ */
+function createWork(store: Store, op: CreateWorkOp): WorkOpResult {
+  if (op.issues.length < 1 || op.issues.length > MAX_WORK_ISSUES)
+    reject(`Add 1 to ${MAX_WORK_ISSUES} issues at a time.`);
+  for (const issue of op.issues) {
+    const title = issue.title.trim();
+    if (!title) reject("Give every issue a title.");
+    if (!PRIORITIES.includes(issue.priority)) reject(`Pick a priority for "${title}".`);
+    if (!SIZES.includes(issue.size)) reject(`Pick a size for "${title}".`);
+    if (issue.status !== "backlog" && issue.status !== "planned")
+      reject(`"${title}" starts in backlog or planned.`);
+    if (!issue.criteria.some((c) => c.trim())) reject(`Give "${title}" at least one criterion.`);
+    checkLinks(store, issue.links ?? []);
+  }
+
+  const by = store.me;
+  const used = new Set<string>();
+  const freshId = (prefix: string) => {
+    for (;;) {
+      const id = store.newId(prefix);
+      if (!used.has(id)) {
+        used.add(id);
+        return id;
+      }
+    }
+  };
+
+  // The group: the folder the issues go in, and the `_group.md` a new one needs.
+  const taken = new Set<string>();
+  let groupId: string;
+  let groupTitle: string;
+  let groupDir: string;
+  let groupFile: { path: string; text: string } | undefined;
+  if (typeof op.group === "string") {
+    const group = need(
+      store.world.groups.find((g) => g.id === op.group),
+      `Group ${op.group}`,
+    );
+    groupId = group.id;
+    groupTitle = group.title;
+    groupDir = store.derived.groupDirs.get(group.id) ?? group.slug;
+    for (const i of store.world.issues) if (i.group === group.id) taken.add(i.slug);
+    for (const g of store.world.groups) if (g.parent === group.id) taken.add(g.slug);
+  } else {
+    const parentId = op.group.parent;
+    const parent = need(
+      store.world.groups.find((g) => g.id === parentId),
+      `Group ${parentId}`,
+    );
+    groupTitle = op.group.title.trim();
+    if (!groupTitle) reject("Give the group a title.");
+    const slug = slugFor(groupTitle, "");
+    if (!SLUG.test(slug)) reject("Use letters or digits in the group title.");
+    const siblingIssue = store.world.issues.some((i) => i.group === parent.id && i.slug === slug);
+    const siblingGroup = store.world.groups.some((g) => g.parent === parent.id && g.slug === slug);
+    if (siblingIssue || siblingGroup)
+      reject(`A folder named "${slug}" already exists in ${parent.title}. Pick another title.`);
+    groupId = freshId("g-");
+    groupDir = `${store.derived.groupDirs.get(parent.id) ?? parent.slug}/${slug}`;
+    const siblings = store.world.groups.filter((g) => g.parent === parent.id);
+    groupFile = {
+      path: `${groupDir}/_group.md`,
+      text: newGroupFile({
+        id: groupId,
+        title: groupTitle,
+        slug,
+        parent: parent.id,
+        owner: by,
+        color: hashColor(groupId),
+        order: siblings.reduce((max, g) => Math.max(max, g.order), 0) + 1,
+        implicit: false,
+      }),
+    };
+  }
+
+  const created = store.stamp();
+  const files = op.issues.map((issue) => {
+    const id = freshId(`${store.world.config.id_prefix}-`);
+    const slug = freeSlug(slugFor(issue.title, "issue"), taken);
+    taken.add(slug);
+    const dir = `${groupDir}/${slug}`;
+    const clean = { ...issue, criteria: issue.criteria.map((c) => c.trim()).filter(Boolean) };
+    return {
+      id,
+      title: issue.title.trim(),
+      path: `${dir}/goal.md`,
+      text: workIssueGoal({ id, owner: by, created, dir, issue: clean }),
+    };
+  });
+  const issueIds = files.map((f) => f.id);
+
+  const m = store.mutate(by, undefined, (w) => {
+    const touches: Applied["touches"] = [];
+    if (groupFile) {
+      w.write(groupFile.path, groupFile.text);
+      touches.push({ file: groupFile.path, anchors: "all" });
+    }
+    for (const f of files) {
+      w.write(f.path, f.text);
+      touches.push({ file: f.path, anchors: "all" });
+    }
+    const n = files.length;
+    return {
+      touches,
+      activity: [
+        {
+          issue_id: issueIds[0],
+          kind: "status",
+          author: by,
+          title: `Added ${n} issue${n === 1 ? "" : "s"} to ${groupTitle}`,
+        },
+      ],
+      log: files.map((f) => ({ issue_id: f.id, kind: "status", author: by, title: "Created" })),
+      created: groupId,
+    };
+  });
+  return {
+    rev: m.rev,
+    file_rev: m.file_rev,
+    issue: store.summary(issueIds[0]),
+    created: groupId,
+    work: { groupId, issueIds },
+  };
 }

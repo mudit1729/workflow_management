@@ -21,6 +21,8 @@ import type {
   ServerEvent,
 } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
+import type { Delivery } from "@/lib/api/types";
+import { emptyDelivery, newestFirst, sampleDelivery } from "./delivery";
 import { type Derived, derive } from "./derive";
 import { loadWorkspace } from "./md";
 import { isIgnored, normPath } from "./md/paths";
@@ -152,6 +154,16 @@ export interface Store {
   paths(): string[];
   /** Binary files by path. */
   assets(): Record<string, { url: string; bytes: number }>;
+
+  /**
+   * Git, PR and CI data of an issue, newest first. It lives beside the files, not in them (plan
+   * D2): the sample brings a fixture, a Codex run adds to it, `reset()` empties it.
+   */
+  delivery(issue: IssueId): Delivery;
+  /** Change the delivery data of an issue. The listeners hear it. */
+  updateDelivery(issue: IssueId, change: (current: Delivery) => Delivery): void;
+  /** Hear every change `updateDelivery` makes. */
+  onDelivery(fn: (issue: IssueId) => void): () => void;
 
   /** Throw a 409 when `base_rev` is stale for the anchor (see `guard` below). */
   guard(file: string, anchor: string, base: string | undefined, current?: () => unknown): void;
@@ -364,6 +376,9 @@ export function createStore(options: StoreOptions = {}): Store {
   let assets: Record<string, { url: string; bytes: number }> = {};
   let previews = new Set<string>();
   let activityLog = new Map<IssueId, ActivitySrc[]>();
+  // Git, PR and CI data. Replaced, never changed in place, so a held copy stays exact.
+  let deliveryData = new Map<IssueId, Delivery>();
+  const deliveryListeners = new Set<(issue: IssueId) => void>();
 
   function rebase(text: Record<string, string>): Record<string, string> {
     return rebaseWorkspace(text, shiftMs);
@@ -378,14 +393,18 @@ export function createStore(options: StoreOptions = {}): Store {
     assets = { ...from.assets };
     previews = new Set(from.previews);
     activityLog = new Map();
+    // Only the sample world has a git history (a store built on the sample files, as the tests
+    // do, counts too); the shipped workspace and new issues start empty.
+    deliveryData = which === "sample" || from === sample ? sampleDelivery(shiftMs) : new Map();
   }
   takeDisk(home, "home");
 
   /**
    * Everything that makes up a working copy, to put it back exactly. The texts, the activity
-   * log and the previews are never changed in place (a write builds new ones), so holding the
-   * references is enough; the file history grows in place, so it is copied. Archify is not part
-   * of it: that is a flag of the daemon, not of the files, and its callers manage it themselves.
+   * log, the delivery data and the previews are never changed in place (a write builds new ones),
+   * so holding the references is enough; the file history grows in place, so it is copied.
+   * Archify is not part of it: that is a flag of the daemon, not of the files, and its callers
+   * manage it themselves.
    */
   interface Saved {
     showing: "home" | "sample";
@@ -396,6 +415,7 @@ export function createStore(options: StoreOptions = {}): Store {
     assets: Record<string, { url: string; bytes: number }>;
     previews: Set<string>;
     activityLog: Map<IssueId, ActivitySrc[]>;
+    delivery: Map<IssueId, Delivery>;
     versions: Map<string, FileVersion[]>;
   }
 
@@ -412,6 +432,7 @@ export function createStore(options: StoreOptions = {}): Store {
       assets,
       previews,
       activityLog,
+      delivery: deliveryData,
       versions: copyVersions(versions),
     };
   }
@@ -425,6 +446,7 @@ export function createStore(options: StoreOptions = {}): Store {
     assets = s.assets;
     previews = s.previews;
     activityLog = s.activityLog;
+    deliveryData = s.delivery;
   }
 
   function nextRev(note: string): string {
@@ -766,6 +788,19 @@ export function createStore(options: StoreOptions = {}): Store {
     newId(prefix) {
       const taken = allIds(built.source.world);
       return randomId((id) => taken.has(id), prefix);
+    },
+
+    delivery: (issue) => newestFirst(deliveryData.get(issue) ?? emptyDelivery()),
+    updateDelivery(issue, change) {
+      const current = newestFirst(deliveryData.get(issue) ?? emptyDelivery());
+      deliveryData = new Map(deliveryData).set(issue, change(current));
+      for (const l of [...deliveryListeners]) l(issue);
+    },
+    onDelivery(fn) {
+      deliveryListeners.add(fn);
+      return () => {
+        deliveryListeners.delete(fn);
+      };
     },
 
     summary: (id) => built.derived.snapshot.issues.find((i) => i.id === id),

@@ -1,0 +1,1141 @@
+{
+  "issues": {
+    "wf-3k9x2": {
+      "commits": [
+        {
+          "sha": "0d4a6c1",
+          "subject": "Send snapshot on connect",
+          "author": "codex",
+          "at": "2026-10-22T15:54+05:30",
+          "branch": "wf-3k9x2/sse-delta-stream",
+          "task": "T-3",
+          "pr": 41,
+          "files_changed": 1,
+          "trailer": "Issue: wf-3k9x2"
+        },
+        {
+          "sha": "9f1e2ab",
+          "subject": "Stream deltas over SSE",
+          "author": "codex",
+          "at": "2026-10-22T15:36+05:30",
+          "branch": "wf-3k9x2/sse-delta-stream",
+          "task": "T-3",
+          "pr": 41,
+          "files_changed": 2,
+          "trailer": "Issue: wf-3k9x2"
+        },
+        {
+          "sha": "b81f03a",
+          "subject": "Test live_append within 2 s",
+          "author": "codex",
+          "at": "2026-10-21T11:40+05:30",
+          "branch": "wf-3k9x2/index-deltas",
+          "task": "T-1",
+          "pr": 36,
+          "files_changed": 1,
+          "trailer": "Issue: wf-3k9x2"
+        },
+        {
+          "sha": "4c1d7e0",
+          "subject": "Diff snapshots into deltas",
+          "author": "codex",
+          "at": "2026-10-21T10:02+05:30",
+          "branch": "wf-3k9x2/index-deltas",
+          "task": "T-1",
+          "pr": 36,
+          "files_changed": 2,
+          "trailer": "Issue: wf-3k9x2"
+        },
+        {
+          "sha": "a3f9c21",
+          "subject": "Pin notify 8.2 and rescan the subtree",
+          "author": "codex",
+          "at": "2026-10-21T00:22+05:30",
+          "branch": "wf-3k9x2/index-deltas",
+          "task": "T-2",
+          "pr": 36,
+          "files_changed": 2,
+          "trailer": "Issue: wf-3k9x2"
+        },
+        {
+          "sha": "5d2c8f1",
+          "subject": "Bump notify to 9.0-rc",
+          "author": "codex",
+          "at": "2026-10-20T23:05+05:30",
+          "branch": "wf-3k9x2/index-deltas",
+          "task": "T-2",
+          "pr": 36,
+          "files_changed": 2,
+          "trailer": "Issue: wf-3k9x2"
+        }
+      ],
+      "prs": [
+        {
+          "number": 41,
+          "title": "Push board updates over SSE",
+          "state": "draft",
+          "branch": "wf-3k9x2/sse-delta-stream",
+          "author": "codex",
+          "updated_at": "2026-10-22T15:58+05:30",
+          "checks": { "passed": 5, "failed": 0, "pending": 1 },
+          "review": "pending",
+          "url": null
+        },
+        {
+          "number": 36,
+          "title": "Diff snapshots and suppress watcher echoes",
+          "state": "open",
+          "branch": "wf-3k9x2/index-deltas",
+          "author": "codex",
+          "updated_at": "2026-10-21T19:57+05:30",
+          "checks": { "passed": 6, "failed": 0, "pending": 0 },
+          "review": "changes_requested",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3981",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-3k9x2/sse-delta-stream",
+          "sha": "0d4a6c1",
+          "status": "in_progress",
+          "started_at": "2026-10-22T15:55+05:30",
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 6 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 48 },
+            { "name": "test" }
+          ]
+        },
+        {
+          "id": "ci-3978",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-3k9x2/sse-delta-stream",
+          "sha": "9f1e2ab",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-22T15:37+05:30",
+          "duration_s": 214,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 6 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 51 },
+            { "name": "test", "conclusion": "success", "duration_s": 157 }
+          ]
+        },
+        {
+          "id": "ci-3925",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-3k9x2/index-deltas",
+          "sha": "b81f03a",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T11:41+05:30",
+          "duration_s": 188,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 49 },
+            { "name": "test", "conclusion": "success", "duration_s": 134 }
+          ]
+        },
+        {
+          "id": "ci-3921",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-3k9x2/index-deltas",
+          "sha": "4c1d7e0",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T10:03+05:30",
+          "duration_s": 176,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 47 },
+            { "name": "test", "conclusion": "success", "duration_s": 124 }
+          ]
+        },
+        {
+          "id": "ci-3904",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-3k9x2/index-deltas",
+          "sha": "a3f9c21",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T00:23+05:30",
+          "duration_s": 171,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 46 },
+            { "name": "test", "conclusion": "success", "duration_s": 120 }
+          ]
+        },
+        {
+          "id": "ci-3901",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-3k9x2/index-deltas",
+          "sha": "5d2c8f1",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-10-20T23:06+05:30",
+          "duration_s": 97,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 6 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 44 },
+            { "name": "test", "conclusion": "failure", "duration_s": 47 }
+          ]
+        }
+      ]
+    },
+    "wf-b1d7v": {
+      "commits": [
+        {
+          "sha": "4e7c1b9",
+          "subject": "Add the issue drawer on the mock server",
+          "author": "claude-sonnet",
+          "at": "2026-10-22T11:20+05:30",
+          "branch": "wf-b1d7v/board-and-drawer",
+          "task": "T-5",
+          "pr": 40,
+          "files_changed": 6,
+          "trailer": "Issue: wf-b1d7v"
+        },
+        {
+          "sha": "d90b4e3",
+          "subject": "Build the golden fixtures once per CI run",
+          "author": "codex",
+          "at": "2026-10-21T15:34+05:30",
+          "branch": "wf-b1d7v/ci-fixtures",
+          "pr": 37,
+          "files_changed": 2,
+          "trailer": "Issue: wf-b1d7v"
+        },
+        {
+          "sha": "3a9e5d1",
+          "subject": "Add the golden workspace to the wf-index tests",
+          "author": "codex",
+          "at": "2026-10-21T14:05+05:30",
+          "branch": "wf-b1d7v/ci-fixtures",
+          "pr": 37,
+          "files_changed": 3,
+          "trailer": "Issue: wf-b1d7v"
+        },
+        {
+          "sha": "2fa90c6",
+          "subject": "Answer 409 with the current value",
+          "author": "codex",
+          "at": "2026-10-16T17:20+05:30",
+          "branch": "wf-b1d7v/write-protocol",
+          "task": "T-3",
+          "pr": 29,
+          "files_changed": 3,
+          "trailer": "Issue: wf-b1d7v"
+        },
+        {
+          "sha": "e41b8a7",
+          "subject": "Rebuild the roll-ups on a change",
+          "author": "mudit",
+          "at": "2026-10-15T11:55+05:30",
+          "branch": "wf-b1d7v/index-and-watcher",
+          "task": "T-2",
+          "pr": 27,
+          "files_changed": 4,
+          "trailer": "Issue: wf-b1d7v"
+        },
+        {
+          "sha": "7c2e9d4",
+          "subject": "Lint a fresh workspace clean",
+          "author": "codex",
+          "at": "2026-10-11T16:30+05:30",
+          "branch": "wf-b1d7v/freeze-format",
+          "task": "T-1",
+          "pr": 22,
+          "files_changed": 3,
+          "trailer": "Issue: wf-b1d7v"
+        }
+      ],
+      "prs": [
+        {
+          "number": 40,
+          "title": "Ship the board and the drawer",
+          "state": "draft",
+          "branch": "wf-b1d7v/board-and-drawer",
+          "author": "shruti",
+          "updated_at": "2026-10-22T11:24+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "pending",
+          "url": null
+        },
+        {
+          "number": 37,
+          "title": "Cache the golden fixtures in CI",
+          "state": "merged",
+          "branch": "wf-b1d7v/ci-fixtures",
+          "author": "codex",
+          "updated_at": "2026-10-21T16:10+05:30",
+          "checks": { "passed": 2, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        },
+        {
+          "number": 29,
+          "title": "Refuse a write when the file changed",
+          "state": "merged",
+          "branch": "wf-b1d7v/write-protocol",
+          "author": "codex",
+          "updated_at": "2026-10-16T18:05+05:30",
+          "checks": { "passed": 3, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        },
+        {
+          "number": 27,
+          "title": "Index the workspace and watch it",
+          "state": "merged",
+          "branch": "wf-b1d7v/index-and-watcher",
+          "author": "mudit",
+          "updated_at": "2026-10-15T13:00+05:30",
+          "checks": { "passed": 3, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        },
+        {
+          "number": 22,
+          "title": "Freeze wf_format 1",
+          "state": "merged",
+          "branch": "wf-b1d7v/freeze-format",
+          "author": "codex",
+          "updated_at": "2026-10-11T17:10+05:30",
+          "checks": { "passed": 3, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3968",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-b1d7v/board-and-drawer",
+          "sha": "4e7c1b9",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-22T11:22+05:30",
+          "duration_s": 96,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 21 },
+            { "name": "biome", "conclusion": "success", "duration_s": 9 },
+            { "name": "vitest", "conclusion": "success", "duration_s": 41 },
+            { "name": "build", "conclusion": "success", "duration_s": 25 }
+          ]
+        },
+        {
+          "id": "ci-3940",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-b1d7v/ci-fixtures",
+          "sha": "d90b4e3",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T15:35+05:30",
+          "duration_s": 91,
+          "jobs": [
+            { "name": "rust", "conclusion": "success", "duration_s": 74 },
+            { "name": "web", "conclusion": "success", "duration_s": 66 }
+          ]
+        },
+        {
+          "id": "ci-3931",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-b1d7v/ci-fixtures",
+          "sha": "3a9e5d1",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-10-21T14:06+05:30",
+          "duration_s": 612,
+          "jobs": [
+            { "name": "rust", "conclusion": "failure", "duration_s": 612 },
+            { "name": "web", "conclusion": "success", "duration_s": 66 }
+          ]
+        },
+        {
+          "id": "ci-3808",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-b1d7v/write-protocol",
+          "sha": "2fa90c6",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-16T17:22+05:30",
+          "duration_s": 118,
+          "jobs": [
+            { "name": "rust", "conclusion": "success", "duration_s": 104 },
+            { "name": "web", "conclusion": "success", "duration_s": 58 }
+          ]
+        },
+        {
+          "id": "ci-3790",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-b1d7v/index-and-watcher",
+          "sha": "e41b8a7",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-15T11:57+05:30",
+          "duration_s": 109,
+          "jobs": [
+            { "name": "rust", "conclusion": "success", "duration_s": 96 },
+            { "name": "web", "conclusion": "success", "duration_s": 55 }
+          ]
+        },
+        {
+          "id": "ci-3705",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-b1d7v/freeze-format",
+          "sha": "7c2e9d4",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-11T16:32+05:30",
+          "duration_s": 88,
+          "jobs": [
+            { "name": "rust", "conclusion": "success", "duration_s": 79 },
+            { "name": "web", "conclusion": "success", "duration_s": 52 }
+          ]
+        }
+      ]
+    },
+    "wf-t3jp5": {
+      "commits": [
+        {
+          "sha": "5c7a0d2",
+          "subject": "Test the trim order on the golden workspace",
+          "author": "codex",
+          "at": "2026-10-22T15:30+05:30",
+          "branch": "wf-t3jp5/token-budget",
+          "task": "T-2",
+          "pr": 34,
+          "files_changed": 1,
+          "trailer": "Issue: wf-t3jp5"
+        },
+        {
+          "sha": "e50d93c",
+          "subject": "Drop sections in a fixed order",
+          "author": "codex",
+          "at": "2026-10-21T14:20+05:30",
+          "branch": "wf-t3jp5/token-budget",
+          "task": "T-2",
+          "pr": 34,
+          "files_changed": 2,
+          "trailer": "Issue: wf-t3jp5"
+        },
+        {
+          "sha": "c47a1be",
+          "subject": "Count tokens with a byte-pair estimate",
+          "author": "codex",
+          "at": "2026-10-18T13:15+05:30",
+          "branch": "wf-t3jp5/token-budget",
+          "task": "T-1",
+          "pr": 34,
+          "files_changed": 2,
+          "trailer": "Issue: wf-t3jp5"
+        }
+      ],
+      "prs": [
+        {
+          "number": 34,
+          "title": "Trim context bundles to the token budget",
+          "state": "draft",
+          "branch": "wf-t3jp5/token-budget",
+          "author": "codex",
+          "updated_at": "2026-10-22T15:34+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "pending",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3977",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-t3jp5/token-budget",
+          "sha": "5c7a0d2",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-22T15:31+05:30",
+          "duration_s": 143,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 52 },
+            { "name": "test", "conclusion": "success", "duration_s": 86 }
+          ]
+        },
+        {
+          "id": "ci-3934",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-t3jp5/token-budget",
+          "sha": "e50d93c",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T14:22+05:30",
+          "duration_s": 138,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 50 },
+            { "name": "test", "conclusion": "success", "duration_s": 83 }
+          ]
+        },
+        {
+          "id": "ci-3830",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-t3jp5/token-budget",
+          "sha": "c47a1be",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-18T13:22+05:30",
+          "duration_s": 129,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 49 },
+            { "name": "test", "conclusion": "success", "duration_s": 75 }
+          ]
+        }
+      ]
+    },
+    "wf-9gr4k": {
+      "commits": [
+        {
+          "sha": "9c2e6a1",
+          "subject": "Print the preferred term as the fix",
+          "author": "claude-sonnet",
+          "at": "2026-10-21T16:40+05:30",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "task": "T-3",
+          "pr": 33,
+          "files_changed": 2,
+          "trailer": "Issue: wf-9gr4k"
+        },
+        {
+          "sha": "b20f7a4",
+          "subject": "Test S09 on the dogfood workspace",
+          "author": "claude-sonnet",
+          "at": "2026-10-19T14:15+05:30",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "task": "T-2",
+          "pr": 33,
+          "files_changed": 1,
+          "trailer": "Issue: wf-9gr4k"
+        },
+        {
+          "sha": "6e1c8d5",
+          "subject": "Match avoided words on word boundaries",
+          "author": "claude-sonnet",
+          "at": "2026-10-17T14:55+05:30",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "task": "T-1",
+          "pr": 33,
+          "files_changed": 1
+        }
+      ],
+      "prs": [
+        {
+          "number": 33,
+          "title": "Lint glossary synonyms (S09)",
+          "state": "open",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "author": "claude-sonnet",
+          "updated_at": "2026-10-22T15:17+05:30",
+          "checks": { "passed": 5, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3944",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "sha": "9c2e6a1",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T16:42+05:30",
+          "duration_s": 112,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 48 },
+            { "name": "test", "conclusion": "success", "duration_s": 57 }
+          ]
+        },
+        {
+          "id": "ci-3855",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "sha": "b20f7a4",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-19T14:16+05:30",
+          "duration_s": 104,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 46 },
+            { "name": "test", "conclusion": "success", "duration_s": 53 }
+          ]
+        },
+        {
+          "id": "ci-3815",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-9gr4k/s09-synonyms",
+          "sha": "6e1c8d5",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-17T14:56+05:30",
+          "duration_s": 98,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 44 },
+            { "name": "test", "conclusion": "success", "duration_s": 49 }
+          ]
+        }
+      ]
+    },
+    "wf-z9mw2": {
+      "commits": [
+        {
+          "sha": "b7d1e02",
+          "subject": "Roll the card back on a conflict",
+          "author": "claude-sonnet",
+          "at": "2026-10-22T10:20+05:30",
+          "branch": "wf-z9mw2/drag-cards",
+          "task": "T-3",
+          "pr": 28,
+          "files_changed": 2,
+          "trailer": "Issue: wf-z9mw2"
+        },
+        {
+          "sha": "f4a8c10",
+          "subject": "Handle the move gate in the drop",
+          "author": "claude-sonnet",
+          "at": "2026-10-22T09:48+05:30",
+          "branch": "wf-z9mw2/drag-cards",
+          "task": "T-3",
+          "pr": 28,
+          "files_changed": 2,
+          "trailer": "Issue: wf-z9mw2"
+        },
+        {
+          "sha": "e92b4d7",
+          "subject": "Add drop targets and the accent line",
+          "author": "claude-sonnet",
+          "at": "2026-10-17T13:35+05:30",
+          "branch": "wf-z9mw2/drag-cards",
+          "task": "T-2",
+          "pr": 28,
+          "files_changed": 3,
+          "trailer": "Issue: wf-z9mw2"
+        },
+        {
+          "sha": "30c9ba1",
+          "subject": "Make the cards draggable",
+          "author": "claude-sonnet",
+          "at": "2026-10-15T15:25+05:30",
+          "branch": "wf-z9mw2/drag-cards",
+          "task": "T-1",
+          "pr": 28,
+          "files_changed": 2,
+          "trailer": "Issue: wf-z9mw2"
+        }
+      ],
+      "prs": [
+        {
+          "number": 28,
+          "title": "Drag issues between columns",
+          "state": "open",
+          "branch": "wf-z9mw2/drag-cards",
+          "author": "claude-sonnet",
+          "updated_at": "2026-10-22T10:27+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "pending",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3963",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-z9mw2/drag-cards",
+          "sha": "b7d1e02",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-22T10:22+05:30",
+          "duration_s": 93,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 20 },
+            { "name": "biome", "conclusion": "success", "duration_s": 8 },
+            { "name": "vitest", "conclusion": "success", "duration_s": 40 },
+            { "name": "build", "conclusion": "success", "duration_s": 24 }
+          ]
+        },
+        {
+          "id": "ci-3960",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-z9mw2/drag-cards",
+          "sha": "f4a8c10",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-10-22T09:50+05:30",
+          "duration_s": 71,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 19 },
+            { "name": "biome", "conclusion": "success", "duration_s": 8 },
+            { "name": "vitest", "conclusion": "failure", "duration_s": 36 },
+            { "name": "build", "conclusion": "cancelled" }
+          ]
+        }
+      ]
+    },
+    "wf-q4fs9": {
+      "commits": [
+        {
+          "sha": "8b5e0c2",
+          "subject": "Release an expired claim under the file lock",
+          "author": "codex",
+          "at": "2026-10-22T15:10+05:30",
+          "branch": "wf-q4fs9/reap-leases",
+          "task": "T-2",
+          "pr": 38,
+          "files_changed": 2,
+          "trailer": "Issue: wf-q4fs9"
+        },
+        {
+          "sha": "f3a71d9",
+          "subject": "Return the lease state from the index",
+          "author": "codex",
+          "at": "2026-10-21T14:05+05:30",
+          "branch": "wf-q4fs9/reap-leases",
+          "task": "T-1",
+          "pr": 38,
+          "files_changed": 1,
+          "trailer": "Issue: wf-q4fs9"
+        }
+      ],
+      "prs": [
+        {
+          "number": 38,
+          "title": "Reap expired task leases",
+          "state": "draft",
+          "branch": "wf-q4fs9/reap-leases",
+          "author": "codex",
+          "updated_at": "2026-10-22T16:20+05:30",
+          "checks": { "passed": 3, "failed": 0, "pending": 2 },
+          "review": "pending",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3984",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-q4fs9/reap-leases",
+          "sha": "8b5e0c2",
+          "status": "queued",
+          "started_at": "2026-10-22T16:20+05:30",
+          "jobs": [{ "name": "fmt" }, { "name": "clippy" }, { "name": "test" }]
+        },
+        {
+          "id": "ci-3975",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-q4fs9/reap-leases",
+          "sha": "8b5e0c2",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-22T15:11+05:30",
+          "duration_s": 126,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 47 },
+            { "name": "test", "conclusion": "success", "duration_s": 72 }
+          ]
+        },
+        {
+          "id": "ci-3930",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-q4fs9/reap-leases",
+          "sha": "f3a71d9",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-21T14:06+05:30",
+          "duration_s": 119,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 46 },
+            { "name": "test", "conclusion": "success", "duration_s": 68 }
+          ]
+        }
+      ]
+    },
+    "wf-w8vz4": {
+      "commits": [
+        {
+          "sha": "47d1b9e",
+          "subject": "Queue renders behind the first snapshot",
+          "author": "codex",
+          "at": "2026-10-19T14:25+05:30",
+          "branch": "wf-w8vz4/render-queue",
+          "task": "T-1",
+          "pr": 35,
+          "files_changed": 2,
+          "trailer": "Issue: wf-w8vz4"
+        }
+      ],
+      "prs": [
+        {
+          "number": 35,
+          "title": "Queue archify renders",
+          "state": "merged",
+          "branch": "wf-w8vz4/render-queue",
+          "author": "codex",
+          "updated_at": "2026-10-19T16:45+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3858",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-w8vz4/render-queue",
+          "sha": "47d1b9e",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "started_at": "2026-10-19T14:40+05:30",
+          "duration_s": 22,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "cancelled", "duration_s": 17 },
+            { "name": "test", "conclusion": "cancelled" }
+          ]
+        },
+        {
+          "id": "ci-3857",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-w8vz4/render-queue",
+          "sha": "47d1b9e",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-19T14:27+05:30",
+          "duration_s": 122,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 5 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 48 },
+            { "name": "test", "conclusion": "success", "duration_s": 69 }
+          ]
+        }
+      ]
+    },
+    "wf-7p4dn": {
+      "commits": [
+        {
+          "sha": "a41c7e0",
+          "subject": "Parse files in parallel",
+          "author": "codex",
+          "at": "2026-09-02T12:05+05:30",
+          "branch": "wf-7p4dn/scan-snapshot",
+          "task": "T-2",
+          "pr": 12,
+          "files_changed": 2,
+          "trailer": "Issue: wf-7p4dn"
+        },
+        {
+          "sha": "6b2f0d4",
+          "subject": "Walk the folder with the ignore rules",
+          "author": "codex",
+          "at": "2026-08-28T14:25+05:30",
+          "branch": "wf-7p4dn/scan-snapshot",
+          "task": "T-1",
+          "pr": 12,
+          "files_changed": 2,
+          "trailer": "Issue: wf-7p4dn"
+        }
+      ],
+      "prs": [
+        {
+          "number": 12,
+          "title": "Scan the workspace into a snapshot",
+          "state": "merged",
+          "branch": "wf-7p4dn/scan-snapshot",
+          "author": "codex",
+          "updated_at": "2026-09-07T16:05+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3131",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-7p4dn/scan-snapshot",
+          "sha": "a41c7e0",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-09-07T15:40+05:30",
+          "duration_s": 101,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 4 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 41 },
+            { "name": "test", "conclusion": "success", "duration_s": 54 }
+          ]
+        },
+        {
+          "id": "ci-3118",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-7p4dn/scan-snapshot",
+          "sha": "a41c7e0",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-09-02T12:06+05:30",
+          "duration_s": 99,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 4 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 40 },
+            { "name": "test", "conclusion": "success", "duration_s": 53 }
+          ]
+        }
+      ]
+    },
+    "wf-c2pn6": {
+      "commits": [
+        {
+          "sha": "a07f6c8",
+          "subject": "Add the actions group",
+          "author": "claude-sonnet",
+          "at": "2026-10-17T16:55+05:30",
+          "branch": "wf-c2pn6/palette",
+          "task": "T-3",
+          "pr": 21,
+          "files_changed": 2,
+          "trailer": "Issue: wf-c2pn6"
+        },
+        {
+          "sha": "5c9e0a3",
+          "subject": "Test the open time and the server search",
+          "author": "claude-sonnet",
+          "at": "2026-10-11T16:15+05:30",
+          "branch": "wf-c2pn6/palette",
+          "task": "T-2",
+          "pr": 21,
+          "files_changed": 1,
+          "trailer": "Issue: wf-c2pn6"
+        },
+        {
+          "sha": "1be7d40",
+          "subject": "Build the palette shell with cmdk",
+          "author": "claude-sonnet",
+          "at": "2026-10-07T14:05+05:30",
+          "branch": "wf-c2pn6/palette",
+          "task": "T-1",
+          "pr": 21,
+          "files_changed": 3,
+          "trailer": "Issue: wf-c2pn6"
+        }
+      ],
+      "prs": [
+        {
+          "number": 21,
+          "title": "Add a command palette",
+          "state": "merged",
+          "branch": "wf-c2pn6/palette",
+          "author": "claude-sonnet",
+          "updated_at": "2026-10-17T17:40+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        },
+        {
+          "number": 20,
+          "title": "Draft the palette on a Radix select",
+          "state": "closed",
+          "branch": "wf-c2pn6/radix-select",
+          "author": "claude-sonnet",
+          "updated_at": "2026-10-07T13:30+05:30",
+          "checks": { "passed": 2, "failed": 1, "pending": 0 },
+          "review": "changes_requested",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3819",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-c2pn6/palette",
+          "sha": "a07f6c8",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-17T16:58+05:30",
+          "duration_s": 94,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 19 },
+            { "name": "biome", "conclusion": "success", "duration_s": 8 },
+            { "name": "vitest", "conclusion": "success", "duration_s": 38 },
+            { "name": "build", "conclusion": "success", "duration_s": 24 }
+          ]
+        },
+        {
+          "id": "ci-3701",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-c2pn6/palette",
+          "sha": "5c9e0a3",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-11T16:18+05:30",
+          "duration_s": 90,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 18 },
+            { "name": "biome", "conclusion": "success", "duration_s": 8 },
+            { "name": "vitest", "conclusion": "success", "duration_s": 36 },
+            { "name": "build", "conclusion": "success", "duration_s": 23 }
+          ]
+        },
+        {
+          "id": "ci-3640",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-c2pn6/palette",
+          "sha": "1be7d40",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-07T14:07+05:30",
+          "duration_s": 86,
+          "jobs": [
+            { "name": "typecheck", "conclusion": "success", "duration_s": 17 },
+            { "name": "biome", "conclusion": "success", "duration_s": 8 },
+            { "name": "vitest", "conclusion": "success", "duration_s": 34 },
+            { "name": "build", "conclusion": "success", "duration_s": 22 }
+          ]
+        }
+      ]
+    },
+    "wf-9tq4e": {
+      "commits": [
+        {
+          "sha": "1d7f3c8",
+          "subject": "Check the rev and write atomically",
+          "author": "codex",
+          "at": "2026-08-11T15:00+05:30",
+          "branch": "wf-9tq4e/write-back",
+          "task": "T-2",
+          "pr": 8,
+          "files_changed": 2,
+          "trailer": "Issue: wf-9tq4e"
+        },
+        {
+          "sha": "c80e5f2",
+          "subject": "Splice one frontmatter value by its span",
+          "author": "codex",
+          "at": "2026-08-09T12:10+05:30",
+          "branch": "wf-9tq4e/write-back",
+          "task": "T-1",
+          "pr": 8,
+          "files_changed": 2,
+          "trailer": "Issue: wf-9tq4e"
+        },
+        {
+          "sha": "71be2d9",
+          "subject": "Write goal.md through a serializer",
+          "author": "codex",
+          "at": "2026-08-05T13:30+05:30",
+          "branch": "wf-9tq4e/write-back",
+          "task": "T-1",
+          "pr": 8,
+          "files_changed": 1,
+          "trailer": "Issue: wf-9tq4e"
+        }
+      ],
+      "prs": [
+        {
+          "number": 8,
+          "title": "Write back one value without reformatting",
+          "state": "merged",
+          "branch": "wf-9tq4e/write-back",
+          "author": "codex",
+          "updated_at": "2026-08-13T15:05+05:30",
+          "checks": { "passed": 4, "failed": 0, "pending": 0 },
+          "review": "approved",
+          "url": null
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "ci-3033",
+          "workflow": "CI",
+          "trigger": "pull_request",
+          "branch": "wf-9tq4e/write-back",
+          "sha": "1d7f3c8",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-08-11T15:02+05:30",
+          "duration_s": 92,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 4 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 38 },
+            { "name": "test", "conclusion": "success", "duration_s": 48 }
+          ]
+        },
+        {
+          "id": "ci-3019",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-9tq4e/write-back",
+          "sha": "c80e5f2",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-08-09T12:12+05:30",
+          "duration_s": 88,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 4 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 37 },
+            { "name": "test", "conclusion": "success", "duration_s": 45 }
+          ]
+        },
+        {
+          "id": "ci-3011",
+          "workflow": "CI",
+          "trigger": "push",
+          "branch": "wf-9tq4e/write-back",
+          "sha": "71be2d9",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-08-05T13:31+05:30",
+          "duration_s": 74,
+          "jobs": [
+            { "name": "fmt", "conclusion": "success", "duration_s": 4 },
+            { "name": "clippy", "conclusion": "success", "duration_s": 36 },
+            { "name": "test", "conclusion": "failure", "duration_s": 30 }
+          ]
+        }
+      ]
+    }
+  }
+}

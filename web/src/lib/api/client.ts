@@ -13,7 +13,17 @@ import type {
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "./error";
 import { isRealApi, loadMock } from "./mock-bridge";
-import type { SearchScope, WfOp, WorkspaceFile, WorkspaceFileInfo } from "./types";
+import type {
+  CodexRun,
+  CodexRunKind,
+  Delivery,
+  SearchScope,
+  SplitInput,
+  SplitResult,
+  WfOp,
+  WorkspaceFile,
+  WorkspaceFileInfo,
+} from "./types";
 
 const BASE = "/api";
 
@@ -38,6 +48,14 @@ export interface Api {
   search(q: string, scope?: SearchScope, k?: number): Promise<SearchHit[]>;
   context(id: string, budget?: number): Promise<string>;
   ops(op: WfOp): Promise<OpResult>;
+  /** Commits, pull requests and CI runs of an issue, newest first. */
+  delivery(issue: string): Promise<Delivery>;
+  /** Split a group into issue proposals. `onStep` hears the progress steps of the mock. */
+  splitWork(input: SplitInput, onStep?: (step: number) => void): Promise<SplitResult>;
+  /** Codex runs of one issue, or of all, newest first. */
+  codexRuns(issue?: string): Promise<CodexRun[]>;
+  startCodexRun(issue: string, kind: CodexRunKind): Promise<CodexRun>;
+  cancelCodexRun(id: string): Promise<CodexRun>;
   health(): Promise<Health>;
   /** Every file of the workspace, sorted by path. */
   files(): Promise<WorkspaceFileInfo[]>;
@@ -65,6 +83,23 @@ const real: Api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(op),
     }),
+  delivery: (issue) => request(`/issues/${encodeURIComponent(issue)}/delivery`),
+  splitWork: (input, onStep) => {
+    onStep?.(0);
+    return request("/work/split", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+  codexRuns: (issue) => request(`/codex/runs${issue ? `?${new URLSearchParams({ issue })}` : ""}`),
+  startCodexRun: (issue, kind) =>
+    request("/codex/runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ issue, kind }),
+    }),
+  cancelCodexRun: (id) => request(`/codex/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
   health: () => request("/health"),
   files: () => request("/files"),
   file: (path) => request(`/files/${filePath(path)}`),
@@ -88,6 +123,11 @@ const mock: Api = {
   search: async (q, scope, k) => (await loadMock()).search(q, scope, k),
   context: async (id, budget) => (await loadMock()).context(id, budget),
   ops: async (op) => (await loadMock()).ops(op),
+  delivery: async (issue) => (await loadMock()).delivery(issue),
+  splitWork: async (input, onStep) => (await loadMock()).splitWork(input, onStep),
+  codexRuns: async (issue) => (await loadMock()).codexRuns(issue),
+  startCodexRun: async (issue, kind) => (await loadMock()).startCodexRun(issue, kind),
+  cancelCodexRun: async (id) => (await loadMock()).cancelCodexRun(id),
   health: async () => (await loadMock()).health(),
   files: async () => (await loadMock()).files(),
   file: async (path) => (await loadMock()).file(path),

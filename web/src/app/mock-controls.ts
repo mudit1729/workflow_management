@@ -17,6 +17,8 @@ export interface MockControls {
   loadSample: () => number;
   /** Shows the sample until the returned function is called, then restores the working copy. */
   holdSample: () => () => void;
+  /** Time between the phases of the Codex runs that start from now on, in ms. Default 2000. */
+  setCodexPhaseMs: (ms: number) => void;
 }
 
 export function getMockControls(): MockControls | undefined {

@@ -10,4 +10,8 @@ export const qk = {
   context: (id: string, budget: number) => ["context", id, budget] as const,
   files: () => ["files"] as const,
   file: (path: string) => ["file", path] as const,
+  /** Commits, pull requests and CI runs of one issue. */
+  delivery: (issue: string) => ["delivery", issue] as const,
+  /** Codex runs of one issue, or of all. */
+  codexRuns: (issue?: string) => ["codex", "runs", issue ?? "all"] as const,
 };
