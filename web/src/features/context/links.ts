@@ -6,6 +6,7 @@
 //   - [[wf-3k9x2#D-7f3k2]] Push board updates over SSE                      entry of an issue
 //   - Glossary: lease — a time-boxed claim on a task                         glossary term
 //   - [research notes](../../web/live-board-updates/notes/research.md)      workspace file
+//   - [[platform:runbooks/rotate-keys.md]]: Cited for "how do we rotate"     page of a team or personal library
 //
 // A file path is relative to the folder of the issue, so the link also works in an editor and on
 // a git host. Older bullets such as `- [[wf-7p4dn]]: index scan.` still read: the colon is
@@ -22,7 +23,8 @@ export type LinkKind = ContextKind | "issue" | "url" | "text";
 export interface ParsedLink {
   kind: LinkKind;
   /** library: `lib-4tz7c`; entry: `wf-3k9x2#D-7f3k2` (or `#D-7f3k2`); issue: `wf-7p4dn`;
-   *  term: the term; file: workspace-relative path; url: the address; text: the whole line. */
+   *  page: `alias:path` (with `#anchor`); term: the term; file: workspace-relative path;
+   *  url: the address; text: the whole line. */
   target: string;
   /** The words after the link, without the bullet and the separator. */
   label: string;
@@ -32,6 +34,9 @@ export interface ParsedLink {
 
 /** Characters of a linked file that `wf context` includes. The picker estimates with it too. */
 export const FILE_EXCERPT_CHARS = 1200;
+
+/** Characters of a linked library page that `wf context` includes. A page is what a person chose to cite. */
+export const PAGE_EXCERPT_CHARS = 3200;
 
 /** Rough token count: four characters per token, the rule of thumb `wf context` uses. */
 export const estimateTokens = (chars: number): number => Math.ceil(Math.max(0, chars) / 4);
@@ -99,6 +104,8 @@ export function linkLine(link: ContextLink, fromDir = ""): string {
     case "library":
     case "entry":
       return `- [[${link.target}]]${label ? ` ${label}` : ""}`;
+    case "page":
+      return `- [[${link.target}]]${label ? `: ${label}` : ""}`;
     case "term":
       return `- Glossary: ${oneLine(link.target)}${label ? ` — ${label}` : ""}`;
     case "file": {
@@ -142,6 +149,11 @@ const REF_LINE = new RegExp(
 const TERM_LINE = new RegExp(`${BULLET}Glossary:\\s*(.+?)(?:\\s+[\\u2014\\u2013-]+\\s+(.*))?\\s*$`);
 const LINK_LINE = new RegExp(`${BULLET}\\[([^\\]]*)\\]\\(([^)\\s]+)\\)\\s*(.*)$`);
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/** `platform:runbooks/rotate-keys.md`, with an optional `#anchor`: the address of a library page. */
+const PAGE_ADDRESS = /^[a-z0-9][a-z0-9_-]*:(?!\/\/)[^\s#:][^\s#]*(?:#\S+)?$/i;
+
+/** Is this `[[target]]` the address of a page of a team or personal library? */
+export const isPageAddress = (target: string): boolean => PAGE_ADDRESS.test(target);
 
 /**
  * Read one line of `## Links`. A file link resolves against `fromDir` to a workspace-relative
@@ -155,9 +167,11 @@ export function parseLinkLine(line: string, fromDir?: string): ParsedLink {
     const target = ref[1];
     const kind: LinkKind = /^lib-/i.test(target)
       ? "library"
-      : target.includes("#")
-        ? "entry"
-        : "issue";
+      : isPageAddress(target)
+        ? "page"
+        : target.includes("#")
+          ? "entry"
+          : "issue";
     return { kind, target, label: oneLine(ref[2]), line };
   }
 
@@ -182,11 +196,17 @@ export function parseLinks(md: string | undefined, fromDir?: string): ParsedLink
     .map((l) => parseLinkLine(l, fromDir));
 }
 
-/** The links that point at the Workdatabase (library, entry, term, file), as `ContextLink`s. */
+/** The links that point at the Workdatabase (library, entry, term, file, page), as `ContextLink`s. */
 export function contextLinksOf(md: string | undefined, fromDir?: string): ContextLink[] {
   const out: ContextLink[] = [];
   for (const p of parseLinks(md, fromDir)) {
-    if (p.kind === "library" || p.kind === "entry" || p.kind === "term" || p.kind === "file")
+    if (
+      p.kind === "library" ||
+      p.kind === "entry" ||
+      p.kind === "term" ||
+      p.kind === "file" ||
+      p.kind === "page"
+    )
       out.push({ kind: p.kind, target: p.target, label: p.label });
   }
   return out;

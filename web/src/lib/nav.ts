@@ -3,12 +3,17 @@
 //   /w            board            search: group, swim, author, q, show, needs
 //   /w/i/$id      board + drawer   search: board search + tab, log
 //   /i/$id        full issue page  search: tab, log (tab used below 768 px only)
-//   /lib, /lib/$id                 search: tab (items | glossary), kind, q
+//   /lib                           Library home: the personal library, the team libraries, recent pages
+//   /lib/me, /lib/me/<path>        the personal library (a page, or its home)   search: q, scope, view
+//   /lib/t/<alias>, /lib/t/<alias>/<path>   a team library, the workspace's first   search: q, scope, view
+//   /lib/$id                       old address of a library item (lib-xxxxx): redirects to its page
+//   /glossary                      old address of the glossary: redirects to its page in the workspace library
 //   /skills       Workdatabase · Skills        search: skill (the open skill)
 //   /inbox        gone: redirects to /w?needs=me
 //   /kit          component gallery (prototype only)
 import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
+import { PERSONAL_ALIAS } from "@/features/library/address";
 import type { IssueId, LibId } from "@/gen/types";
 
 export type IssueTab = "now" | "goal" | "criteria" | "plan" | "log" | "git" | "ci" | "files";
@@ -41,15 +46,21 @@ export interface IssueSearch {
 export type DrawerSearch = BoardSearch & IssueSearch;
 
 export interface LibrarySearch {
-  tab?: "items" | "glossary";
-  kind?: string;
+  /** The text in the library's search box. Results replace the page while it is set. */
   q?: string;
+  /** Where the search looks: `all` (default), `me`, or the alias of a team library. */
+  scope?: string;
+  /** `source` shows the markdown of a page instead of the rendered page. */
+  view?: "source";
+  /** Old: `/lib?tab=glossary` was the address of the glossary. It redirects. */
+  tab?: "items" | "glossary";
 }
 
 type NavOpts = {
   to: string;
   params?: Record<string, string>;
   search?: unknown;
+  hash?: string;
   replace?: boolean;
 };
 function useNav() {
@@ -137,11 +148,58 @@ export function useIssueTab(defaultTab: IssueTab = "now") {
   return { tab, setTab, log, setLog };
 }
 
+// ---------------------------------------------------------------- library pages
+
+/** Segments of a library path encoded, the slashes kept. */
+const encodePath = (path: string) =>
+  path.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+
+/**
+ * Where a page of a library lives: `/lib/me/<path>` for the personal library, `/lib/t/<alias>/<path>`
+ * for the others. With no path it is the library's home.
+ */
+export function libraryPath(alias: string, path = ""): string {
+  const base = alias === PERSONAL_ALIAS ? "/lib/me" : `/lib/t/${encodeURIComponent(alias)}`;
+  const rest = encodePath(path);
+  return rest ? `${base}/${rest}` : base;
+}
+
+/** An href for a page, with its heading: for `<a>`, copy link and middle-click. Hash-router aware. */
+export function libraryHref(alias: string, path = "", anchor?: string): string {
+  return hrefFor(`${libraryPath(alias, path)}${anchor ? `#${encodeURIComponent(anchor)}` : ""}`);
+}
+
+export interface PageTarget {
+  alias: string;
+  path?: string;
+  anchor?: string;
+}
+
+/** Open a page of a library, at a heading if given. A page that is already open scrolls to it. */
+export function useOpenPage() {
+  const nav = useNav();
+  return useCallback(
+    ({ alias, path = "", anchor }: PageTarget) => {
+      const hash = anchor || undefined;
+      const rest = path.replace(/^\/+/, "");
+      if (alias === PERSONAL_ALIAS)
+        return rest
+          ? nav({ to: "/lib/me/$", params: { _splat: rest }, hash })
+          : nav({ to: "/lib/me", hash });
+      return rest
+        ? nav({ to: "/lib/t/$alias/$", params: { alias, _splat: rest }, hash })
+        : nav({ to: "/lib/t/$alias", params: { alias }, hash });
+    },
+    [nav],
+  );
+}
+
 export function useGo() {
   const nav = useNav();
   return {
     board: (search: BoardSearch = {}) => nav({ to: "/w", search }),
     library: (search: LibrarySearch = {}) => nav({ to: "/lib", search }),
+    /** The old address of an item; the route sends it to the item's page. */
     libraryItem: (id: LibId) => nav({ to: "/lib/$id", params: { id } }),
     /** The board with only the issues that wait on me (replaces the inbox). */
     needsYou: (search: BoardSearch = {}) => nav({ to: "/w", search: { ...search, needs: "me" } }),

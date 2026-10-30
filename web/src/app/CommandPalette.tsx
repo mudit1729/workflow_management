@@ -23,10 +23,12 @@ import {
   Play,
   Rows3,
   ScrollText,
+  Search,
   Square,
   SquareTerminal,
   StepForward,
   SunMoon,
+  UserRound,
   Zap,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -41,6 +43,7 @@ import {
   CommandList,
   Kbd,
 } from "@/components/ui";
+import { openAskPanel } from "@/features/ask";
 import { copyCodexCommand, useNextStep } from "@/features/codex";
 import { useFilesNav } from "@/features/files";
 import { copyContextWithToast, showContext } from "@/features/issue/handoff";
@@ -63,12 +66,12 @@ import {
   useWorkspaceFiles,
 } from "@/lib/api";
 import { parseTs } from "@/lib/format";
-import { useGo, useOpenIssue, useOpenIssueId } from "@/lib/nav";
+import { useGo, useOpenIssue, useOpenIssueId, usePathname } from "@/lib/nav";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { playNextEvent, withMockControls } from "./mock-controls";
 import { useReturnFocus } from "./return-focus";
-import { openAddWork, useShell } from "./shell-store";
+import { openAddLibrary, openAddWork, useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
 
@@ -227,6 +230,17 @@ const MEANING_WEIGHT = 0.5;
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+
+/**
+ * The library's search box, once the palette has closed and the lazy view has mounted it (a frame
+ * at a time, for a second): focus set while the palette is still open is taken back as it closes.
+ */
+function focusLibrarySearch(tries = 60) {
+  const box = document.querySelector<HTMLElement>('[data-wf="LibrarySearchBox"] input');
+  const dialogOpen = document.querySelector('[role="dialog"][data-state="open"]');
+  if (box && !dialogOpen) box.focus();
+  else if (tries > 0) requestAnimationFrame(() => focusLibrarySearch(tries - 1));
+}
 
 function flattenGroups(root: GroupNode): { node: GroupNode; path: string[] }[] {
   const out: { node: GroupNode; path: string[] }[] = [];
@@ -588,6 +602,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   const go = useGo();
   const navigate = useNavigate();
   const files = useFilesNav();
+  const inLibrary = usePathname().startsWith("/lib");
   const theme = usePrefs((s) => s.theme);
   const setTheme = usePrefs((s) => s.setTheme);
   const density = usePrefs((s) => s.density);
@@ -706,6 +721,15 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         run: () => showContext(openIssue.id),
       },
       {
+        id: "ask-library",
+        label: `Ask the library about ${openIssue.id}`,
+        icon: <MessageCircleQuestionMark {...ICON} />,
+        hint: "Opens a side panel",
+        keywords: ["ask", "question", "library", "answer", "citations", "query", openIssue.title],
+        // The panel opens beside the issue, so nothing here takes focus away from it.
+        run: () => openAskPanel({ issue: openIssue.id }),
+      },
+      {
         id: "move",
         label: `Move ${openIssue.id} to…`,
         icon: <ArrowRight {...ICON} />,
@@ -750,15 +774,62 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
     },
     {
       id: "go-library",
-      label: "Workdatabase · Library",
+      label: "Library",
       icon: <Library {...ICON} />,
       shortcut: "g l",
-      keywords: ["go to library", "go to workdatabase", "patterns", "playbooks", "gotchas"],
+      keywords: ["go to library", "go to workdatabase", "patterns", "playbooks", "gotchas", "wiki"],
       run: () => go.library(),
     },
     {
+      id: "go-personal",
+      label: "Open personal library",
+      icon: <UserRound {...ICON} />,
+      shortcut: "g p",
+      keywords: ["library personal", "my library", "topics", "research", "notes", "codebases"],
+      run: () => void navigate({ to: "/lib/me" }),
+    },
+    {
+      id: "go-team-libraries",
+      label: "Library · Team libraries",
+      icon: <Library {...ICON} />,
+      shortcut: "g t",
+      keywords: ["team library", "team libraries", "handbook", "wiki", "github"],
+      run: () => void navigate({ to: "/lib/t" }),
+    },
+    ...(openIssue
+      ? []
+      : [
+          {
+            id: "ask-library",
+            label: "Ask the library…",
+            icon: <MessageCircleQuestionMark {...ICON} />,
+            hint: "Pick an issue first",
+            keywords: ["ask", "question", "library", "answer", "citations", "query"],
+            run: () => openAskPanel(),
+          } satisfies Action,
+        ]),
+    {
+      id: "add-team-library",
+      label: "Add team library…",
+      icon: <FolderPlus {...ICON} />,
+      hint: "Paste a GitHub link",
+      keywords: ["library", "team", "github", "link", "handbook", "wiki", "repo", "connect"],
+      run: openAddLibrary,
+    },
+    {
+      id: "search-library",
+      label: "Search the library",
+      icon: <Search {...ICON} />,
+      shortcut: "/",
+      keywords: ["find", "pages", "libraries", "wiki", "personal", "team", "docs"],
+      run: () => {
+        if (!inLibrary) void go.library();
+        requestAnimationFrame(() => focusLibrarySearch());
+      },
+    },
+    {
       id: "go-glossary",
-      label: "Workdatabase · Glossary",
+      label: "Library · Glossary",
       icon: <BookText {...ICON} />,
       shortcut: "g g",
       keywords: ["go to glossary", "terms", "words", "vocabulary"],
@@ -766,7 +837,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
     },
     {
       id: "open-files",
-      label: "Workdatabase · Files",
+      label: "Library · Files",
       icon: <FolderTree {...ICON} />,
       shortcut: "g f",
       keywords: ["go to files", "open workspace files", "source", "markdown", "edit", "tree"],
@@ -774,7 +845,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
     },
     {
       id: "go-skills",
-      label: "Workdatabase · Skills",
+      label: "Library · Skills",
       icon: <ScrollText {...ICON} />,
       shortcut: "g s",
       keywords: ["go to skills", "plugins", "install", "codex", "claude", "marketplace"],

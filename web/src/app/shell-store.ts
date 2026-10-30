@@ -18,6 +18,8 @@ interface ShellState {
   /** The Add work flow (plan D6) is open. */
   addWorkOpen: boolean;
   addWorkStart?: AddWorkStart;
+  /** The Add team library flow (spec 4.1) is open. */
+  addLibraryOpen: boolean;
   devPanelOpen: boolean;
   mobileNavOpen: boolean;
   /** 768–1099 px: the rail is an icon rail; this is the person asking to see it open (an overlay). */
@@ -25,6 +27,7 @@ interface ShellState {
   setPaletteOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   setAddWorkOpen: (open: boolean, start?: AddWorkStart) => void;
+  setAddLibraryOpen: (open: boolean) => void;
   setDevPanelOpen: (open: boolean) => void;
   setMobileNavOpen: (open: boolean) => void;
   setNarrowNavOpen: (open: boolean) => void;
@@ -35,6 +38,7 @@ export const useShell = create<ShellState>()((set) => ({
   shortcutsOpen: false,
   addWorkOpen: false,
   addWorkStart: undefined,
+  addLibraryOpen: false,
   devPanelOpen: false,
   mobileNavOpen: false,
   narrowNavOpen: false,
@@ -42,6 +46,7 @@ export const useShell = create<ShellState>()((set) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setAddWorkOpen: (addWorkOpen, start) =>
     set(addWorkOpen ? { addWorkOpen, addWorkStart: start } : { addWorkOpen }),
+  setAddLibraryOpen: (addLibraryOpen) => set({ addLibraryOpen }),
   setDevPanelOpen: (devPanelOpen) => set({ devPanelOpen }),
   setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
   setNarrowNavOpen: (narrowNavOpen) => set({ narrowNavOpen }),
@@ -50,6 +55,11 @@ export const useShell = create<ShellState>()((set) => ({
 /** Open the Add work flow, optionally on the group or issue path and with a group preselected. */
 export function openAddWork(start?: AddWorkStart) {
   useShell.getState().setAddWorkOpen(true, start);
+}
+
+/** Open the Add team library flow: paste a GitHub link, read the library. */
+export function openAddLibrary() {
+  useShell.getState().setAddLibraryOpen(true);
 }
 
 /** Open the command palette. */

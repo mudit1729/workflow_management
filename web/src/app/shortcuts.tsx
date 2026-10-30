@@ -2,8 +2,8 @@
 // o, s, /, 1–8, Esc) are registered by those features; this file owns the rest.
 // SHORTCUTS is also the source for the ShortcutsDialog.
 //
-// Go to: `g w` Workflow · Board, `g l` (or `g d`) Workdatabase · Library, `g g` Glossary,
-// `g f` Files, `g s` Skills, `g k` Kit. `n` opens Add work. There is no inbox (plan D5): what needs
+// Go to: `g w` Workflow · Board, `g l` (or `g d`) Library, `g p` Personal library, `g t` Team
+// libraries, `g g` Glossary (a page of the workspace library), `g f` Files, `g s` Skills, `g k` Kit. `n` opens Add work. There is no inbox (plan D5): what needs
 // you is a filter of the board.
 
 import { useNavigate } from "@tanstack/react-router";
@@ -41,10 +41,12 @@ export const SHORTCUTS: ShortcutSection[] = [
     title: "Go to",
     items: [
       { combos: ["g w"], label: "Workflow · Board" },
-      { combos: ["g l", "g d"], label: "Workdatabase · Library" },
-      { combos: ["g g"], label: "Workdatabase · Glossary" },
-      { combos: ["g f"], label: "Workdatabase · Files" },
-      { combos: ["g s"], label: "Workdatabase · Skills" },
+      { combos: ["g l", "g d"], label: "Library" },
+      { combos: ["g p"], label: "Library · Personal" },
+      { combos: ["g t"], label: "Library · Team libraries" },
+      { combos: ["g g"], label: "Library · Glossary" },
+      { combos: ["g f"], label: "Library · Files" },
+      { combos: ["g s"], label: "Library · Skills" },
       { combos: ["g k"], label: "Kit" },
     ],
   },
@@ -72,7 +74,15 @@ export const SHORTCUTS: ShortcutSection[] = [
     ],
   },
   {
-    title: "Workdatabase · Files",
+    title: "Library · Pages",
+    items: [
+      { combos: ["["], label: "Previous page" },
+      { combos: ["]"], label: "Next page" },
+      { combos: ["/"], label: "Search the libraries" },
+    ],
+  },
+  {
+    title: "Library · Files",
     items: [
       { combos: ["/"], label: "Filter the file tree" },
       { combos: ["mod+s", "mod+Enter"], label: "Save the file you are editing" },
@@ -100,6 +110,8 @@ export function GlobalShortcuts() {
   });
   useHotkey("g w", () => go.board());
   useHotkey(["g d", "g l"], () => go.library());
+  useHotkey("g p", () => void navigate({ to: "/lib/me" }));
+  useHotkey("g t", () => void navigate({ to: "/lib/t" }));
   useHotkey("g g", () => void navigate({ to: "/glossary" }));
   useHotkey("g f", () => files.open());
   useHotkey("g s", () => void navigate({ to: "/skills" }));

@@ -1,4 +1,4 @@
-// /files: the workspace as the files it is, a Workdatabase view. A top bar (the Workdatabase tabs,
+// /files: the workspace as the files it is, a Library view. A top bar (the Library tabs,
 // a one-line explanation, New file), a tree of every file at the left and the open file at the
 // right. When the page is too narrow for both (under 720 px of page, rail included) the tree and
 // the file are separate screens.
@@ -15,8 +15,7 @@ import { SourceView } from "./SourceView";
 import { useFilesNav } from "./useFilesNav";
 import { WorkspaceTree } from "./WorkspaceTree";
 
-const EXPLAIN =
-  "The Workdatabase is these markdown files. Edit one and the Workflow board changes.";
+const EXPLAIN = "The workspace is these markdown files. Edit one and the Workflow board changes.";
 const PROTOTYPE_NOTE =
   "In this prototype, edits stay in this browser tab until you reset the data. On the dev server, saving a file on disk also updates the board.";
 
@@ -46,7 +45,7 @@ export function WorkspaceView({ path }: WorkspaceViewProps) {
       className="flex h-full min-h-0 min-w-0 flex-col bg-bg"
     >
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4">
-        <h1 className="sr-only">Workdatabase · Files</h1>
+        <h1 className="sr-only">Library · Files</h1>
         <ViewTabs view="workdatabase" />
         <p
           title={PROTOTYPE_NOTE}

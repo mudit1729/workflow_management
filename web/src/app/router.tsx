@@ -6,17 +6,21 @@ import {
   createRoute,
   createRouter,
   redirect,
-  useParams,
 } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { WorkspaceView } from "@/features/files";
 import { KitPage } from "@/features/kit";
-import { GlossaryPage, LibraryView } from "@/features/library";
 // The search validator lives apart from the view, so the view can load when /skills opens.
 import { validateSkillsSearch } from "@/features/skills/search";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
-import { IssueDrawer, IssuePage, SkillsView } from "./lazy-views";
+import { IssueDrawer, IssuePage, LibraryHome, SkillsView, WikiView } from "./lazy-views";
+import {
+  redirectGlossary,
+  redirectLibraryItem,
+  redirectLibraryTab,
+  redirectTeams,
+} from "./library-redirects";
 import { RouteError, RouteNotFound, RoutePending } from "./RouteStates";
 import {
   validateBoardSearch,
@@ -82,41 +86,92 @@ const issueRoute = createRoute({
   },
 });
 
-// /lib and /lib/$id share one LibraryView, so the list keeps its scroll and
-// search while the selected item changes.
+// /lib — the Library: its home, the personal library (/lib/me), the team libraries (/lib/t/<alias>,
+// the workspace's own first) and the old addresses of a library item and of the glossary, which
+// redirect to their pages. The viewer is a lazy chunk (lazy-views.tsx).
 const libraryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "lib",
   validateSearch: validateLibrarySearch,
-  component: function LibraryRoute() {
-    const { id } = useParams({ strict: false }) as { id?: string };
-    return <LibraryView selectedId={id} />;
-  },
 });
 
-// `/lib?tab=glossary` was the old address of the glossary; it lives at /glossary now.
+function Wiki({ alias, path }: { alias: string; path: string }) {
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <WikiView alias={alias} path={path} />
+    </Suspense>
+  );
+}
+
 const libraryIndexRoute = createRoute({
   getParentRoute: () => libraryRoute,
   path: "/",
-  beforeLoad: ({ search }) => {
-    if (search.tab === "glossary") {
-      throw redirect({ to: "/glossary", search: { q: search.q }, replace: true });
-    }
+  // `/lib?tab=glossary` was the old address of the glossary.
+  beforeLoad: ({ search }) => redirectLibraryTab(search),
+  component: function LibraryHomeRoute() {
+    return (
+      <Suspense fallback={<RoutePending />}>
+        <LibraryHome />
+      </Suspense>
+    );
   },
 });
 
+const personalRoute = createRoute({
+  getParentRoute: () => libraryRoute,
+  path: "me",
+  component: function PersonalRoute() {
+    return <Wiki alias="me" path="" />;
+  },
+});
+
+const personalPageRoute = createRoute({
+  getParentRoute: () => libraryRoute,
+  path: "me/$",
+  component: function PersonalPageRoute() {
+    const { _splat } = personalPageRoute.useParams();
+    return <Wiki alias="me" path={_splat ?? ""} />;
+  },
+});
+
+// /lib/t has no page of its own: the team libraries open on the workspace's.
+const teamsRoute = createRoute({
+  getParentRoute: () => libraryRoute,
+  path: "t",
+  beforeLoad: () => redirectTeams(),
+});
+
+const teamRoute = createRoute({
+  getParentRoute: () => libraryRoute,
+  path: "t/$alias",
+  component: function TeamRoute() {
+    const { alias } = teamRoute.useParams();
+    return <Wiki alias={alias} path="" />;
+  },
+});
+
+const teamPageRoute = createRoute({
+  getParentRoute: () => libraryRoute,
+  path: "t/$alias/$",
+  component: function TeamPageRoute() {
+    const { alias, _splat } = teamPageRoute.useParams();
+    return <Wiki alias={alias} path={_splat ?? ""} />;
+  },
+});
+
+// /lib/<lib-id> (old): the item's page in the workspace library.
 const libraryItemRoute = createRoute({
   getParentRoute: () => libraryRoute,
   path: "$id",
+  beforeLoad: ({ params }) => redirectLibraryItem(params.id),
 });
 
-// /glossary — one term, one meaning. A Workdatabase sub-view beside the Library and Files;
-// GlossaryPage renders its own top bar with the Workdatabase tabs.
+// /glossary (old): the Glossary page of the workspace library. `?q=` opens it at that term.
 const glossaryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "glossary",
   validateSearch: validateGlossarySearch,
-  component: GlossaryPage,
+  beforeLoad: ({ search }) => redirectGlossary(search.q),
 });
 
 // /skills — the plugins and skills of this repository, and how to install them. `?skill=` opens one.
@@ -164,7 +219,15 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   boardRoute.addChildren([boardIndexRoute, drawerRoute]),
   issueRoute,
-  libraryRoute.addChildren([libraryIndexRoute, libraryItemRoute]),
+  libraryRoute.addChildren([
+    libraryIndexRoute,
+    personalRoute,
+    personalPageRoute,
+    teamsRoute,
+    teamRoute,
+    teamPageRoute,
+    libraryItemRoute,
+  ]),
   glossaryRoute,
   skillsRoute,
   inboxRoute,

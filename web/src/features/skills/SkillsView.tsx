@@ -1,6 +1,6 @@
-// Workdatabase · Skills: the plugins of this repository and the skills each one ships, how a team
+// Library · Skills: the plugins of this repository and the skills each one ships, how a team
 // installs them (Claude Code, Codex), and the SKILL.md of the one you open. Goal: distribute skills
-// and plugins across the team. One 44 px top bar that starts with the Workdatabase tabs, then
+// and plugins across the team. One 44 px top bar that starts with the Library tabs, then
 // by page width (the rail counts as page):
 //   900 px and up   the install panel and the list beside the open skill
 //   under 900 px    an open skill is a screen of its own, and so it is on a phone
@@ -66,7 +66,7 @@ export function SkillsView() {
         data-screen="skill"
         className="h-full min-h-0 min-w-0 bg-bg"
       >
-        <h1 className="sr-only">Workdatabase · Skills</h1>
+        <h1 className="sr-only">Library · Skills</h1>
         <SkillItemView skill={selected} plugin={plugin} onClose={nav.close} variant="screen" />
       </div>
     );
@@ -75,7 +75,7 @@ export function SkillsView() {
   return (
     <div ref={measure} data-wf="SkillsView" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
       <header className="flex h-(--wf-topbar-h) shrink-0 items-center gap-3 border-border border-b bg-bg px-4 sm:gap-4">
-        <h1 className="sr-only">Workdatabase · Skills</h1>
+        <h1 className="sr-only">Library · Skills</h1>
         <ViewTabs view="workdatabase" />
         <span className="ml-auto hidden min-w-0 truncate text-fg-faint text-sm min-[1360px]:block">
           Read from plugins/ in this repository

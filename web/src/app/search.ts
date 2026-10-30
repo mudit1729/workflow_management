@@ -2,7 +2,6 @@
 // knows, set to `undefined` when the value is missing or invalid, so a bad value
 // in the URL (`?swim=sideways`) never reaches a component.
 import type { FilesSearch } from "@/features/files";
-import type { LibraryKind } from "@/gen/types";
 import {
   type BoardSearch,
   ISSUE_TABS,
@@ -15,7 +14,6 @@ import {
 type Raw = Record<string, unknown>;
 
 const LOG_VIEWS: LogView[] = ["changes", "decisions", "learnings"];
-const LIBRARY_KINDS: LibraryKind[] = ["pattern", "playbook", "gotcha", "decision"];
 
 /** A non-empty string. Numbers are accepted because the default parser turns `?q=42` into 42. */
 function str(v: unknown): string | undefined {
@@ -59,15 +57,20 @@ export function validateIssueSearch(raw: Raw): IssueSearch {
   };
 }
 
+/**
+ * The library routes keep the search text and where it looks (`all`, `me` or a team alias), and
+ * which view of a page is open. `tab` is the old `?tab=glossary`; the router redirects it.
+ */
 export function validateLibrarySearch(raw: Raw): LibrarySearch {
   return {
-    tab: oneOf(raw.tab, ["items", "glossary"] as const),
-    kind: oneOf<LibraryKind>(raw.kind, LIBRARY_KINDS),
     q: text(raw.q),
+    scope: str(raw.scope),
+    view: oneOf(raw.view, ["source"] as const),
+    tab: oneOf(raw.tab, ["items", "glossary"] as const),
   };
 }
 
-/** /glossary keeps only the filter text; `/lib?tab=glossary` redirects here with its `q`. */
+/** /glossary keeps the filter text (the old address of the glossary; the route redirects it). */
 export function validateGlossarySearch(raw: Raw): { q?: string } {
   return { q: text(raw.q) };
 }

@@ -2,11 +2,24 @@
 // is sanitized. [[refs]] become RefLinks, @handles become author mentions, and
 // ```wf-diagram fences become ArchifyCards.
 //
+// With `wiki` set, the text is a page of a library (docs/plan/proposals/libraries-spec.md): headings
+// get anchors, `[[path]]`, `[[alias:path]]` and relative links go to pages (dashed when broken),
+// `> [!NOTE]` quotes are callouts, and a paragraph that is only an image, a video file or a
+// YouTube, Vimeo or Loom link becomes a figure, a player or a click-to-load card (MarkdownMedia).
+//
 // With `source` set, the page is grounded in the file it came from: every block (heading,
 // paragraph, list item, code block, table, quote, diagram) carries `data-src-line`, the 1-based
 // line in the real file, and hovering a block shows a gutter tag with `path:line` that opens
 // that line. Without `source` nothing changes.
-import { Check } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Info,
+  Lightbulb,
+  type LucideIcon,
+  MessageSquareWarning,
+  OctagonAlert,
+} from "lucide-react";
 import {
   type ComponentProps,
   createContext,
@@ -23,13 +36,24 @@ import {
 import Markdown, { type Components, defaultUrlTransform, type ExtraProps } from "react-markdown";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
-import { Skeleton } from "@/components/ui";
+import { Skeleton, Tooltip } from "@/components/ui";
+import { linkForm } from "@/features/library/address";
+import { headingsOf } from "@/features/library/anchors";
 import type { Diagram } from "@/gen/types";
+import type { LinkForm, PageLink as PageLinkData, PageMedia } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
+import { libraryHref, useOpenPage } from "@/lib/nav";
 import { AuthorChip } from "./AuthorChip";
 import { CodeBlock } from "./CodeBlock";
+import { EmbedCard, MediaFigure, parseEmbed } from "./MarkdownMedia";
 import { RefLink } from "./RefLink";
-import { AUTHOR_PROTOCOL, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";
+import {
+  AUTHOR_PROTOCOL,
+  type CalloutKind,
+  REF_PROTOCOL,
+  remarkCallouts,
+  remarkWfRefs,
+} from "./remark-wf";
 import { SourceLineMarker, useOpenInFiles } from "./SourceLineMarker";
 
 // Loaded lazily: keeps the diagram feature out of the common bundle and avoids an import cycle.
@@ -39,6 +63,11 @@ const ArchifyCard = lazy(() =>
 
 const schema: SanitizeSchema = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    // `> [!NOTE]` quotes carry their kind for the blockquote component.
+    blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataCallout"],
+  },
   protocols: {
     ...defaultSchema.protocols,
     href: [...(defaultSchema.protocols?.href ?? []), "wf-ref", "wf-author"],
@@ -124,14 +153,325 @@ function TaskBox({ checked }: { checked: boolean }) {
   );
 }
 
+// ---------------------------------------------------------------- a page of a library
+
+/** The page the text belongs to: how its links resolve and where its media is. */
+export interface ProseWiki {
+  alias: string;
+  /** Root-relative path of the page. */
+  path: string;
+  /** Its links, resolved (`LibraryPage.links`). */
+  links: PageLinkData[];
+  /** Its media by `src` (`LibraryPage.media`). */
+  media: Record<string, PageMedia>;
+}
+
+interface WikiValue {
+  alias: string;
+  path: string;
+  link: (form: LinkForm, raw: string) => PageLinkData | undefined;
+  media: (src: string) => PageMedia | undefined;
+  /** The anchor of each heading by its line in the text. */
+  anchors: Map<number, string>;
+}
+
+/** Read through context for the same reason as the diagrams: a new page must not remount blocks. */
+const WikiContext = createContext<WikiValue | undefined>(undefined);
+
+/** Why a link goes nowhere, in words. */
+function brokenReason(link: PageLinkData | undefined, fallback: string): string {
+  switch (link?.missing) {
+    case "heading":
+      return `No heading #${link.anchor ?? fallback} on that page`;
+    case "library":
+      return `No library named ${link.alias ?? fallback}`;
+    case "item":
+      return `No library item ${link.item ?? fallback}`;
+    case "issue":
+      return `No issue ${link.issue ?? fallback}`;
+    default:
+      return `No page ${link?.path || fallback} in the library`;
+  }
+}
+
+const pageLinkClass =
+  "text-accent underline decoration-accent/30 underline-offset-[3px] hover:decoration-accent";
+const brokenClass =
+  "text-fg-muted underline decoration-dashed decoration-fg-faint underline-offset-[3px]";
+
+/** A link to a page of a library. Dashed when the page or the heading is not there. */
+function PageLink({
+  link,
+  raw,
+  children,
+  className,
+}: {
+  link: PageLinkData | undefined;
+  raw: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const open = useOpenPage();
+  if (!link?.alias || link.path === undefined || (!link.ok && link.missing !== "heading")) {
+    return (
+      <Tooltip content={brokenReason(link, raw)}>
+        <span data-wf="PageLink" data-broken="" className={cn(brokenClass, className)}>
+          {children}
+        </span>
+      </Tooltip>
+    );
+  }
+  const { alias, path, anchor } = link;
+  const a = (
+    <a
+      data-wf="PageLink"
+      data-broken={link.ok ? undefined : ""}
+      href={libraryHref(alias, path, anchor)}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open({ alias, path, anchor });
+      }}
+      className={cn(link.ok ? pageLinkClass : brokenClass, className)}
+    >
+      {children}
+    </a>
+  );
+  return link.ok ? a : <Tooltip content={brokenReason(link, raw)}>{a}</Tooltip>;
+}
+
+/** `[[target]]` in a page of a library: a page link, or an issue or library item as anywhere else. */
+function WikiRef({
+  target,
+  issueId,
+  label,
+}: {
+  target: string;
+  issueId?: string;
+  label: ReactNode;
+}) {
+  const wiki = useContext(WikiContext);
+  const form = linkForm(target, "wiki");
+  const link = wiki?.link(form, target);
+  // Issues and library items keep their own links (status, kind); a name that only looks like an
+  // issue id but is a page goes to the page, and so does a library item, straight to its page.
+  const pageForm = form === "wiki" || form === "alias" || form === "anchor";
+  if (!wiki || !(pageForm || (link?.ok && link.path !== undefined && !link.issue)))
+    return <RefLink target={target} issueId={issueId} />;
+  const explicit = typeof label === "string" && label !== target;
+  return (
+    <PageLink link={link} raw={target}>
+      {explicit ? label : (link?.title ?? target)}
+    </PageLink>
+  );
+}
+
+const CALLOUT: Record<CalloutKind, { icon: LucideIcon; label: string; tone: string; box: string }> =
+  {
+    note: { icon: Info, label: "Note", tone: "text-fg-muted", box: "border-border" },
+    tip: { icon: Lightbulb, label: "Tip", tone: "text-success-text", box: "border-border" },
+    important: {
+      icon: CircleAlert,
+      label: "Important",
+      tone: "text-accent",
+      box: "border-accent/30",
+    },
+    warning: {
+      icon: MessageSquareWarning,
+      label: "Warning",
+      tone: "text-stale-text",
+      box: "border-stale/40",
+    },
+    caution: { icon: OctagonAlert, label: "Caution", tone: "text-danger", box: "border-danger/40" },
+  };
+
+/** A GitHub callout: a titled box, quiet, with the kind in the icon and the label (never color alone). */
+function Callout({
+  kind,
+  children,
+  line,
+}: {
+  kind: CalloutKind;
+  children: ReactNode;
+  line?: Record<string, number>;
+}) {
+  const c = CALLOUT[kind];
+  const Icon = c.icon;
+  return (
+    <aside
+      data-wf="Callout"
+      data-callout={kind}
+      className={cn("rounded-md border bg-subtle px-3.5 py-3", c.box)}
+      {...line}
+    >
+      <p className={cn("m-0 mb-1.5 flex items-center gap-1.5 font-medium text-sm", c.tone)}>
+        <Icon size={14} strokeWidth={1.75} aria-hidden />
+        {c.label}
+      </p>
+      <div className="flex min-w-0 flex-col gap-2 text-fg">{children}</div>
+    </aside>
+  );
+}
+
+/** A heading with its anchor: the `#` shows when the pointer or the keyboard is on the heading. */
+function Heading({
+  tag: Tag,
+  className,
+  line,
+  children,
+  node,
+}: {
+  tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  className: string;
+  line?: Record<string, number>;
+  children?: ReactNode;
+  node: ExtraProps["node"];
+}) {
+  const wiki = useContext(WikiContext);
+  const open = useOpenPage();
+  const anchor = wiki?.anchors.get(node?.position?.start.line ?? -1);
+  return (
+    <Tag id={anchor} className={cn(anchor && "group/h scroll-mt-6", className)} {...line}>
+      {children}
+      {anchor && wiki && (
+        <a
+          href={libraryHref(wiki.alias, wiki.path, anchor)}
+          aria-label="Link to this section"
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            open({ alias: wiki.alias, path: wiki.path, anchor });
+          }}
+          className="ml-2 font-normal text-fg-faint no-underline opacity-0 transition-opacity duration-100 hover:text-fg focus-visible:opacity-100 group-hover/h:opacity-100"
+        >
+          #
+        </a>
+      )}
+    </Tag>
+  );
+}
+
+/** The one child of a paragraph, ignoring blank text: an image or a link alone on its line. */
+function soloChild(node: ExtraProps["node"]): HastLike | undefined {
+  const kids = ((node as unknown as HastLike | undefined)?.children ?? []).filter(
+    (c) => !(c.type === "text" && String(c.value ?? "").trim() === ""),
+  );
+  return kids.length === 1 ? kids[0] : undefined;
+}
+
+const prop = (n: HastLike, key: string): string | undefined => {
+  const v = n.properties?.[key];
+  return typeof v === "string" ? v : undefined;
+};
+
+const VIDEO_EXT = ["mp4", "webm", "mov", "ogv", "m4v"];
+
+/**
+ * A paragraph that holds only an image, or only a link to a video, is a block of its own: a
+ * figure, a player, a card; anything else keeps `fallback`. Without a `wiki`, only absolute
+ * addresses are media (a relative path means nothing outside a library).
+ */
+function MediaBlock({ solo, fallback }: { solo: HastLike; fallback: ReactNode }) {
+  const wiki = useContext(WikiContext);
+  const mediaOf = (src: string): PageMedia | undefined => {
+    const known = wiki?.media(src);
+    if (known) return known;
+    if (!/^https?:\/\//i.test(src)) return undefined;
+    const ext = /\.([a-z0-9]+)(?:[?#].*)?$/i.exec(src)?.[1]?.toLowerCase() ?? "";
+    const kind = ext === "gif" ? "gif" : VIDEO_EXT.includes(ext) ? "video" : "image";
+    return { src, kind, url: src, external: true };
+  };
+  if (solo.tagName === "img") {
+    const src = prop(solo, "src");
+    const media = src ? mediaOf(src) : undefined;
+    return media ? <MediaFigure media={media} alt={prop(solo, "alt") ?? ""} /> : fallback;
+  }
+  if (solo.tagName === "a") {
+    const href = prop(solo, "href");
+    const embed = href ? parseEmbed(href) : undefined;
+    if (!embed) return fallback;
+    // `[![Title](poster.png)](https://youtu.be/…)`: the picture stands in for the player.
+    const image = solo.children?.find((c) => c.tagName === "img");
+    const src = image ? prop(image, "src") : undefined;
+    const poster = src ? mediaOf(src)?.url : undefined;
+    const words = image ? prop(image, "alt") : textOf(solo);
+    return <EmbedCard embed={embed} title={words || undefined} poster={poster} />;
+  }
+  return fallback;
+}
+
+/** Does a paragraph's only child make a media block? Decided from the tree, before rendering. */
+function isMediaChild(solo: HastLike | undefined): solo is HastLike {
+  if (!solo) return false;
+  if (solo.tagName === "img") return true;
+  if (solo.tagName !== "a") return false;
+  const href = prop(solo, "href");
+  return Boolean(href && parseEmbed(href));
+}
+
 function hasClass(cls: unknown, name: string): boolean {
   return typeof cls === "string" && cls.split(" ").includes(name);
 }
 
+/** A link written as markdown: in a library page a relative one goes to a page, dashed when broken. */
+function ProseAnchor({ href, className, children, ...p }: ComponentProps<"a"> & ExtraProps) {
+  const wiki = useContext(WikiContext);
+  const external = /^https?:\/\//i.test(href ?? "");
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.test(href ?? "");
+  const form: LinkForm | undefined = href?.startsWith("#") ? "anchor" : "relative";
+  const link = wiki && href && !scheme ? wiki.link(form, href) : undefined;
+  // A page, or a page that is not there; a media or other file of the library is a plain address.
+  if (link && (link.address || !link.ok)) {
+    return (
+      <PageLink link={link} raw={href ?? ""}>
+        {children}
+      </PageLink>
+    );
+  }
+  const target = external ? href : (link?.href ?? href);
+  return (
+    <a
+      href={target}
+      target={external ? "_blank" : undefined}
+      rel={external ? "noopener noreferrer" : undefined}
+      className={cn(pageLinkClass, className)}
+      {...p}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** An image in the middle of a sentence. In a library page its address is the library's file. */
+function ProseImage({
+  src,
+  alt,
+  className,
+  ...p
+}: { src?: string; alt?: string; className?: string } & Omit<ComponentProps<"img">, "src">) {
+  const wiki = useContext(WikiContext);
+  const media = src ? wiki?.media(src) : undefined;
+  if (media?.missing)
+    return <span className="text-fg-faint underline decoration-dashed">{alt || src}</span>;
+  return (
+    <img
+      alt={alt ?? ""}
+      src={media?.url ?? src}
+      loading="lazy"
+      className={cn("max-w-full rounded-md border border-border", className)}
+      {...p}
+    />
+  );
+}
+
 type P<K extends keyof React.JSX.IntrinsicElements> = ComponentProps<K> & ExtraProps;
 
-/** Document typography: a docs page (14 px body) or a pane (13 px body); headings 16 / 14 / 13. */
-export type ProseDocument = "page" | "pane";
+/**
+ * Document typography: a docs page (14 px body), a pane (13 px body; headings 16 / 14 / 13), or a
+ * wiki page (15 to 16 px body at about 1.65; headings 28 / 22 / 18 / 16).
+ */
+export type ProseDocument = "page" | "pane" | "wiki";
 
 /** Where the markdown came from, so every block can name its line. */
 export interface MarkdownSource {
@@ -164,53 +504,112 @@ interface BuildOptions {
 function buildComponents(opts: BuildOptions): Components {
   const { issueId, compact, doc, offset } = opts;
   const traced = offset !== undefined;
-  const heading = doc
-    ? "mt-3 first:mt-0 font-semibold text-fg leading-snug"
-    : "mt-2 first:mt-0 font-semibold text-fg leading-snug";
-  const sizes = doc
-    ? { h1: "text-lg", h2: "text-md", h3: "text-base" }
-    : compact
-      ? { h1: "text-base", h2: "text-sm", h3: "text-sm" }
-      : { h1: "text-md", h2: "text-base", h3: "text-base" };
+  const wiki = doc === "wiki";
+  const heading = wiki
+    ? "mt-6 first:mt-0 font-semibold text-fg leading-snug"
+    : doc
+      ? "mt-3 first:mt-0 font-semibold text-fg leading-snug"
+      : "mt-2 first:mt-0 font-semibold text-fg leading-snug";
+  const sizes = wiki
+    ? {
+        h1: "text-[26px] tracking-[-0.02em] min-[1280px]:text-[28px]",
+        h2: "text-xl tracking-[-0.01em] min-[1280px]:text-[22px]",
+        h3: "text-[17px] min-[1280px]:text-lg",
+        h4: "text-[15px] min-[1280px]:text-[16px]",
+      }
+    : doc
+      ? { h1: "text-lg", h2: "text-md", h3: "text-base", h4: "" }
+      : compact
+        ? { h1: "text-base", h2: "text-sm", h3: "text-sm", h4: "" }
+        : { h1: "text-md", h2: "text-base", h3: "text-base", h4: "" };
+  const small = wiki
+    ? "mt-6 text-sm font-medium uppercase tracking-wide text-fg-muted"
+    : "font-medium text-fg-muted";
   return {
-    p: ({ node, className, ...p }: P<"p">) => (
-      <p className={cn("min-w-0", className)} {...lineProps(node, offset)} {...p} />
+    p: ({ node, className, children, ...p }: P<"p">) => {
+      const para = (
+        <p className={cn("min-w-0", className)} {...lineProps(node, offset)} {...p}>
+          {children}
+        </p>
+      );
+      const solo = compact ? undefined : soloChild(node);
+      if (!isMediaChild(solo)) return para;
+      const block = <MediaBlock solo={solo} fallback={para} />;
+      // The wrapper only exists on a traced page; an untraced one renders the block itself.
+      return traced ? (
+        <div className="min-w-0" {...lineProps(node, offset)}>
+          {block}
+        </div>
+      ) : (
+        block
+      );
+    },
+    h1: ({ node, className, children }: P<"h1">) => (
+      <Heading
+        tag="h1"
+        node={node}
+        className={cn(heading, sizes.h1, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
-    h1: ({ node, className, ...p }: P<"h1">) => (
-      <h1 className={cn(heading, sizes.h1, className)} {...lineProps(node, offset)} {...p} />
+    h2: ({ node, className, children }: P<"h2">) => (
+      <Heading
+        tag="h2"
+        node={node}
+        className={cn(heading, sizes.h2, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
-    h2: ({ node, className, ...p }: P<"h2">) => (
-      <h2 className={cn(heading, sizes.h2, className)} {...lineProps(node, offset)} {...p} />
+    h3: ({ node, className, children }: P<"h3">) => (
+      <Heading
+        tag="h3"
+        node={node}
+        className={cn(heading, sizes.h3, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
-    h3: ({ node, className, ...p }: P<"h3">) => (
-      <h3 className={cn(heading, sizes.h3, className)} {...lineProps(node, offset)} {...p} />
+    h4: ({ node, className, children }: P<"h4">) => (
+      <Heading
+        tag="h4"
+        node={node}
+        className={cn(heading, wiki ? sizes.h4 : small, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
-    h4: ({ node, className, ...p }: P<"h4">) => (
-      <h4
-        className={cn(heading, "font-medium text-fg-muted", className)}
-        {...lineProps(node, offset)}
-        {...p}
-      />
+    h5: ({ node, className, children }: P<"h5">) => (
+      <Heading
+        tag="h5"
+        node={node}
+        className={cn(heading, small, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
-    h5: ({ node, className, ...p }: P<"h5">) => (
-      <h5
-        className={cn(heading, "font-medium text-fg-muted", className)}
-        {...lineProps(node, offset)}
-        {...p}
-      />
-    ),
-    h6: ({ node, className, ...p }: P<"h6">) => (
-      <h6
-        className={cn(heading, "font-medium text-fg-muted", className)}
-        {...lineProps(node, offset)}
-        {...p}
-      />
+    h6: ({ node, className, children }: P<"h6">) => (
+      <Heading
+        tag="h6"
+        node={node}
+        className={cn(heading, small, className)}
+        line={lineProps(node, offset)}
+      >
+        {children}
+      </Heading>
     ),
     ul: ({ node: _n, className, ...p }: P<"ul">) => (
       <ul
         className={cn(
           "list-disc pl-4 marker:text-fg-faint [&>li+li]:mt-0.5 [li>&]:mt-0.5",
           doc && "[&>li+li]:mt-1",
+          wiki && "pl-5 [&>li+li]:mt-1.5",
           className,
         )}
         {...p}
@@ -221,6 +620,7 @@ function buildComponents(opts: BuildOptions): Components {
         className={cn(
           "list-decimal pl-4 marker:text-fg-faint marker:tabular-nums [&>li+li]:mt-0.5 [li>&]:mt-0.5",
           doc && "[&>li+li]:mt-1",
+          wiki && "pl-5 [&>li+li]:mt-1.5",
           className,
         )}
         {...p}
@@ -238,13 +638,24 @@ function buildComponents(opts: BuildOptions): Components {
         {...p}
       />
     ),
-    blockquote: ({ node, className, ...p }: P<"blockquote">) => (
-      <blockquote
-        className={cn("border-border-strong border-l pl-3 text-fg-muted [&>*+*]:mt-2", className)}
-        {...lineProps(node, offset)}
-        {...p}
-      />
-    ),
+    blockquote: ({ node, className, children, ...p }: P<"blockquote">) => {
+      const kind = (p as Record<string, unknown>)["data-callout"];
+      if (typeof kind === "string" && kind in CALLOUT)
+        return (
+          <Callout kind={kind as CalloutKind} line={lineProps(node, offset)}>
+            {children}
+          </Callout>
+        );
+      return (
+        <blockquote
+          className={cn("border-border-strong border-l pl-3 text-fg-muted [&>*+*]:mt-2", className)}
+          {...lineProps(node, offset)}
+          {...p}
+        >
+          {children}
+        </blockquote>
+      );
+    },
     hr: ({ node, className, ...p }: P<"hr">) => (
       <hr
         className={cn("my-1 h-px border-0 bg-border", className)}
@@ -254,23 +665,19 @@ function buildComponents(opts: BuildOptions): Components {
     ),
     a: ({ node: _n, href, children, className, ...p }: P<"a">) => {
       if (href?.startsWith(REF_PROTOCOL))
-        return <RefLink target={decode(href.slice(REF_PROTOCOL.length))} issueId={issueId} />;
+        return (
+          <WikiRef
+            target={decode(href.slice(REF_PROTOCOL.length))}
+            issueId={issueId}
+            label={children}
+          />
+        );
       if (href?.startsWith(AUTHOR_PROTOCOL))
         return <AuthorChip handle={decode(href.slice(AUTHOR_PROTOCOL.length))} variant="text" />;
-      const external = /^https?:\/\//i.test(href ?? "");
       return (
-        <a
-          href={href}
-          target={external ? "_blank" : undefined}
-          rel={external ? "noopener noreferrer" : undefined}
-          className={cn(
-            "text-accent underline decoration-accent/30 underline-offset-[3px] hover:decoration-accent",
-            className,
-          )}
-          {...p}
-        >
+        <ProseAnchor href={href} className={className} {...p}>
           {children}
-        </a>
+        </ProseAnchor>
       );
     },
     strong: ({ node: _n, className, ...p }: P<"strong">) => (
@@ -304,11 +711,11 @@ function buildComponents(opts: BuildOptions): Components {
     },
     input: ({ node: _n, type, checked, ...p }: P<"input">) =>
       type === "checkbox" ? <TaskBox checked={Boolean(checked)} /> : <input type={type} {...p} />,
-    img: ({ node: _n, className, alt, ...p }: P<"img">) => (
-      <img
-        alt={alt ?? ""}
-        loading="lazy"
-        className={cn("max-w-full rounded-md border border-border", className)}
+    img: ({ node: _n, className, alt, src, ...p }: P<"img">) => (
+      <ProseImage
+        src={typeof src === "string" ? src : undefined}
+        alt={alt}
+        className={className}
         {...p}
       />
     ),
@@ -320,7 +727,14 @@ function buildComponents(opts: BuildOptions): Components {
         <table
           className={cn(
             "w-full border-collapse text-left [&_tbody_tr:last-child_td]:border-b-0",
-            compact ? "text-xs" : doc === "page" ? "text-base" : "text-sm",
+            // A wiki table sits in 15 to 16 px text: 14 px keeps its code (0.875em) at 12 px.
+            compact
+              ? "text-xs"
+              : doc === "wiki"
+                ? "text-md"
+                : doc === "page"
+                  ? "text-base"
+                  : "text-sm",
             className,
           )}
           {...p}
@@ -462,6 +876,8 @@ export interface MarkdownProseProps {
   compact?: boolean;
   /** Document typography for a whole page of markdown. Sets the body size; see `ProseDocument`. */
   document?: ProseDocument;
+  /** The library page the text belongs to: resolves its links and media, anchors its headings. */
+  wiki?: ProseWiki;
   /** The file the text came from. Turns on the line tags (see the top of this file). */
   source?: MarkdownSource;
   className?: string;
@@ -475,6 +891,7 @@ export function MarkdownProse({
   issueId,
   compact = false,
   document: doc,
+  wiki,
   source,
   className,
   empty = null,
@@ -485,6 +902,17 @@ export function MarkdownProse({
     () => buildComponents({ issueId, compact, doc, offset }),
     [issueId, compact, doc, offset],
   );
+  const wikiValue = useMemo<WikiValue | undefined>(() => {
+    if (!wiki) return undefined;
+    const links = new Map(wiki.links.map((l) => [`${l.form}:${l.raw}`, l]));
+    return {
+      alias: wiki.alias,
+      path: wiki.path,
+      link: (form, raw) => links.get(`${form}:${raw}`),
+      media: (src) => wiki.media[src],
+      anchors: new Map(headingsOf(md).map((h) => [h.line, h.anchor])),
+    };
+  }, [wiki, md]);
   const gutter = source ? (source.gutter ?? 40) : 0;
   const trace = useTrace(Boolean(source) && gutter > 0, gutter, md);
   if (!md.trim()) {
@@ -506,26 +934,30 @@ export function MarkdownProse({
         "flex min-w-0 flex-col break-words text-fg",
         source && "relative",
         compact && "[--wf-code-size:var(--wf-text-xs)]",
-        doc === "page"
-          ? "gap-3 text-md leading-[1.65]"
-          : doc === "pane"
-            ? "gap-2.5 text-base leading-[1.6]"
-            : compact
-              ? "gap-1.5 text-sm leading-normal"
-              : "gap-2 text-base leading-[1.55]",
+        doc === "wiki"
+          ? "gap-4 text-[15px] leading-[1.65] [--wf-code-size:0.875em] min-[1280px]:text-[16px]"
+          : doc === "page"
+            ? "gap-3 text-md leading-[1.65]"
+            : doc === "pane"
+              ? "gap-2.5 text-base leading-[1.6]"
+              : compact
+                ? "gap-1.5 text-sm leading-normal"
+                : "gap-2 text-base leading-[1.55]",
         className,
       )}
     >
       <DiagramsContext.Provider value={diagrams}>
-        <Markdown
-          remarkPlugins={[remarkGfm, remarkWfRefs]}
-          rehypePlugins={[[rehypeSanitize, schema]]}
-          components={components}
-          urlTransform={urlTransform}
-          skipHtml
-        >
-          {md}
-        </Markdown>
+        <WikiContext.Provider value={wikiValue}>
+          <Markdown
+            remarkPlugins={[remarkGfm, remarkCallouts, remarkWfRefs]}
+            rehypePlugins={[[rehypeSanitize, schema]]}
+            components={components}
+            urlTransform={urlTransform}
+            skipHtml
+          >
+            {md}
+          </Markdown>
+        </WikiContext.Provider>
       </DiagramsContext.Provider>
       {/* Last, so a heading that opens the page keeps its `first:` margin while the tag shows. */}
       {source && gutter > 0 && (

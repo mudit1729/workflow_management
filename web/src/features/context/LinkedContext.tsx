@@ -1,19 +1,21 @@
 // The `## Links` section of goal.md as the Goal tab shows it: one row per bullet with the glyph
 // of what it links. Library items, entries and issues are RefLinks. A glossary term opens the
-// glossary, a file opens its source in the Workdatabase · Files view (a plain relative link would
-// point nowhere in the app or in the static build). A bullet this grammar does not know keeps
+// glossary, a page of a team or personal library opens in the wiki, a file opens its source in the
+// Workdatabase · Files view (a plain relative link would point nowhere in the app or in the static
+// build). A bullet this grammar does not know keeps
 // its markdown. Each row has a remove button on hover and focus: it takes that one bullet out
 // of goal.md, and the toast offers to put it back.
-import { BookA, ExternalLink, FileText, X } from "lucide-react";
+import { BookA, BookOpen, ExternalLink, FileText, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { KindIcon, MarkdownProse, RefLink } from "@/components/common";
 import { filesHref, useFilesNav } from "@/features/files/useFilesNav";
+import { parseAddress } from "@/features/library/address";
 import { InlineCode, LibraryStatusChip } from "@/features/library/meta";
 import type { Diagram } from "@/gen/types";
-import { api, useSnapshot, useWriteWorkspaceFile } from "@/lib/api";
+import { api, useLibraryPage, useSnapshot, useWriteWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { useGo } from "@/lib/nav";
+import { libraryHref, useGo, useOpenPage } from "@/lib/nav";
 import { type ParsedLink, parseLinkLine, withoutLink } from "./links";
 import { DRAFT_NOTE } from "./types";
 
@@ -210,6 +212,8 @@ function LinkRow({ link, issueId, dir }: { link: ParsedLink; issueId: string; di
       );
     case "term":
       return <TermRow link={link} removal={removal} />;
+    case "page":
+      return <PageRow link={link} removal={removal} />;
     case "file":
       return <FileRow link={link} dir={dir} removal={removal} />;
     case "url":
@@ -263,6 +267,45 @@ function LibraryRow({
   );
 }
 
+/** A page of a team or personal library: its title opens it in the wiki; a missing page is dashed. */
+function PageRow({ link, removal }: { link: ParsedLink; removal: Removal }) {
+  const at = parseAddress(link.target);
+  const open = useOpenPage();
+  const query = useLibraryPage(at?.alias, at?.path);
+  const gone = !at || query.isError;
+  const title = query.data?.title ?? at?.path.slice(at.path.lastIndexOf("/") + 1) ?? link.target;
+  return (
+    <Row icon={<BookOpen size={14} strokeWidth={1.75} />} removal={removal}>
+      {/* The why is a sentence: it goes under the title, not beside it. */}
+      <span className="flex min-w-0 flex-col gap-0.5">
+        {gone ? (
+          <span
+            title="Page not found (F009)"
+            className="code-inline text-fg-muted underline decoration-dashed decoration-fg-faint underline-offset-[3px]"
+          >
+            [[{link.target}]]
+          </span>
+        ) : (
+          <a
+            data-wf="PageRef"
+            href={libraryHref(at.alias, at.path, at.anchor)}
+            title={`${query.data?.library ?? at.alias} · ${link.target}`}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+              e.preventDefault();
+              void open({ alias: at.alias, path: at.path, anchor: at.anchor });
+            }}
+            className="min-w-0 break-words font-medium text-fg underline decoration-1 decoration-border-strong underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:decoration-fg-muted"
+          >
+            {title}
+          </a>
+        )}
+        {link.label && <Faint>{link.label}</Faint>}
+      </span>
+    </Row>
+  );
+}
+
 function TermRow({ link, removal }: { link: ParsedLink; removal: Removal }) {
   const go = useGo();
   return (
@@ -293,7 +336,7 @@ function FileRow({ link, dir, removal }: { link: ParsedLink; dir: string; remova
           e.preventDefault();
           void files.open(link.target);
         }}
-        title={`Open ${link.target} in Workdatabase · Files`}
+        title={`Open ${link.target} in Library · Files`}
         className="min-w-0 break-words font-medium text-fg underline decoration-1 decoration-border-strong underline-offset-[3px] transition-colors duration-100 hover:bg-muted hover:decoration-fg-muted"
       >
         {link.label || shown}
