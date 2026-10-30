@@ -645,9 +645,9 @@ describe("a next_step run with nothing ready", () => {
     expect(detail.criteria.every((c) => c.satisfied_by.length === 1)).toBe(true);
     // The plan entry, the new state file and the status: backlog moved on to in_progress.
     expect(store.text(changesPath(id))).toMatch(
-      /Wrote the plan with 3 tasks in 1 lane \{#C-[0-9a-hjkmnp-tv-z]{5}\}\n- kind: docs\n- files: `plan\.md`\n- model: gpt-5-codex/,
+      /Wrote the plan with 3 tasks in 1 area \{#C-[0-9a-hjkmnp-tv-z]{5}\}\n- kind: docs\n- files: `plan\.md`\n- model: gpt-5-codex/,
     );
-    expect(detail.state?.summary).toBe("Planned: 3 tasks in 1 lane; T-1 is ready.");
+    expect(detail.state?.summary).toBe("Planned: 3 tasks in 1 area; T-1 is ready.");
     expect(detail.summary.status).toBe("in_progress");
     expect(detail.summary.coordinator).toMatchObject({ holder: "codex", state: "live" });
     expect(detail.diagnostics).toEqual([]);
@@ -907,6 +907,110 @@ describe("a run whose task changes under it", () => {
     server.controls.reset();
     expect(await server.codexRuns()).toEqual([]);
     expect(await wait(5 * PHASE_MS)).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------- a run by another agent
+
+// Plan D12: the run, the claim and the entries use the name of the agent that runs. The sample's
+// authors.md has no @claude (the shipped workspace has), so each test adds the entry first.
+describe("a run by Claude Code", () => {
+  const goalPath = () => store.filePath(COORD_ID, "goal.md");
+
+  beforeEach(async () => {
+    const authors = await server.file("authors.md");
+    await server.writeFile({
+      path: "authors.md",
+      base_rev: authors.rev,
+      text: `${authors.text}\n## @claude\n- kind: agent\n- name: Claude Code\n- runtime: claude-code\n- color: 7\n- max_leases: 3\n`,
+    });
+  });
+
+  test("the run says who does it, and that it is simulated", async () => {
+    const run = await server.startCodexRun(COORD_ID, "next_step", "claude");
+    expect(run).toMatchObject({ by: "claude", agent: "claude", source: "simulated" });
+    const codex = await server.startCodexRun(ID, "next_step");
+    expect(codex).toMatchObject({ by: "codex", agent: "codex", source: "simulated" });
+    // Without an agent the run is Codex's, as before.
+    expect((await server.codexRuns(ID))[0].agent).toBe("codex");
+  });
+
+  test("the claim names @claude: the task and the issue", async () => {
+    const diff = await changed(() => server.startCodexRun(COORD_ID, "next_step", "claude"));
+    const goal = diff[goalPath()] as { added: string[] };
+    expect(goal.added).toContain('claimed_by: "@claude"');
+    const plan = diff[store.filePath(COORD_ID, "plan.md")] as { added: string[] };
+    expect(plan.added).toContain("- claimed_by: @claude");
+    expect(JSON.stringify(diff)).not.toContain("@codex");
+    const detail = await server.issue(COORD_ID);
+    expect(detail.summary.coordinator).toMatchObject({ holder: "claude", state: "live" });
+    expect(task(detail, "T-1")).toMatchObject({ status: "in_progress", claimed_by: "claude" });
+  });
+
+  test("the entries, the evidence and the state are written by @claude", async () => {
+    await server.startCodexRun(COORD_ID, "next_step", "claude");
+    const diff = await wait(3 * PHASE_MS);
+    const added = (diff[changesPath(COORD_ID)] as { added: string[] }).added;
+    expect(line(added, /^## /)).toMatch(/^## \S+ @claude — /);
+    expect(JSON.stringify(diff)).not.toContain("@codex");
+    expect((diff[store.filePath(COORD_ID, "goal.md")] as { added: string[] }).added).toContain(
+      "  - verified_by: @claude",
+    );
+    const detail = await server.issue(COORD_ID);
+    expect(detail.state?.updated_by).toBe("claude");
+    expect(detail.criteria[0]).toMatchObject({ state: "verified", verified_by: "claude" });
+    expect((await server.delivery(COORD_ID)).commits[0]).toMatchObject({ author: "claude" });
+    // Everything the run wrote is by an author of authors.md: no Q012.
+    expect(detail.diagnostics.filter((d) => d.rule === "Q012").map((d) => d.message)).toEqual([]);
+    expect((await server.codexRuns(COORD_ID))[0]).toMatchObject({
+      status: "done",
+      agent: "claude",
+    });
+  });
+
+  test("a cancel gives the claim back and writes as @claude", async () => {
+    const before = texts();
+    const run = await server.startCodexRun(COORD_ID, "next_step", "claude");
+    const cancelled = await server.cancelCodexRun(run.id);
+    expect(cancelled).toMatchObject({ status: "cancelled", agent: "claude" });
+    expect(store.text(goalPath())).toContain("status: planned");
+    expect(store.text(goalPath())).not.toContain("claimed_by");
+    expect(store.text(store.filePath(COORD_ID, "plan.md"))).toBe(
+      before.get(store.filePath(COORD_ID, "plan.md")),
+    );
+  });
+
+  test("one run per issue holds across agents, and the refusal names the one at work", async () => {
+    await server.startCodexRun(ID, "next_step", "claude");
+    const err = await server.startCodexRun(ID, "next_step", "codex").catch((e: unknown) => e);
+    expect(((err as ApiError).body as { gaps?: string[] }).gaps).toEqual([
+      `Claude Code is already working on ${ID}.`,
+    ]);
+    const again = await server.startCodexRun(ID, "next_step", "claude").catch((e: unknown) => e);
+    expect(((again as ApiError).body as { gaps?: string[] }).gaps).toEqual([
+      `Claude Code is already working on ${ID}.`,
+    ]);
+  });
+
+  test("another author's live lease makes the run a worker, as for Codex", async () => {
+    // wf-3k9x2 is held by @claude-opus: a run by @claude claims the task and leaves goal.md alone.
+    const diff = await changed(() => server.startCodexRun(ID, "next_step", "claude"));
+    expect(Object.keys(diff)).toEqual([planPath()]);
+    expect((diff[planPath()] as { added: string[] }).added).toContain("- claimed_by: @claude");
+    await wait(3 * PHASE_MS);
+    expect(store.text(store.filePath(ID, "goal.md"))).toContain('claimed_by: "@claude-opus"');
+    expect(store.text(changesPath())).toContain("Ran as a worker under another lease");
+    expect(store.text(changesPath())).toMatch(/@claude — Elected one leader tab/);
+  });
+
+  test("the live stream carries the agent", async () => {
+    const heard: string[] = [];
+    server.subscribeCodex((e: CodexEvent) => {
+      if (e.event === "run") heard.push(`${e.run.agent}/${e.run.source}/${e.run.status}`);
+    });
+    await server.startCodexRun(ID, "next_step", "claude");
+    await wait(3 * PHASE_MS);
+    expect(new Set(heard)).toEqual(new Set(["claude/simulated/running", "claude/simulated/done"]));
   });
 });
 

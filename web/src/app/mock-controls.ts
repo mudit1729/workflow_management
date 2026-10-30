@@ -2,6 +2,7 @@
 // Absent when the app talks to the real daemon (`VITE_API=real`), so every caller
 // guards on `undefined`.
 import { toast } from "sonner";
+import type { AgentKind } from "@/lib/api/types";
 
 export type MockConnection = "live" | "reconnecting" | "offline";
 
@@ -19,6 +20,10 @@ export interface MockControls {
   holdSample: () => () => void;
   /** Time between the phases of the Codex runs that start from now on, in ms. Default 2000. */
   setCodexPhaseMs: (ms: number) => void;
+  /** Connect the simulated agent (`"codex"` by default), as a finished pairing would. */
+  connectAgent: (kind?: AgentKind) => void;
+  /** End the agent connection. */
+  disconnectAgent: () => void;
 }
 
 export function getMockControls(): MockControls | undefined {

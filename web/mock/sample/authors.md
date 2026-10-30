@@ -15,6 +15,13 @@
 - color: 7
 - max_leases: 6
 
+## @claude
+- kind: agent
+- name: Claude Code
+- runtime: claude-code
+- color: 7
+- max_leases: 3
+
 ## @codex
 - kind: agent
 - name: Codex
