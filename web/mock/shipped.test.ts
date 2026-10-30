@@ -476,3 +476,17 @@ describe("holdSample() keeps the working copy for the Kit", () => {
     expect(s.controls.playNextEvent()).toBeUndefined();
   });
 });
+
+describe("clock", () => {
+  test("the shipped workspace keeps real times; only the sample moves to the clock", () => {
+    const store = shipped();
+    expect(store.shiftMs).toBe(0);
+    // A skill writes a log entry at the real time: the board shows that time, not a shifted one.
+    const path = "README.md";
+    const stamped = `${DISK.text[path]}\n<!-- written 2026-10-30T14:20+00:00 -->\n`;
+    store.applyDisk({ ...DISK, text: { ...DISK.text, [path]: stamped } });
+    expect(store.text(path)).toBe(stamped);
+    store.loadSample();
+    expect(store.shiftMs).not.toBe(0);
+  });
+});

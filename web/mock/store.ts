@@ -387,7 +387,10 @@ export function createStore(options: StoreOptions = {}): Store {
   function takeDisk(from: WorkspaceDisk, which: "home" | "sample") {
     showing = which;
     disk = from;
-    shiftMs = shiftSinceRecording(clock());
+    // Only the sample world was recorded at RECORDED_AT. The shipped workspace holds real times
+    // (a skill writes `now`), so shifting it would show a fresh entry as days in the future.
+    const recorded = which === "sample" || from === sample;
+    shiftMs = recorded ? shiftSinceRecording(clock()) : 0;
     loadedAt = clock();
     files = new Map(Object.entries(rebase(from.text)));
     assets = { ...from.assets };
@@ -395,7 +398,7 @@ export function createStore(options: StoreOptions = {}): Store {
     activityLog = new Map();
     // Only the sample world has a git history (a store built on the sample files, as the tests
     // do, counts too); the shipped workspace and new issues start empty.
-    deliveryData = which === "sample" || from === sample ? sampleDelivery(shiftMs) : new Map();
+    deliveryData = recorded ? sampleDelivery(shiftMs) : new Map();
   }
   takeDisk(home, "home");
 
