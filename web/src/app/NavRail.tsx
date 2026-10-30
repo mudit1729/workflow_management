@@ -1,8 +1,8 @@
 // The left navigation. Workspace "wf" holds two views: Workflow (work in motion: Board) and
-// Workdatabase (everything stored: Library, Glossary, Files, Skills). Below them the Groups tree,
-// which filters the Workflow board, then the agent row (Codex or Claude Code: connected or not), Kit
-// (prototype tools) and the display controls. What needs you is a filter of the board, not a place
-// in the nav. 232 px, or a
+// Library (everything stored: Personal, Team libraries with the workspace's own first and "+ Add
+// team library", Files, Skills). Below them the Groups tree, which filters the Workflow board, then
+// the agent row (Codex or Claude Code: connected or not), Kit (prototype tools) and the display
+// controls. What needs you is a filter of the board, not a place in the nav. 232 px, or a
 // 52 px icon rail when collapsed (⌘B or [): one icon per view, tooltips list the sub-views.
 // Below 768 px AppShell shows it inside a sheet (variant "sheet").
 import { Link } from "@tanstack/react-router";
@@ -14,6 +14,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Rows2,
   Rows3,
   Search,
@@ -34,15 +35,15 @@ import {
 } from "@/components/common";
 import { Button, Chip, Kbd, Segmented, Tooltip } from "@/components/ui";
 import { AgentStatus } from "@/features/agent/AgentStatus";
-import { useMe, useSnapshot } from "@/lib/api";
+import { useLibraries, useMe, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLiveStatus } from "@/lib/live";
-import { usePathname } from "@/lib/nav";
+import { libraryPath, usePathname } from "@/lib/nav";
 import { type Density, type ThemePref, usePrefs } from "@/lib/prefs";
 import { DevPanel } from "./DevPanel";
 import { GroupTree } from "./GroupTree";
 import { NotifyBanner, useBlockingForMe } from "./NotifyBanner";
-import { useShell } from "./shell-store";
+import { openAddLibrary, useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -302,10 +303,10 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
 /** What a sub-view shows after its name: how many things it holds, or nothing. */
 function subCount(sub: WfSubView, counts: ViewCounts): number | undefined {
   switch (sub) {
-    case "library":
-      return counts.library;
-    case "glossary":
-      return counts.glossary;
+    case "personal":
+      return counts.personal;
+    case "team":
+      return counts.team;
     case "files":
       return counts.files;
     case "skills":
@@ -316,8 +317,8 @@ function subCount(sub: WfSubView, counts: ViewCounts): number | undefined {
 }
 
 const SUB_COUNT_LABEL: Partial<Record<WfSubView, string>> = {
-  library: "items",
-  glossary: "terms",
+  personal: "pages",
+  team: "libraries",
   files: "files",
   skills: "skills",
 };
@@ -385,11 +386,63 @@ function ExpandedView({
                   <span aria-hidden className="size-[6px] shrink-0 rounded-full bg-danger" />
                 )}
               </Link>
+              {sub === "team" && <TeamLibraryRows onNavigate={onNavigate} />}
             </li>
           );
         })}
       </ul>
     </>
+  );
+}
+
+/**
+ * The team libraries under their row: the workspace's own first, then each one added, then the
+ * button that adds another by its GitHub link.
+ */
+function TeamLibraryRows({ onNavigate }: { onNavigate?: () => void }) {
+  const libraries = useLibraries().data?.filter((l) => l.kind !== "personal") ?? [];
+  const path = usePathname();
+  return (
+    <ul
+      data-wf="NavTeamLibraries"
+      aria-label="Team libraries"
+      className="mt-px mb-0.5 ml-[11px] flex flex-col gap-px border-border border-l pl-1"
+    >
+      {libraries.map((l) => {
+        const base = libraryPath(l.alias);
+        const here = path === base || path.startsWith(`${base}/`);
+        return (
+          <li key={l.alias}>
+            <Link
+              to="/lib/t/$alias"
+              params={{ alias: l.alias }}
+              onClick={onNavigate}
+              aria-current={here ? "page" : undefined}
+              title={l.kind === "workspace" ? `${l.name} (${l.alias})` : l.name}
+              className={cn(
+                "flex h-7 items-center rounded-md pr-2 pl-[11px] text-base transition-colors duration-100 ease-wf",
+                here ? "bg-muted text-fg" : "text-fg-muted hover:bg-muted/70 hover:text-fg",
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{l.name}</span>
+            </Link>
+          </li>
+        );
+      })}
+      <li>
+        <button
+          type="button"
+          onClick={() => {
+            openAddLibrary();
+            onNavigate?.();
+          }}
+          className="flex h-7 w-full items-center gap-1.5 rounded-md pr-2 pl-[11px] text-fg-faint text-base transition-colors duration-100 ease-wf hover:bg-muted/70 hover:text-fg"
+        >
+          <Plus {...ICON} aria-hidden />
+          Add team library
+        </button>
+      </li>
+    </ul>
   );
 }
 

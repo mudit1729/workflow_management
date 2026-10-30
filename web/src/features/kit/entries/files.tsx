@@ -281,35 +281,35 @@ function NewFileDialogBody() {
 
 export const filesEntries: KitEntry[] = [
   entry(
-    "Workdatabase",
+    "Library",
     "WorkspaceView",
     `${SRC}/WorkspaceView.tsx`,
-    "The Workdatabase is a folder of markdown files, so Files shows them and lets you change one; seeing a status in the text and on the Workflow card at once is how you trust it.",
+    "The workspace is a folder of markdown files, so Files shows them and lets you change one; seeing a status in the text and on the Workflow card at once is how you trust it.",
     WorkspaceViewBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "WorkspaceTree",
     `${SRC}/WorkspaceTree.tsx`,
     "The workspace is a folder tree, but a path means little by itself, so issue folders carry their status and title and every file shows its findings.",
     WorkspaceTreeBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "SourceView",
     `${SRC}/SourceView.tsx`,
     "A file is read as the text it is, with line numbers and the findings the linter put on those lines, so what an agent was told and what is wrong sit in one place.",
     SourceViewBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "SourceEditor",
     `${SRC}/SourceEditor.tsx`,
     "Editing the file is the one way to change anything, so the editor saves against the rev it opened from and says plainly when the file moved underneath.",
     SourceEditorBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "NewFileDialog",
     `${SRC}/NewFileDialog.tsx`,
     "A new issue is a folder with a goal.md, so creating one asks for a title and a folder and writes a valid file, and the path stays visible so nothing is hidden.",

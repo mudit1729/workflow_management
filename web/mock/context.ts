@@ -2,11 +2,18 @@
 // instead of the whole folder. Sections are added in priority order until the token budget
 // is spent. Archify blocks become one-line stubs; only reviewed library items enter, wrapped
 // as reference data.
-import { FILE_EXCERPT_CHARS, type ParsedLink, parseLinks } from "@/features/context/links";
+import {
+  FILE_EXCERPT_CHARS,
+  PAGE_EXCERPT_CHARS,
+  type ParsedLink,
+  parseLinks,
+} from "@/features/context/links";
+import { parseAddress } from "@/features/library/address";
 import type { Criterion, IssueDetail, LibraryItemDetail, Task } from "@/gen/types";
 import { resumeCommand } from "@/lib/api/resume";
 import type { Delivery } from "@/lib/api/types";
 import type { Derived, IssueFileName } from "./derive";
+import type { Libraries } from "./libraries";
 import { stubDiagrams } from "./md/render";
 import { tsMs } from "./time";
 
@@ -114,11 +121,44 @@ function fileText(d: Derived, path: string): string | undefined {
 }
 
 /** The first lines of a file, cut at a line break. */
-function excerpt(text: string): string {
+function excerpt(text: string, limit = FILE_EXCERPT_CHARS): string {
   const t = text.trim();
-  if (t.length <= FILE_EXCERPT_CHARS) return t;
-  const head = t.slice(0, FILE_EXCERPT_CHARS).replace(/\n[^\n]*$/, "");
+  if (t.length <= limit) return t;
+  const head = t.slice(0, limit).replace(/\n[^\n]*$/, "");
   return `${head}\n… (excerpt: ${(t.length - head.length).toLocaleString("en-US")} more characters in the file)`;
+}
+
+/** The pages of the libraries a bundle may read: the part of `Libraries` it needs. */
+export type BundlePages = Pick<Libraries, "page">;
+
+/** The body of a page, without its frontmatter. */
+const pageBody = (text: string, lineOffset: number): string =>
+  text.split("\n").slice(lineOffset).join("\n");
+
+/**
+ * A page of a team or personal library, as reference data. A team page is pinned by the commit
+ * it was read at (`platform:runbooks/x.md@a1b2c3d`), so a handoff reads what was cited and not
+ * what the branch says later. The page text is another team's text: a closing tag in it is
+ * defused, so it cannot end the block early.
+ */
+function pageBlock(link: ParsedLink, pages: BundlePages | undefined): Block {
+  const at = parseAddress(link.target);
+  if (!at || !pages) return { kind: "listed", text: `${link.target}: library not available.` };
+  let page: ReturnType<BundlePages["page"]>;
+  try {
+    page = pages.page(at.alias, at.path);
+  } catch {
+    return { kind: "listed", text: `${link.target}: page not found.` };
+  }
+  const source = `${page.address}${page.commit && page.libraryKind === "team" ? `@${page.commit}` : ""}`;
+  const body = excerpt(pageBody(page.text, page.lineOffset), PAGE_EXCERPT_CHARS)
+    .replaceAll("</reference-data", "<\\/reference-data")
+    .replaceAll("<reference-data", "<\\reference-data");
+  return {
+    kind: "item",
+    label: source,
+    text: reference(source, "page", undefined, `# ${page.title}\n${body}`),
+  };
 }
 
 const reference = (source: string, kind: string, status: string | undefined, body: string) =>
@@ -137,7 +177,7 @@ interface Linked {
  * and glossary terms go in as reference data, files as excerpts. Drafts and retired items are
  * listed by name only: they are not injected until they are reviewed.
  */
-function linkedSection(detail: IssueDetail, d: Derived): Linked {
+function linkedSection(detail: IssueDetail, d: Derived, pages?: BundlePages): Linked {
   const id = detail.summary.id;
   const links = parseLinks(detail.goal.links_md, d.dirs.get(id));
   const library = new Set<string>();
@@ -146,7 +186,7 @@ function linkedSection(detail: IssueDetail, d: Derived): Linked {
   const listed: string[] = [];
 
   for (const link of links) {
-    const block = linkedBlock(link, id, d, library);
+    const block = linkedBlock(link, id, d, library, pages);
     if (block.kind === "item") items.push({ label: block.label, text: block.text });
     else if (block.kind === "issue") issues.push(block.text);
     else if (block.kind === "listed") listed.push(block.text);
@@ -177,8 +217,16 @@ type Block =
   | { kind: "issue" | "listed"; text: string }
   | { kind: "skip" };
 
-function linkedBlock(link: ParsedLink, from: string, d: Derived, library: Set<string>): Block {
+function linkedBlock(
+  link: ParsedLink,
+  from: string,
+  d: Derived,
+  library: Set<string>,
+  pages?: BundlePages,
+): Block {
   switch (link.kind) {
+    case "page":
+      return pageBlock(link, pages);
     case "library": {
       library.add(link.target);
       const item = d.library.get(link.target);
@@ -300,6 +348,7 @@ function buildSections(
   d: Derived,
   now: number,
   delivery: Delivery | undefined,
+  pages: BundlePages | undefined,
 ): Section[] {
   const s = detail.summary;
   const out: Section[] = [];
@@ -346,7 +395,7 @@ function buildSections(
   }
 
   // 4 Linked context: what goal.md links, before the ranked library items.
-  const linked = linkedSection(detail, d);
+  const linked = linkedSection(detail, d, pages);
   if (linked.section) out.push(linked.section);
 
   const tasks = detail.plan?.phases.flatMap((p) => p.tasks) ?? [];
@@ -443,6 +492,7 @@ export function contextBundle(
   budget = 6000,
   now = Date.now(),
   delivery?: Delivery,
+  pages?: BundlePages,
 ): string {
   const detail = d.details.get(id);
   if (!detail) throw new Error(`Issue ${id} does not exist.`);
@@ -468,7 +518,7 @@ export function contextBundle(
     .join("\n");
 
   const resume = `To resume: ${resumeCommand(s)}`;
-  const sections = buildSections(detail, d, now, delivery);
+  const sections = buildSections(detail, d, now, delivery, pages);
   const keep = new Set<Section>();
   let used = tokens(header) + tokens(resume) + 60; // the footer, the resume line and the note
   const dropped: string[] = [];

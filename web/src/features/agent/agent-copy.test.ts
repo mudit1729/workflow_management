@@ -66,7 +66,10 @@ describe("agent names", () => {
 
 describe("skillsLine", () => {
   it("is ok when every skill is installed", () => {
-    expect(skillsLine(codex.skills, "codex")).toEqual({ ok: true, text: "All 8 skills installed" });
+    expect(skillsLine(codex.skills, "codex")).toEqual({
+      ok: true,
+      text: "All 12 skills installed",
+    });
   });
 
   it("names the agent when none of the skills is installed", () => {
@@ -80,7 +83,7 @@ describe("skillsLine", () => {
     const skills = { installed: WF_SKILL_NAMES.slice(0, 5), missing: WF_SKILL_NAMES.slice(5) };
     expect(skillsLine(skills, "codex")).toEqual({
       ok: false,
-      text: "3 of 8 skills not installed for Codex",
+      text: "7 of 12 skills not installed for Codex",
     });
   });
 

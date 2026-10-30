@@ -2,8 +2,10 @@
 // minimal text edit (ticking SC-3 flips `[ ]` to `[x]` on its line and nothing else changes).
 // Order inside each op: find the target → 409 if the client's rev is stale → 422 if the
 // move or value is not allowed → edit the text through `store.mutate`, which loads the result.
+import { isPageAddress } from "@/features/context/links";
+import { parseAddress } from "@/features/library/address";
 import type { ContextLink, IssueId, LibraryKind, LibrarySection, OpResult } from "@/gen/types";
-import { ApiError } from "@/lib/api/error";
+import { ApiError, NotFoundError } from "@/lib/api/error";
 import type { CreateWorkOp, NewIssueOp, WfOp, WorkOpResult } from "@/lib/api/types";
 import {
   doneGaps,
@@ -12,10 +14,12 @@ import {
   STATUS_LABEL,
   TASK_STATUS_LABEL,
 } from "@/lib/status";
+import type { Libraries } from "./libraries";
 import {
   addLinks as addLinksText,
   answerRequestsReferring,
   answerRequest as answerRequestText,
+  appendLearning,
   approveLibraryItem,
   EditError,
   moveTask,
@@ -24,10 +28,11 @@ import {
   promote as promoteTexts,
   setDecisionStatus as setDecisionStatusText,
   setIssueStatus,
+  sourcesEvidence,
   toggleCriterion as toggleCriterionText,
   toggleStep as toggleStepText,
 } from "./md/edit";
-import type { IssueSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./source";
+import type { IssueSrc, LearningSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./source";
 import type { Applied, Draft, Mutation, Store } from "./store";
 import { dateIn, toTs } from "./time";
 import { folderName, lowestUnusedColor, slugify } from "./util";
@@ -102,7 +107,13 @@ function edit<T>(fn: () => T): T {
 
 // ---------------------------------------------------------------- the dispatcher
 
-export function applyOp(store: Store, op: WfOp): OpResult {
+/**
+ * The libraries an op may name (a linked or cited page). Without it a page address is checked for
+ * its shape only, so a store built alone (the tests of the other ops) needs none.
+ */
+export type PageSource = Pick<Libraries, "page">;
+
+export function applyOp(store: Store, op: WfOp, pages?: PageSource): OpResult {
   switch (op.op) {
     case "set_status":
       return setStatus(store, op);
@@ -127,7 +138,9 @@ export function applyOp(store: Store, op: WfOp): OpResult {
     case "approve_library":
       return approveLibrary(store, op);
     case "add_links":
-      return addLinks(store, op);
+      return addLinks(store, op, pages);
+    case "add_learning":
+      return addLearning(store, op, pages);
   }
 }
 
@@ -579,8 +592,21 @@ function approveLibrary(store: Store, op: Of<"approve_library">): OpResult {
 /** Words for a count of links: "1 link", "3 links". */
 const linkCount = (n: number) => `${n} link${n === 1 ? "" : "s"}`;
 
+/** A page address names a page that exists: a 422 says which one does not. */
+function checkPage(address: string, pages: PageSource | undefined): void {
+  const at = parseAddress(address);
+  if (!isPageAddress(address) || !at) reject(`${address} is not a page address. Use alias:path.`);
+  if (!pages) return;
+  try {
+    pages.page(at.alias, at.path);
+  } catch (err) {
+    if (err instanceof NotFoundError) reject(`Page ${at.alias}:${at.path} does not exist.`);
+    throw err;
+  }
+}
+
 /** A link must point at something that exists: a 422 names the first one that does not. */
-function checkLinks(store: Store, links: ContextLink[]): void {
+function checkLinks(store: Store, links: ContextLink[], pages?: PageSource): void {
   for (const link of links) {
     if (!link.target.trim()) reject("A link needs a target.");
     switch (link.kind) {
@@ -608,18 +634,21 @@ function checkLinks(store: Store, links: ContextLink[]): void {
         if (store.text(link.target) === undefined && !store.assets()[link.target])
           reject(`File ${link.target} does not exist.`);
         break;
+      case "page":
+        checkPage(link.target, pages);
+        break;
       default:
-        reject("Unknown link kind. Use library, entry, term or file.");
+        reject("Unknown link kind. Use library, entry, term, file or page.");
     }
   }
 }
 
-function addLinks(store: Store, op: Of<"add_links">): OpResult {
+function addLinks(store: Store, op: Of<"add_links">, pages?: PageSource): OpResult {
   const live = issueIn(store.world, op.issue);
   const file = store.filePath(op.issue, "goal.md");
   store.guard(file, "links", op.base_rev, () => ({ links: live.links ?? "" }));
   if (op.links.length === 0) reject("Pick at least one item to link.");
-  checkLinks(store, op.links);
+  checkLinks(store, op.links, pages);
 
   const by = store.me;
   const dir = store.derived.dirs.get(op.issue) ?? file.slice(0, file.lastIndexOf("/"));
@@ -633,6 +662,56 @@ function addLinks(store: Store, op: Of<"add_links">): OpResult {
       touches: [{ file, anchors: ["links"] }],
       activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
       log: [{ issue_id: op.issue, kind: "state", author: by, title }],
+    };
+  });
+  return result(store, m, op.issue);
+}
+
+// ---------------------------------------------------------------- learnings
+
+/** The most characters of a learning's title: it is the heading of the entry, one line. */
+const MAX_TITLE = 200;
+
+/**
+ * Save an answer to the issue's log (`logging-work`, learnings): the question is the title, the
+ * summary the rule, the cited pages the `sources:` under `Evidence:`. It is an append: another
+ * entry written meanwhile is no conflict, only a rewrite of the whole file is.
+ */
+function addLearning(store: Store, op: Of<"add_learning">, pages?: PageSource): OpResult {
+  issueIn(store.world, op.issue);
+  const file = store.filePath(op.issue, "learnings.md");
+  store.guard(file, "learnings", op.base_rev);
+
+  // A heading is one line, and a `{#…}` in it would read as the entry's id.
+  const title = oneLine(op.title.replace(/\{#[^}]*\}?/g, " ")) ?? "";
+  const rule = op.rule.replace(/\r\n/g, "\n").trim();
+  if (!title) reject("Give the learning a title.");
+  if (title.length > MAX_TITLE) reject(`Keep the title under ${MAX_TITLE} characters.`);
+  if (!rule) reject("A learning needs its rule: the answer's summary.");
+  const sources = [...new Set((op.sources ?? []).map((a) => a.trim()).filter(Boolean))];
+  for (const address of sources) checkPage(address, pages);
+  const tags = [...new Set((op.tags ?? []).map((t) => t.trim()).filter(Boolean))];
+
+  const by = store.me;
+  const id = store.newId("L-");
+  const entry: LearningSrc = {
+    id,
+    ts: store.stamp(),
+    author: by,
+    title,
+    kind: op.kind ?? "tip",
+    ...(tags.length ? { tags } : {}),
+    promote: "no",
+    rule,
+    ...(sources.length ? { evidence: sourcesEvidence(sources) } : {}),
+  };
+  const m = store.mutate(by, op.issue, (w) => {
+    w.write(file, appendLearning(w.read(file), entry));
+    return {
+      touches: [{ file, anchors: [id] }],
+      // The entry is the record: nothing goes to the in-memory log.
+      activity: [{ issue_id: op.issue, kind: "learning", author: by, title: `Saved "${title}"` }],
+      created: id,
     };
   });
   return result(store, m, op.issue);

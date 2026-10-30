@@ -216,7 +216,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
 
       <Section title="Source of truth">
         <p className="text-fg-faint text-xs">
-          The Workdatabase is a folder of markdown files. Edit one and the Workflow board changes.
+          The workspace is a folder of markdown files. Edit one and the Workflow board changes.
         </p>
         <Button
           size="sm"
@@ -228,7 +228,7 @@ function DevPanelBody({ onClose }: { onClose: () => void }) {
           }}
         >
           <FolderTree {...ICON} aria-hidden />
-          Open Workdatabase · Files
+          Open Library · Files
         </Button>
       </Section>
 

@@ -75,8 +75,12 @@ const FALLBACK_SKILLS = [
   "checking-status",
   "doing-next-step",
   "handing-off",
+  "keeping-a-library",
   "logging-work",
   "planning-issues",
+  "querying-library",
+  "summarizing-codebase",
+  "summarizing-work",
   "using-wf",
   "writing-readable-bulk-text",
 ];

@@ -1,4 +1,4 @@
-// "Context from the Workdatabase": library items and glossary terms found with a search on what
+// "Context from the library": library items and glossary terms found with a search on what
 // the person typed, as toggle chips. Skip is always one press away.
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui";
@@ -106,8 +106,8 @@ export function ContextStep({ flow }: { flow: AddWorkFlow }) {
         </div>
       ) : all.length === 0 ? (
         <p className="rounded-md border border-border border-dashed px-3 py-3 text-fg-muted text-sm">
-          The Workdatabase has nothing to suggest yet. Skip this; you can add context later from the
-          Goal tab.
+          The library has nothing to suggest yet. Skip this; you can add context later from the Goal
+          tab.
         </p>
       ) : (
         <div className="flex flex-col gap-4">

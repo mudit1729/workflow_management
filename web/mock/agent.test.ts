@@ -68,7 +68,7 @@ describe("the simulated bridge", () => {
       .filter((s) => s.plugin === "workflow")
       .map((s) => s.name)
       .sort();
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(12);
     expect([...WF_SKILL_NAMES].sort()).toEqual(names);
   });
 
@@ -90,6 +90,6 @@ describe("the simulated bridge", () => {
     });
     // The lists are copies: changing one never changes the next answer.
     simulatedConnection("claude").skills?.missing.pop();
-    expect(simulatedConnection("claude").skills?.missing).toHaveLength(8);
+    expect(simulatedConnection("claude").skills?.missing).toHaveLength(12);
   });
 });

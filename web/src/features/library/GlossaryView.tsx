@@ -1,6 +1,7 @@
 // The glossary: one term, one meaning. Each term lists the words to avoid (struck through, with an
 // arrow to the term) and links to related terms. The terms are written in glossary.md; each one
-// names its line there and opens it in Workdatabase · Files.
+// names its line there and opens it in Library · Files. It is the body of the Glossary page of
+// the workspace library; each term carries the anchor of its heading, so `#lease` opens at it.
 import { ArrowRight, ArrowUpRight, BookText, Info, SearchX, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
@@ -9,6 +10,7 @@ import { FilesLink } from "@/features/files/useFilesNav";
 import type { GlossaryTerm } from "@/gen/types";
 import { useGlossary, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { slugify } from "./anchors";
 import { glossaryLines } from "./markdown";
 import { InlineCode } from "./meta";
 
@@ -23,6 +25,8 @@ export interface GlossaryViewProps {
   query?: string;
   /** Called when a "See" link points at a term that the search hides. */
   onClearQuery?: () => void;
+  /** Inside a page: no page padding or width of its own. */
+  embedded?: boolean;
 }
 
 const KIND_NAME: Record<GlossaryTerm["kind"], string> = {
@@ -37,11 +41,12 @@ function useTermLines(): Map<string, number> | undefined {
   return useMemo(() => (text ? glossaryLines(text) : undefined), [text]);
 }
 
+/** The anchor of the term's heading in glossary.md. */
 function termDomId(term: string): string {
-  return `term-${term.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return slugify(term);
 }
 
-export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
+export function GlossaryView({ query, onClearQuery, embedded = false }: GlossaryViewProps) {
   const glossary = useGlossary();
   const lines = useTermLines();
   const [own, setOwn] = useState("");
@@ -92,7 +97,10 @@ export function GlossaryView({ query, onClearQuery }: GlossaryViewProps) {
   return (
     <div
       data-wf="GlossaryView"
-      className="mx-auto flex w-full max-w-[880px] flex-col gap-4 px-6 py-5"
+      className={cn(
+        "flex w-full flex-col gap-4",
+        embedded ? "min-w-0" : "mx-auto max-w-[880px] px-6 py-5",
+      )}
     >
       <p
         data-wf="GlossaryNote"

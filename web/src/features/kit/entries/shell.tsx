@@ -36,7 +36,7 @@ function NavRailBody() {
           </div>
         </Sandbox>
       </V>
-      <V label="expanded · on Workdatabase · Files" width={232} height={640}>
+      <V label="expanded · on Library · Files" width={232} height={640}>
         <Sandbox path="/files">
           <div className={`flex min-h-0 flex-1 ${HIDE_DEV_PANEL}`}>
             <NavRail />
@@ -55,7 +55,7 @@ function NavRailBody() {
           </div>
         </Sandbox>
       </V>
-      <V label="sheet (phone overlay) · on Workdatabase · Library" width={280} height={640}>
+      <V label="sheet (phone overlay) · on Library · Library" width={280} height={640}>
         <Sandbox path="/lib">
           <div className={`flex min-h-0 flex-1 [&>nav]:flex-1 ${HIDE_DEV_PANEL}`}>
             <NavRail variant="sheet" />
@@ -342,7 +342,7 @@ export const shellEntries: KitEntry[] = [
     "Shell",
     "NavRail",
     `${SRC}/NavRail.tsx`,
-    "One rail holds the workspace and its two views (Workflow: Board; Workdatabase: Library, Glossary, Files and Skills), the Groups tree that filters the board, and Kit; it folds to one icon per view at 52 px when the board needs the room. What needs you is a filter of the board, not an item here.",
+    "One rail holds the workspace and its two views (Workflow: Board; Library: Personal, Team libraries, Files and Skills), the Groups tree that filters the board, and Kit; it folds to one icon per view at 52 px when the board needs the room. What needs you is a filter of the board, not an item here.",
     NavRailBody,
   ),
   entry(

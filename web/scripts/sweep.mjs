@@ -6,6 +6,9 @@
 // the sample world (26 issues) in each page before its route opens. /kit holds the sample itself.
 // --agent connects that agent in each page first (window.__wf.connectAgent), for a route whose frame needs a connected
 // agent; the default routes do not (the Kit shows the connect flow and the Agent panel on fixed connections).
+// A route under /lib/t/platform-handbook first adds the example team library through its dialog
+// (see goto.mjs); the old /lib/<lib-id>, /glossary and /lib?tab=glossary only redirect, so they are
+// not routes of their own here.
 // Base URL: SHOT_BASE (default http://localhost:5177). For the static build use SHOT_BASE=http://host:port/#
 // Each page is also checked for text under 11 px; the first few elements are printed as a "note" and kept in report.json (`smallText`).
 // Writes <dir>/<route-slug>__<width>__<theme>.png, <dir>/report.json, and with --sheets
@@ -37,8 +40,17 @@ export const ROUTES = [
   "/i/wf-3k9x2?tab=plan",
   "/w/i/wf-k8dv6?tab=files",
   "/lib",
-  "/lib/lib-4tz7c",
-  "/lib?tab=glossary",
+  "/lib/me",
+  "/lib/me/topics/agent-context",
+  "/lib/me/topics/agent-context/resume-points",
+  "/lib/me/topics/agent-context/bundle-sizes",
+  "/lib/me/codebases/mudit1729-workflow_management",
+  "/lib/me/work/wf/wf/web/wf-3k9x2",
+  "/lib/t/wf",
+  "/lib/t/wf/playbooks/write-criteria-as-ears",
+  "/lib/t/wf/glossary",
+  "/lib/t/platform-handbook",
+  "/lib/t/platform-handbook/runbooks/rotate-signing-keys",
   "/skills",
   "/skills?skill=adding-work",
   "/kit",
@@ -49,6 +61,9 @@ export const ROUTES = [
   "/kit?el=AgentStatus",
   "/kit?el=ConnectAgentPanel",
   "/kit?el=AgentPanel",
+  "/kit?el=PersonalHome",
+  "/kit?el=MediaFigure",
+  "/kit?el=AskPanel",
 ];
 
 const args = process.argv.slice(2);

@@ -10,6 +10,7 @@ import {
   baseName,
   contextLinksOf,
   FILE_EXCERPT_CHARS,
+  isPageAddress,
   linkKeys,
   linkLine,
   parseLinkLine,
@@ -353,5 +354,46 @@ describe("withoutLink", () => {
     expect(withoutLink("## Context\n\nWhy.\n", "- [[lib-4tz7c]] x")).toBeUndefined();
     // A line outside the section does not count.
     expect(withoutLink(goal, "Why.")).toBeUndefined();
+  });
+});
+
+describe("links to a page of a library", () => {
+  const link: ContextLink = {
+    kind: "page",
+    target: "platform:runbooks/rotate-keys.md",
+    label: "Cited for “How do we rotate”.",
+  };
+
+  test("the bullet puts the why after a colon, and reads back to the link", () => {
+    const line = linkLine(link);
+    expect(line).toBe("- [[platform:runbooks/rotate-keys.md]]: Cited for “How do we rotate”.");
+    expect(parseLinkLine(line)).toMatchObject({
+      kind: "page",
+      target: link.target,
+      label: link.label,
+    });
+    expect(contextLinksOf(line)).toEqual([link]);
+    expect(linkLine({ ...link, label: "" })).toBe("- [[platform:runbooks/rotate-keys.md]]");
+  });
+
+  test("a section of the page is part of the address", () => {
+    const parsed = parseLinkLine("- [[platform:runbooks/rotate-keys.md#rollback]]: The rollback.");
+    expect(parsed).toMatchObject({
+      kind: "page",
+      target: "platform:runbooks/rotate-keys.md#rollback",
+    });
+  });
+
+  test("an issue, an entry and a library item are not pages", () => {
+    for (const target of ["wf-3k9x2", "wf-3k9x2#D-7f3k2", "#T-3", "lib-4tz7c", "runbooks/x.md"])
+      expect(isPageAddress(target)).toBe(false);
+    expect(isPageAddress("me:topics/agent-context/index.md")).toBe(true);
+    expect(isPageAddress("https://example.com")).toBe(false);
+  });
+
+  test("the same page is one link, with or without the section", () => {
+    expect(
+      linkKeys("- [[platform:runbooks/rotate-keys.md]]: Why.").has(`page:${link.target}`),
+    ).toBe(true);
   });
 });

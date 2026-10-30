@@ -37,16 +37,21 @@ function ViewTabsBody() {
         view="workflow"
         path="/w"
       />
-      <Bar label="Workdatabase · Library" view="workdatabase" path="/lib" />
-      <Bar label="Workdatabase · Glossary" view="workdatabase" path="/glossary" />
       <Bar
-        label="Workdatabase · Files"
+        label="Library · Personal"
+        note="The Library home (/lib) shows the Library tabs with none active; Personal and Team libraries are pages of their own, and the Glossary is a page of the workspace library."
+        view="workdatabase"
+        path="/lib/me"
+      />
+      <Bar label="Library · Team libraries" view="workdatabase" path="/lib/t/wf" />
+      <Bar
+        label="Library · Files"
         note="A red dot shows when any file has an error finding."
         view="workdatabase"
         path="/files"
       />
       <Bar
-        label="Workdatabase · Skills"
+        label="Library · Skills"
         note="The count is the skills of every plugin in the repository."
         view="workdatabase"
         path="/skills"
@@ -60,7 +65,7 @@ export const viewsEntries: KitEntry[] = [
     "Shell",
     "ViewTabs",
     `${SRC}/ViewTabs.tsx`,
-    "Workflow (Board) and Workdatabase (Library, Glossary, Files, Skills) each have sub-views, so every page opens its top bar with them as real links, and the active tab and the counts say where you are and what it holds.",
+    "Workflow (Board) and Library (Personal, Team libraries, Files, Skills) each have sub-views, so every page opens its top bar with them as real links, and the active tab and the counts say where you are and what it holds.",
     ViewTabsBody,
   ),
 ];

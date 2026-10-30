@@ -7,12 +7,19 @@ import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { MoveGateDialog } from "@/components/common";
 import { Button } from "@/components/ui";
+import { AskHost } from "@/features/ask";
 import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
-import { AddWorkDialog, AgentDialogs, preloadViews, whenIdle } from "./lazy-views";
+import {
+  AddTeamLibraryDialog,
+  AddWorkDialog,
+  AgentDialogs,
+  preloadViews,
+  whenIdle,
+} from "./lazy-views";
 import { LiveBadge, NavRail } from "./NavRail";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
@@ -63,6 +70,21 @@ function AgentHost() {
   );
 }
 
+/** Add team library mounts when it is first wanted: nobody opens it on the way in. */
+function AddLibraryHost() {
+  const open = useShell((s) => s.addLibraryOpen);
+  const [wanted, setWanted] = useState(false);
+  useEffect(() => {
+    if (open) setWanted(true);
+  }, [open]);
+  if (!open && !wanted) return null;
+  return (
+    <Suspense fallback={null}>
+      <AddTeamLibraryDialog />
+    </Suspense>
+  );
+}
+
 export function AppShell() {
   const mobile = useLayoutMode() === "mobile";
   const mainRef = useRef<HTMLElement>(null);
@@ -106,6 +128,8 @@ export function AppShell() {
       <ShortcutsDialog />
       <AddWorkHost />
       <AgentHost />
+      <AddLibraryHost />
+      <AskHost />
       <MoveGateDialog />
       <GlobalShortcuts />
     </div>

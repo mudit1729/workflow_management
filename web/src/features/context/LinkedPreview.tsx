@@ -2,10 +2,12 @@
 // checked against the budget. Collapsed by default: it is a check, not the content of the tab.
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { parseAddress } from "@/features/library/address";
 import type { ContextLink, IssueDetail } from "@/gen/types";
 import { api, qk, useGlossary, useSnapshot, useWorkspaceFiles } from "@/lib/api";
+import type { LibraryPage } from "@/lib/api/types";
 import { ContextPreview } from "./ContextPreview";
-import { contextLinksOf } from "./links";
+import { contextLinksOf, PAGE_EXCERPT_CHARS } from "./links";
 import { type ContextItem, decisionItem, fileItem, libraryItem, termItem } from "./types";
 
 /**
@@ -27,6 +29,24 @@ export function useLinkedItems(links: ContextLink[]): ContextItem[] {
       staleTime: 30_000,
     })),
     combine: (results) => results.map((r) => r.data as IssueDetail | undefined),
+  });
+
+  // The pages of other libraries the issue links, for their titles and sizes.
+  const addresses = [
+    ...new Set(links.filter((l) => l.kind === "page").map((l) => l.target.split("#")[0] ?? "")),
+  ].filter(Boolean);
+  const pages = useQueries({
+    queries: addresses.map((address) => {
+      const at = parseAddress(address);
+      return {
+        queryKey: qk.libraryPage(at?.alias ?? "", at?.path ?? ""),
+        queryFn: () => api.libraryPage(at?.alias ?? "", at?.path ?? ""),
+        enabled: Boolean(at),
+        retry: false,
+        staleTime: 30_000,
+      };
+    }),
+    combine: (results) => results.map((r) => r.data as LibraryPage | undefined),
   });
 
   return useMemo(
@@ -60,11 +80,27 @@ export function useLinkedItems(links: ContextLink[]): ContextItem[] {
             const d = detail?.decisions.find((x) => x.id === entryId);
             return issue && d ? { ...decisionItem(issue, d), label: link.label } : stub;
           }
+          case "page": {
+            const page = pages.find(
+              (p) => p && `${p.alias}:${p.path}` === link.target.split("#")[0],
+            );
+            return page
+              ? {
+                  kind: "page",
+                  target: link.target,
+                  label: link.label,
+                  title: page.title,
+                  id: page.address,
+                  detail: page.library,
+                  chars: Math.min(page.text.length, PAGE_EXCERPT_CHARS) + 80,
+                }
+              : stub;
+          }
           default:
             return stub;
         }
       }),
-    [links, snapshot, glossary, files, details],
+    [links, snapshot, glossary, files, details, pages],
   );
 }
 

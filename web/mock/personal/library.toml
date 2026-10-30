@@ -1,0 +1,5 @@
+# The personal library of one person: a private repo, github.com/<handle>/wf-library (spec 3).
+name = "Personal library"
+owner = "shruti"
+kind = "personal"
+url = "https://github.com/shruti/wf-library"

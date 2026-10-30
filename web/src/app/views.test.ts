@@ -13,10 +13,23 @@ describe("which sub-view a route belongs to", () => {
 
   it("maps the other pages, with or without a child path", () => {
     expect(subViewForPath("/lib")).toBe("library");
-    expect(subViewForPath("/lib/lib-4tz7c")).toBe("library");
-    expect(subViewForPath("/glossary")).toBe("glossary");
     expect(subViewForPath("/files")).toBe("files");
     expect(subViewForPath("/skills")).toBe("skills");
+  });
+
+  it("splits the Library into the personal library and the team libraries", () => {
+    for (const path of ["/lib/me", "/lib/me/topics/agent-context/index.md"])
+      expect(subViewForPath(path)).toBe("personal");
+    for (const path of ["/lib/t", "/lib/t/wf", "/lib/t/wf/playbooks/write-criteria-as-ears.md"])
+      expect(subViewForPath(path)).toBe("team");
+    // The old addresses redirect before anything renders; until then they sit where they land.
+    expect(subViewForPath("/glossary")).toBe("team");
+    expect(subViewForPath("/lib/lib-4tz7c")).toBe("library");
+  });
+
+  it("does not take a longer word for a library route", () => {
+    expect(subViewForPath("/lib/mean")).toBe("library");
+    expect(subViewForPath("/lib/tx")).toBe("library");
   });
 
   it("has no inbox: /inbox belongs to no view (the router sends it to the board)", () => {
@@ -37,12 +50,15 @@ describe("the view tables", () => {
   const views = Object.keys(VIEWS) as WfView[];
   const subs = Object.keys(SUBVIEWS) as WfSubView[];
 
-  it("lists every sub-view under exactly one view, and the view's home is one of them", () => {
+  it("lists every sub-view as a tab of its own view, except a home that is a page of its own", () => {
     for (const sub of subs) {
-      const owners = views.filter((v) => VIEWS[v].subs.includes(sub));
-      expect(owners).toEqual([SUBVIEWS[sub].view]);
+      const def = SUBVIEWS[sub];
+      const listed = views.filter((v) => VIEWS[v].subs.includes(sub));
+      // The Library home (/lib) is the page the view's name opens, not one of its tabs.
+      const page = VIEWS[def.view].home === sub && !VIEWS[def.view].subs.includes(sub);
+      expect(listed).toEqual(page ? [] : [def.view]);
     }
-    for (const view of views) expect(VIEWS[view].subs).toContain(VIEWS[view].home);
+    for (const view of views) expect(SUBVIEWS[VIEWS[view].home].view).toBe(view);
   });
 
   it("gives every sub-view its own route and its own shortcut", () => {
@@ -55,9 +71,12 @@ describe("the view tables", () => {
     expect(SUBVIEWS[VIEWS.workdatabase.home].to).toBe("/lib");
   });
 
-  it("says Workflow holds Board, Workdatabase Library, Glossary, Files and Skills", () => {
+  it("says Workflow holds Board, and the Library holds Personal, Team libraries, Files and Skills", () => {
     expect(VIEWS.workflow.subs).toEqual(["board"]);
-    expect(VIEWS.workdatabase.subs).toEqual(["library", "glossary", "files", "skills"]);
+    expect(VIEWS.workdatabase.label).toBe("Library");
+    expect(VIEWS.workdatabase.subs).toEqual(["personal", "team", "files", "skills"]);
+    expect(SUBVIEWS.personal.to).toBe("/lib/me");
+    expect(SUBVIEWS.team.to).toBe("/lib/t");
   });
 
   it("gives Skills the route /skills and the shortcut g s, which nothing else uses", () => {
@@ -77,10 +96,11 @@ describe("tab title", () => {
   });
 
   it("names a sub-view that is not its view's home", () => {
-    expect(tabTitle("/skills", "wf", 0)).toBe("Workdatabase · Skills · wf");
-    expect(tabTitle("/lib", "wf", 0)).toBe("Workdatabase · wf");
-    expect(tabTitle("/glossary", "wf", 0)).toBe("Workdatabase · Glossary · wf");
-    expect(tabTitle("/files", "wf", 0)).toBe("Workdatabase · Files · wf");
+    expect(tabTitle("/skills", "wf", 0)).toBe("Library · Skills · wf");
+    expect(tabTitle("/lib", "wf", 0)).toBe("Library · wf");
+    expect(tabTitle("/lib/me/topics/a.md", "wf", 0)).toBe("Library · Personal · wf");
+    expect(tabTitle("/lib/t/wf/glossary.md", "wf", 0)).toBe("Library · Team libraries · wf");
+    expect(tabTitle("/files", "wf", 0)).toBe("Library · Files · wf");
   });
 
   it("covers the kit, unknown paths and a workspace that has not loaded", () => {
@@ -103,6 +123,20 @@ describe("the shortcuts", () => {
     const tabs = SHORTCUTS.find((s) => s.title === "Issue")?.items.find((i) => i.range);
     expect(tabs?.combos).toEqual(["1", "8"]);
     expect(tabs?.label).toBe("Switch tab: Now, Goal, Criteria, Plan, Log, Git, CI, Files");
+  });
+});
+
+describe("the library routes", () => {
+  it("keeps the search text, its scope and the page view, and nothing else", () => {
+    expect(
+      validateLibrarySearch({ q: "rotate keys ", scope: "me", view: "source", kind: "pattern" }),
+    ).toEqual({ q: "rotate keys ", scope: "me", view: "source", tab: undefined });
+    expect(validateLibrarySearch({ view: "wide", q: "  " })).toEqual({
+      q: undefined,
+      scope: undefined,
+      view: undefined,
+      tab: undefined,
+    });
   });
 });
 

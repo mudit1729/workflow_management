@@ -18,6 +18,7 @@ import type {
   IssueId,
   IssueStatus,
   IssueSummary,
+  LearningKind,
   LibId,
   LibraryItemDetail,
   LibraryKind,
@@ -502,6 +503,8 @@ function refreshLinked(links: ContextLink[] | undefined): void {
       const issue = link.target.split("#")[0];
       if (issue) void queryClient.invalidateQueries({ queryKey: qk.issue(issue) });
     }
+    // A page shows the issues that link it (Used in issues) and the libraries follow the files.
+    if (link.kind === "page") void queryClient.invalidateQueries({ queryKey: qk.libraries() });
   }
 }
 
@@ -551,6 +554,39 @@ export function useAddLinks(issueId: IssueId) {
         issue: issueId,
         rebase: async (o) => ({ ...o, base_rev: await freshRev(issueId, "goal.md") }),
         settle: () => refreshLinked(args.links),
+      }),
+    [issueId],
+  );
+}
+
+/**
+ * Append a learning to an issue's `learnings.md`: the title is the question, `rule` the answer's
+ * summary, `sources` the library pages it came from. Resolves to the result, whose `created` is
+ * the new `L-` id.
+ */
+export function useAddLearning(issueId: IssueId) {
+  return useCallback(
+    (args: {
+      title: string;
+      rule: string;
+      kind?: LearningKind;
+      tags?: string[];
+      sources?: string[];
+      base_rev?: string;
+    }) =>
+      run({
+        op: {
+          op: "add_learning",
+          base_rev: args.base_rev ?? cachedFileRev(issueId, "learnings.md"),
+          issue: issueId,
+          title: args.title,
+          rule: args.rule,
+          ...(args.kind ? { kind: args.kind } : {}),
+          ...(args.tags?.length ? { tags: args.tags } : {}),
+          ...(args.sources?.length ? { sources: args.sources } : {}),
+        },
+        issue: issueId,
+        rebase: async (o) => ({ ...o, base_rev: await freshRev(issueId, "learnings.md") }),
       }),
     [issueId],
   );

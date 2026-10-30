@@ -60,8 +60,12 @@ export const WF_SKILL_NAMES: readonly string[] = [
   "checking-status",
   "doing-next-step",
   "handing-off",
+  "keeping-a-library",
   "logging-work",
   "planning-issues",
+  "querying-library",
+  "summarizing-codebase",
+  "summarizing-work",
   "using-wf",
   "writing-readable-bulk-text",
 ];

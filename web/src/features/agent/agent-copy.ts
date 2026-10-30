@@ -56,7 +56,7 @@ export interface SkillsLine {
 }
 
 /**
- * The skills check of a connection: "All 8 skills installed", "Skills not installed for Claude
+ * The skills check of a connection: "All 12 skills installed", "Skills not installed for Claude
  * Code" or, when some are missing, how many. Nothing known yet reads as installed: the line only
  * speaks about what the bridge listed.
  */

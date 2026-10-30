@@ -8,16 +8,37 @@ export { GroupPath, type GroupPathProps } from "./GroupPath";
 export { KIND_ICON, KIND_LABEL, type Kind, KindIcon, type KindIconProps } from "./KindIcon";
 export { LintBadge, type LintBadgeProps, lintSummary } from "./LintBadge";
 export {
+  EmbedCard,
+  type EmbedCardProps,
+  GifPlayer,
+  type GifPlayerProps,
+  MediaFigure,
+  type MediaFigureProps,
+  parseEmbed,
+  VideoPlayer,
+  type VideoPlayerProps,
+} from "./MarkdownMedia";
+export {
   MarkdownProse,
   type MarkdownProseProps,
   type MarkdownSource,
   type ProseDocument,
+  type ProseWiki,
 } from "./MarkdownProse";
 export { MoveGateDialog } from "./MoveGateDialog";
 export { ProgressRing, type ProgressRingProps, progressText } from "./ProgressRing";
 export { RefLink, type RefLinkProps } from "./RefLink";
 export { RelativeTime, type RelativeTimeProps, useNow } from "./RelativeTime";
-export { AUTHOR_PROTOCOL, type ParsedRef, parseRef, REF_PROTOCOL, remarkWfRefs } from "./remark-wf";
+export {
+  AUTHOR_PROTOCOL,
+  CALLOUTS,
+  type CalloutKind,
+  type ParsedRef,
+  parseRef,
+  REF_PROTOCOL,
+  remarkCallouts,
+  remarkWfRefs,
+} from "./remark-wf";
 export {
   markerText,
   SourceLineMarker,

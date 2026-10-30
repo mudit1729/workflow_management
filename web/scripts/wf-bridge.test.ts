@@ -296,7 +296,7 @@ describe("status", () => {
       runs: 0,
       active: 0,
     });
-    expect(SKILLS).toHaveLength(8);
+    expect(SKILLS).toHaveLength(12);
   });
 
   test("Codex skills are the folders of <repo>/.agents/skills that hold a SKILL.md", async () => {
