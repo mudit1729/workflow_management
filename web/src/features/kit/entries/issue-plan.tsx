@@ -1,4 +1,3 @@
-import { PlanLanes } from "@/features/issue/PlanLanes";
 import { PlanList } from "@/features/issue/PlanList";
 import { TaskDetail } from "@/features/issue/TaskDetail";
 import { TaskPill } from "@/features/issue/TaskPill";
@@ -21,9 +20,7 @@ function Pill({
   note,
   tweak,
   size,
-  selected,
   showTitle,
-  highlightReady,
   interactive,
 }: {
   issue?: string;
@@ -32,9 +29,7 @@ function Pill({
   note?: string;
   tweak?: (t: Task) => Task;
   size?: "sm" | "md";
-  selected?: boolean;
   showTitle?: boolean;
-  highlightReady?: boolean;
   interactive?: boolean;
 }) {
   return (
@@ -47,9 +42,7 @@ function Pill({
             <TaskPill
               task={tweak ? tweak(t) : t}
               size={size}
-              selected={selected}
               showTitle={showTitle}
-              highlightReady={highlightReady}
               onClick={interactive ? () => undefined : undefined}
             />
           );
@@ -71,15 +64,8 @@ function TaskPillBody() {
       <Pill task="T-1" label="done" />
       <Pill task="T-4" label="cancelled" tweak={asStatus("cancelled")} />
       <Pill task="T-4" label="ready · accent dot" />
-      <Pill
-        task="T-4"
-        label="ready, highlighted"
-        highlightReady
-        note="The plan's Ready toggle adds an accent hairline."
-      />
       <Pill issue={ISSUE.leaseExpired} task="T-3" label="lease expired · amber dot" />
       <Pill issue={ISSUE.stale} task="T-2" label="stale · amber" />
-      <Pill task="T-3" label="selected" selected interactive />
       <Pill task="T-3" label="no title" showTitle={false} />
       <Pill task="T-3" label="small" size="sm" />
       <Pill
@@ -150,9 +136,9 @@ function TaskDetailBody() {
   );
 }
 
-// ---------------------------------------------------------------- PlanLanes, PlanList
+// ---------------------------------------------------------------- PlanList
 
-function PlanLanesDemo({
+function PlanListDemo({
   id,
   label,
   note,
@@ -167,56 +153,6 @@ function PlanLanesDemo({
 }) {
   return (
     <V label={label} note={note} width={width}>
-      <WithDetail id={id}>
-        {(d) =>
-          d.plan ? (
-            <PlanLanes
-              plan={d.plan}
-              criteria={d.criteria}
-              issueId={d.summary.id}
-              highlightReady={ready}
-            />
-          ) : null
-        }
-      </WithDetail>
-    </V>
-  );
-}
-
-function PlanLanesBody() {
-  return (
-    <>
-      <PlanLanesDemo
-        id={ISSUE.rich}
-        label="wf-3k9x2 · drawer width"
-        note="Hover or click a task to draw its dependency edges; click opens its detail."
-      />
-      <PlanLanesDemo
-        id={ISSUE.rich}
-        label="wf-3k9x2 · 360 px, lane names above their tasks"
-        note="Under 520 px the lane name moves above its tasks so two levels fit; the task in progress is scrolled into view."
-        width={360}
-      />
-      <PlanLanesDemo id={ISSUE.rich} label="ready highlighted" ready />
-      <PlanLanesDemo id={ISSUE.crowded} label="wf-b1d7v · seven tasks, scrolls sideways" />
-      <PlanLanesDemo id={ISSUE.crowded} label="page width" width={900} />
-    </>
-  );
-}
-
-function PlanListDemo({
-  id,
-  label,
-  note,
-  ready,
-}: {
-  id: string;
-  label: string;
-  note?: string;
-  ready?: boolean;
-}) {
-  return (
-    <V label={label} note={note} width={560}>
       <WithDetail id={id}>
         {(d) =>
           d.plan ? (
@@ -236,9 +172,19 @@ function PlanListDemo({
 function PlanListBody() {
   return (
     <>
-      <PlanListDemo id={ISSUE.rich} label="wf-3k9x2 · three phases" />
+      <PlanListDemo
+        id={ISSUE.rich}
+        label="wf-3k9x2 · three phases"
+        note="A task that waits shows “after T-3”. The task in progress is bold and is scrolled into view when the list opens."
+      />
       <PlanListDemo id={ISSUE.crowded} label="wf-b1d7v · finished phases collapsed" />
       <PlanListDemo id={ISSUE.rich} label="ready highlighted" ready />
+      <PlanListDemo
+        id={ISSUE.rich}
+        label="360 px"
+        note="Narrow, the area and “after …” leave the row; the detail still lists them."
+        width={360}
+      />
     </>
   );
 }
@@ -269,7 +215,7 @@ export const issuePlanEntries: KitEntry[] = [
     "Issue · Plan",
     "TaskPill",
     `${SRC}/TaskPill.tsx`,
-    "A task needs to be recognizable anywhere it is mentioned (lanes, lists, the state, the goal): status glyph, id, title and who holds it, with markers only for ready, expired and stale.",
+    "A task needs to be recognizable anywhere it is mentioned (the list, the state, the goal, a commit): status glyph, id, title and who holds it, with markers only for ready, expired and stale.",
     TaskPillBody,
   ),
   entry(
@@ -281,16 +227,9 @@ export const issuePlanEntries: KitEntry[] = [
   ),
   entry(
     "Issue · Plan",
-    "PlanLanes",
-    `${SRC}/PlanLanes.tsx`,
-    "Lanes by dependency level show what can run in parallel and what waits, and draw edges only for the task you point at, so the plan stays readable.",
-    PlanLanesBody,
-  ),
-  entry(
-    "Issue · Plan",
     "PlanList",
     `${SRC}/PlanList.tsx`,
-    "The same plan as a sequence of phases, for people who think in order; finished phases fold away.",
+    "The tasks as a sequence of phases, the one view of them: the Ready highlight, what each task waits for and the task in progress are easy to find, and finished phases fold away.",
     PlanListBody,
   ),
   entry(

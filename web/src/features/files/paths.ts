@@ -128,7 +128,7 @@ export function validateSlug(slug: string): string | null {
 
 const ROLE: Record<string, string> = {
   "goal.md": "Drives the card, its status and the Goal tab.",
-  "plan.md": "Drives the Plan tab and the task lanes.",
+  "plan.md": "Drives the Plan tab and its task list.",
   "current_state.md": "Drives the Now tab and what needs you.",
   "changes.md": "Each entry shows in the Log tab.",
   "decisions.md": "Each entry shows as a decision card in the Log tab.",

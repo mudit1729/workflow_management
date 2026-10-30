@@ -4,8 +4,9 @@ import {
   Columns3,
   Copy,
   FileText,
+  LayoutGrid,
   Link2,
-  ListTree,
+  List,
   Plus,
   Settings,
   Trash2,
@@ -147,8 +148,8 @@ function IconButtonBody() {
       </V>
       <V label="toggle · active">
         <Row>
-          <IconButton label="Columns" icon={<Columns3 {...ICON} />} active />
-          <IconButton label="List" icon={<ListTree {...ICON} />} active={false} />
+          <IconButton label="Grid" icon={<LayoutGrid {...ICON} />} active />
+          <IconButton label="List" icon={<List {...ICON} />} active={false} />
         </Row>
       </V>
       <V label="with a shortcut in the tooltip (hover)">
@@ -263,7 +264,7 @@ function SegmentedDemo({ size }: { size: "sm" | "md" }) {
 }
 
 function SegmentedBody() {
-  const [view, setView] = useState("lanes");
+  const [view, setView] = useState("grid");
   return (
     <>
       <V label="md · with counts">
@@ -275,12 +276,12 @@ function SegmentedBody() {
       <V label="with icons">
         <Segmented
           size="sm"
-          aria-label="Plan view"
+          aria-label="View"
           value={view}
           onChange={setView}
           options={[
-            { value: "lanes", label: "Lanes", icon: <Columns3 {...ICON} /> },
-            { value: "list", label: "List", icon: <ListTree {...ICON} /> },
+            { value: "grid", label: "Grid", icon: <LayoutGrid {...ICON} /> },
+            { value: "list", label: "List", icon: <List {...ICON} /> },
           ]}
         />
       </V>
@@ -288,12 +289,12 @@ function SegmentedBody() {
         <Row>
           <Segmented
             size="sm"
-            aria-label="Swimlanes"
+            aria-label="Density"
             value="a"
             onChange={() => undefined}
             options={[
-              { value: "a", label: "Groups" },
-              { value: "b", label: "None", disabled: true },
+              { value: "a", label: "Comfortable" },
+              { value: "b", label: "Compact", disabled: true },
             ]}
           />
           <Segmented
@@ -303,8 +304,8 @@ function SegmentedBody() {
             disabled
             onChange={() => undefined}
             options={[
-              { value: "a", label: "Groups" },
-              { value: "b", label: "None" },
+              { value: "a", label: "Comfortable" },
+              { value: "b", label: "Compact" },
             ]}
           />
         </Row>

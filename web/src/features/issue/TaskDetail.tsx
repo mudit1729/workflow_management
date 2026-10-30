@@ -1,5 +1,5 @@
-// TaskDetail: everything about one plan task. Opens in a Popover from PlanLanes
-// and inline under a row in PlanList. Status and steps write back through ops.
+// TaskDetail: everything about one plan task. Opens inline under a row in PlanList.
+// Status and steps write back through ops.
 import { Check, ChevronDown, GitCommitHorizontal } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { AuthorChip, CopyButton, MarkdownProse, StatusIcon } from "@/components/common";
@@ -42,27 +42,21 @@ const TASK_STATUSES: TaskStatus[] = [
 export interface TaskDetailProps {
   task: Task;
   issueId: IssueId;
-  /** `popover` is a fixed 360 px card for PlanLanes; `inline` fills its container (PlanList, Kit). */
-  variant?: "popover" | "inline";
   /** All tasks of the plan, to render same-issue dependencies as pills. */
   tasks?: Task[];
   /** The issue's criteria, to explain `satisfies` chips. */
   criteria?: Criterion[];
-  /** Called when a dependency pill is picked (PlanLanes moves the selection). */
+  /** Called when a dependency pill is picked (PlanList opens that task). */
   onSelectTask?: (id: TaskId) => void;
-  /** Called after a commit or run link switched the view (PlanLanes closes its popover). */
-  onNavigate?: () => void;
   className?: string;
 }
 
 export function TaskDetail({
   task,
   issueId,
-  variant = "inline",
   tasks,
   criteria,
   onSelectTask,
-  onNavigate,
   className,
 }: TaskDetailProps) {
   const setTaskStatus = useSetTaskStatus(issueId);
@@ -81,10 +75,8 @@ export function TaskDetail({
   return (
     <div
       data-wf="TaskDetail"
-      data-variant={variant}
       className={cn(
-        "flex min-w-0 flex-col gap-3 text-base",
-        variant === "popover" ? "w-[360px] p-3" : "rounded-md border border-border bg-subtle p-3",
+        "flex min-w-0 flex-col gap-3 rounded-md border border-border bg-subtle p-3 text-base",
         className,
       )}
     >
@@ -113,7 +105,7 @@ export function TaskDetail({
         <Property label="Status">
           <StatusMenu status={task.status} onChange={changeStatus} />
         </Property>
-        <Property label="Lane">
+        <Property label="Area">
           <Chip tone="outline" size="sm">
             {task.lane}
           </Chip>
@@ -190,7 +182,7 @@ export function TaskDetail({
             <VerifyCommand command={task.verify} />
           </Property>
         )}
-        <DeliveryRows task={task} issueId={issueId} onNavigate={onNavigate} />
+        <DeliveryRows task={task} issueId={issueId} />
       </dl>
 
       {task.brief_md && (
@@ -256,15 +248,7 @@ function StatusMenu({
  * each a link to its row: a commit opens the Git tab on its sha, a run opens the CI tab on the
  * run. The Git tab's T-n pill goes the other way, so a task and its delivery are one click apart.
  */
-function DeliveryRows({
-  task,
-  issueId,
-  onNavigate,
-}: {
-  task: Task;
-  issueId: IssueId;
-  onNavigate?: () => void;
-}) {
+function DeliveryRows({ task, issueId }: { task: Task; issueId: IssueId }) {
   const { commits, pipelines } = useDelivery(issueId);
   const { setTab } = useIssueTab();
   const mine = commits.filter((c) => c.task === task.id);
@@ -275,12 +259,10 @@ function DeliveryRows({
   const openCommit = (commit: Commit) => {
     focusCommit(issueId, commit.sha);
     void setTab("git");
-    onNavigate?.();
   };
   const openRun = (run: PipelineRun) => {
     focusRun(issueId, run.id);
     void setTab("ci");
-    onNavigate?.();
   };
   const chip =
     "inline-flex h-5 max-w-full items-center gap-1 rounded-sm bg-muted px-1.5 text-fg-muted text-xs transition-colors duration-100 ease-wf hover:bg-border hover:text-fg";

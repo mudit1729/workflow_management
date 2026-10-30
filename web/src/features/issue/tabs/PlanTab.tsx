@@ -1,7 +1,7 @@
 // Plan tab: how the goal gets done. Approach, assumptions and prior art first,
-// then the tasks as lanes (parallel work) or a phase list (sequence). In the full
-// page the context folds away so the task view gets the room.
-import { ChevronRight, Columns3, ListTree, Play, Waypoints } from "lucide-react";
+// then the tasks as a phase list. In the full page the context folds away so the
+// list gets the room.
+import { ChevronRight, Play, Waypoints } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { AuthorChip, EmptyState, MarkdownProse, RefLink, RelativeTime } from "@/components/common";
 import {
@@ -10,14 +10,12 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  Segmented,
   Tooltip,
 } from "@/components/ui";
 import { useNextStep } from "@/features/codex";
 import type { IssueDetail, Plan, Task, TaskStatus } from "@/gen/types";
+import { agentName, usePreferredAgent } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { type PlanView, usePrefs } from "@/lib/prefs";
-import { PlanLanes } from "../PlanLanes";
 import { PlanList } from "../PlanList";
 import { ASK, SkillHint } from "../skill-hint";
 import { InlineText } from "../TaskDetail";
@@ -28,8 +26,6 @@ export interface PlanTabProps {
 }
 
 export function PlanTab({ detail, variant }: PlanTabProps) {
-  const planView = usePrefs((s) => s.planView);
-  const setPlanView = usePrefs((s) => s.setPlanView);
   const [highlightReady, setHighlightReady] = useState(false);
   const plan = detail.plan;
   const issueId = detail.summary.id;
@@ -51,48 +47,23 @@ export function PlanTab({ detail, variant }: PlanTabProps) {
       </div>
 
       <section aria-label="Tasks" data-wf="PlanTasks" className="flex min-w-0 flex-col gap-3">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center justify-between gap-x-4">
             <h3 className="font-medium text-fg-muted text-sm">Tasks</h3>
-            <TaskCounts tasks={tasks} />
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
             <ReadyToggle
               count={readyCount}
               on={highlightReady && readyCount > 0}
               onChange={setHighlightReady}
             />
-            <Segmented<PlanView>
-              size="sm"
-              aria-label="Plan view"
-              value={planView}
-              onChange={setPlanView}
-              options={[
-                {
-                  value: "lanes",
-                  label: "Lanes",
-                  icon: <Columns3 size={14} strokeWidth={1.75} />,
-                },
-                { value: "list", label: "List", icon: <ListTree size={14} strokeWidth={1.75} /> },
-              ]}
-            />
           </div>
+          <TaskCounts tasks={tasks} />
         </div>
-        {planView === "lanes" ? (
-          <PlanLanes
-            plan={plan}
-            criteria={detail.criteria}
-            issueId={issueId}
-            highlightReady={highlightReady}
-          />
-        ) : (
-          <PlanList
-            plan={plan}
-            issueId={issueId}
-            highlightReady={highlightReady}
-            criteria={detail.criteria}
-          />
-        )}
+        <PlanList
+          plan={plan}
+          issueId={issueId}
+          highlightReady={highlightReady}
+          criteria={detail.criteria}
+        />
       </section>
     </div>
   );
@@ -103,6 +74,7 @@ export function PlanTab({ detail, variant }: PlanTabProps) {
 function NoPlan({ detail }: { detail: IssueDetail }) {
   const { size, signals, id } = detail.summary;
   const nextStep = useNextStep(detail.summary);
+  const preferred = usePreferredAgent();
   const small = size === "xs" || size === "s";
   const hint = small
     ? "A one-task plan is enough for a small issue. Do next step writes it, then starts on T-1."
@@ -125,7 +97,9 @@ function NoPlan({ detail }: { detail: IssueDetail }) {
               aria-busy={nextStep.busy || undefined}
             >
               <Play size={14} strokeWidth={1.75} className="fill-current" />
-              {nextStep.busy ? "Codex is working" : "Do next step"}
+              {nextStep.busy
+                ? `${agentName(nextStep.run?.agent ?? preferred)} is working`
+                : "Do next step"}
             </Button>
             <SkillHint skill="planning-issues" prompt={ASK.plan(id)} />
           </div>

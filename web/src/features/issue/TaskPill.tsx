@@ -1,11 +1,10 @@
-// TaskPill: the compact, recognisable token for a plan task. Used by PlanLanes,
-// TaskDetail, the Now tab (In flight), CoverageStrip and the Kit.
+// TaskPill: the compact, recognisable token for a plan task. Used by TaskDetail (dependencies),
+// the Now tab (In flight), the Git tab, CoverageStrip and the Kit.
 //
 // Anatomy: status glyph · "T-3" (mono) · title (truncated) · markers · claimant.
-// Markers: ready → accent dot (plus an accent hairline when the Ready highlight
-// is on); lease expired → amber dot; stale → amber id. Hover shows the full title,
-// lane, status, claimant and lease time.
-import type { ComponentProps, Ref } from "react";
+// Markers: ready → accent dot; lease expired → amber dot; stale → amber id. Hover shows the
+// full title, area, status, claimant and lease time.
+import type { ComponentProps } from "react";
 import { AuthorChip, StatusIcon, useNow } from "@/components/common";
 import { Tooltip } from "@/components/ui";
 import type { Task } from "@/gen/types";
@@ -16,55 +15,35 @@ import { TASK_STATUS_LABEL } from "@/lib/status";
 export interface TaskPillProps extends Omit<ComponentProps<"button">, "children" | "ref"> {
   task: Task;
   size?: "sm" | "md";
-  /** Makes the pill a button. Popover triggers (asChild) pass this in too. */
+  /** Makes the pill a button. */
   onClick?: ComponentProps<"button">["onClick"];
-  selected?: boolean;
   /** Default true. False shows only the glyph, the id and the markers. */
   showTitle?: boolean;
   /** Default true. False leaves out the claimant's avatar (a commit row already names its author). */
   showClaimant?: boolean;
-  /** The plan's "Ready" highlight: ready tasks get an accent hairline. */
-  highlightReady?: boolean;
-  /** Lets the title run to two lines (the id, glyph and claimant stay on the first). Size md only. */
-  wrap?: boolean;
-  ref?: Ref<HTMLElement>;
 }
 
 export function TaskPill({
   task,
   size = "md",
   onClick,
-  selected = false,
   showTitle = true,
   showClaimant = true,
-  highlightReady = false,
-  wrap = false,
   className,
-  ref,
   ...rest
 }: TaskPillProps) {
   const interactive = onClick != null;
   const md = size === "md";
-  const wrapped = wrap && md;
   // Titles may hold `code` spans; a one-line pill shows them as plain text.
   const title = plainTitle(task.title);
   const leaseExpired = task.lease === "expired";
   const finished = task.status === "done" || task.status === "cancelled";
 
   const classes = cn(
-    "inline-flex min-w-0 max-w-full shrink-0 items-center rounded-md border bg-bg text-left align-middle",
+    "inline-flex min-w-0 max-w-full shrink-0 items-center rounded-md border border-border bg-bg text-left align-middle",
     "transition-[border-color,background-color,opacity] duration-150 ease-wf",
-    wrapped
-      ? "min-h-6 items-start gap-1.5 px-1.5 py-[3px]"
-      : md
-        ? "h-6 gap-1.5 px-1.5"
-        : "h-5 gap-1 px-1",
-    selected
-      ? "border-accent bg-accent-subtle"
-      : highlightReady && task.ready
-        ? "border-accent/70"
-        : "border-border",
-    interactive && !selected && "cursor-pointer hover:border-border-strong hover:bg-subtle",
+    md ? "h-6 gap-1.5 px-1.5" : "h-5 gap-1 px-1",
+    interactive && "cursor-pointer hover:border-border-strong hover:bg-subtle",
     interactive && "disabled:pointer-events-none disabled:opacity-50",
     className,
   );
@@ -72,18 +51,10 @@ export function TaskPill({
   const content = (
     <>
       {/* The status is spoken once, in the sr-only text below. */}
-      {wrapped ? (
-        // Every first-line part is one 18 px line box, so a wrapped title never shifts them.
-        <span className="flex h-[18px] shrink-0 items-center">
-          <StatusIcon status={task.status} size={12} aria-hidden="true" />
-        </span>
-      ) : (
-        <StatusIcon status={task.status} size={md ? 12 : 11} aria-hidden="true" />
-      )}
+      <StatusIcon status={task.status} size={md ? 12 : 11} aria-hidden="true" />
       <span
         className={cn(
-          "shrink-0 font-mono text-xs tabular",
-          wrapped ? "leading-[18px]" : "leading-none",
+          "shrink-0 font-mono text-xs tabular leading-none",
           task.stale ? "text-stale" : "text-fg-muted",
         )}
       >
@@ -92,8 +63,7 @@ export function TaskPill({
       {showTitle && (
         <span
           className={cn(
-            wrapped ? "line-clamp-2 break-words leading-[18px]" : "min-w-0 truncate",
-            "min-w-0",
+            "min-w-0 truncate",
             md ? "text-sm" : "text-xs",
             finished ? "text-fg-muted" : "text-fg",
             task.status === "cancelled" && "line-through",
@@ -102,12 +72,7 @@ export function TaskPill({
           {title}
         </span>
       )}
-      <PillMarkers
-        task={task}
-        leaseExpired={leaseExpired}
-        wrapped={wrapped}
-        showClaimant={showClaimant}
-      />
+      <PillMarkers task={task} leaseExpired={leaseExpired} showClaimant={showClaimant} />
       <span className="sr-only">
         {!showTitle && ` ${title}`}
         {`, ${TASK_STATUS_LABEL[task.status]}`}
@@ -125,7 +90,6 @@ export function TaskPill({
       data-size={size}
       className={classes}
       onClick={onClick}
-      ref={ref as Ref<HTMLButtonElement>}
       {...rest}
     >
       {content}
@@ -135,7 +99,6 @@ export function TaskPill({
       data-wf="TaskPill"
       data-size={size}
       className={classes}
-      ref={ref as Ref<HTMLSpanElement>}
       {...(rest as ComponentProps<"span">)}
     >
       {content}
@@ -157,18 +120,16 @@ export function plainTitle(title: string): string {
 function PillMarkers({
   task,
   leaseExpired,
-  wrapped,
   showClaimant,
 }: {
   task: Task;
   leaseExpired: boolean;
-  wrapped: boolean;
   showClaimant: boolean;
 }) {
   const claimant = showClaimant ? task.claimed_by : undefined;
   if (!task.ready && !leaseExpired && !claimant) return null;
   return (
-    <span className={cn("ml-auto flex shrink-0 items-center gap-1 pl-0.5", wrapped && "h-[18px]")}>
+    <span className="ml-auto flex shrink-0 items-center gap-1 pl-0.5">
       {task.ready && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
       {leaseExpired && <span aria-hidden className="size-1.5 rounded-full bg-stale" />}
       {claimant && (
@@ -191,7 +152,7 @@ function TaskPillTooltip({ task }: { task: Task }) {
         <StatusIcon status={task.status} size={12} />
         <span>{TASK_STATUS_LABEL[task.status]}</span>
         <span aria-hidden>·</span>
-        <span className="truncate">Lane {task.lane}</span>
+        <span className="truncate">Area: {task.lane}</span>
       </div>
       <div className="font-medium text-sm leading-snug">
         <span className="font-mono opacity-75">{task.id}</span> {plainTitle(task.title)}

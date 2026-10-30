@@ -1,20 +1,16 @@
-// PlanList: the plan as a phase stepper. Each phase shows its progress; finished
-// phases start collapsed. A task row expands its TaskDetail inline.
+// PlanList: the plan as a phase stepper, the one view of the tasks. Each phase shows its progress;
+// finished phases start collapsed. A task row shows what to look for: the Ready highlight, what
+// the task still waits for, its claimant; the task in progress is brought into view once when the
+// list opens. A row expands its TaskDetail inline.
 import { ChevronRight, ListChecks } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthorChip, EmptyState, StatusIcon } from "@/components/common";
-import {
-  Chip,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  Tooltip,
-} from "@/components/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, Tooltip } from "@/components/ui";
 import type { Criterion, IssueId, Phase, Plan, Task, TaskId } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { ASK, SkillHint } from "./skill-hint";
 import { InlineText, TaskDetail } from "./TaskDetail";
-import { useTaskFocusRequest } from "./task-focus";
+import { useTaskFocus, useTaskFocusRequest } from "./task-focus";
 
 export interface PlanListProps {
   plan: Plan;
@@ -25,11 +21,39 @@ export interface PlanListProps {
 }
 
 const phaseKey = (p: Phase) => `${p.index}:${p.name}`;
-const isFinished = (p: Phase) =>
-  p.tasks.length > 0 && p.tasks.every((t) => t.status === "done" || t.status === "cancelled");
+const isClosed = (t: Task) => t.status === "done" || t.status === "cancelled";
+const isFinished = (p: Phase) => p.tasks.length > 0 && p.tasks.every(isClosed);
+
+/** The task the issue is about right now: in progress, else in review. */
+const inFlight = (tasks: Task[]) =>
+  tasks.find((t) => t.status === "in_progress") ?? tasks.find((t) => t.status === "review");
+
+/** Whether `el` is fully inside the box that scrolls it (the drawer body), or the window. */
+function inView(el: HTMLElement): boolean {
+  let box: { top: number; bottom: number } = { top: 0, bottom: window.innerHeight };
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const overflow = getComputedStyle(p).overflowY;
+    if (overflow === "auto" || overflow === "scroll") {
+      box = p.getBoundingClientRect();
+      break;
+    }
+  }
+  const r = el.getBoundingClientRect();
+  return r.top >= box.top && r.bottom <= box.bottom;
+}
+
+/** The tasks of this plan that `task` still waits for. Other issues' tasks are not judged here. */
+function waitingOn(task: Task, byId: ReadonlyMap<TaskId, Task>): Task[] {
+  if (isClosed(task)) return [];
+  return task.depends_on.flatMap((id) => {
+    const dep = byId.get(id);
+    return dep && !isClosed(dep) ? [dep] : [];
+  });
+}
 
 export function PlanList({ plan, issueId, highlightReady = false, criteria }: PlanListProps) {
   const tasks = useMemo(() => plan.phases.flatMap((p) => p.tasks), [plan]);
+  const byId = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   // Finished phases start collapsed. Phases the user has toggled, and phases that
   // finish later while the plan is open, keep the state they had.
   const [openPhases, setOpenPhases] = useState<Map<string, boolean>>(
@@ -60,6 +84,21 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
   // A commit's T-n pill in the Git tab asks for this task.
   useTaskFocusRequest(issueId, reveal);
 
+  // When the list opens, bring the task in progress to the middle of the view if it is out of it
+  // (so a short plan stays where it is). Later changes of the plan do not move the page. A task
+  // asked for by a commit pill wins.
+  const latestTasks = useRef(tasks);
+  latestTasks.current = tasks;
+  useEffect(() => {
+    if (useTaskFocus.getState().request?.issue === issueId) return;
+    const frame = requestAnimationFrame(() => {
+      const flight = inFlight(latestTasks.current);
+      const row = flight && rowEls.current.get(flight.id);
+      if (row && !inView(row)) row.scrollIntoView({ block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [issueId]);
+
   if (tasks.length === 0) {
     return (
       <div data-wf="PlanList">
@@ -81,7 +120,7 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
   }
 
   return (
-    <ol data-wf="PlanList" className="flex min-w-0 flex-col">
+    <ol data-wf="PlanList" className="@container/plan flex min-w-0 flex-col">
       {plan.phases.map((phase, i) => {
         const key = phaseKey(phase);
         return (
@@ -100,6 +139,7 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
                   <li key={task.id} className="min-w-0">
                     <TaskRow
                       task={task}
+                      waiting={waitingOn(task, byId)}
                       expanded={expanded === task.id}
                       highlightReady={highlightReady}
                       rowRef={(el) => {
@@ -113,7 +153,6 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
                         <TaskDetail
                           task={task}
                           issueId={issueId}
-                          variant="inline"
                           tasks={tasks}
                           criteria={criteria}
                           onSelectTask={reveal}
@@ -257,12 +296,15 @@ function PhaseMarker({
 
 function TaskRow({
   task,
+  waiting,
   expanded,
   highlightReady,
   rowRef,
   onToggle,
 }: {
   task: Task;
+  /** The tasks of this plan it still waits for. */
+  waiting: Task[];
   expanded: boolean;
   highlightReady: boolean;
   rowRef: (el: HTMLButtonElement | null) => void;
@@ -270,8 +312,9 @@ function TaskRow({
 }) {
   const stepsDone = task.steps.filter((s) => s.checked).length;
   const leaseExpired = task.lease === "expired";
-  const finished = task.status === "done" || task.status === "cancelled";
+  const finished = isClosed(task);
   const lit = highlightReady && task.ready;
+  const working = task.status === "in_progress";
 
   return (
     <button
@@ -302,15 +345,32 @@ function TaskRow({
         className={cn(
           "min-w-0 flex-1 truncate text-base",
           finished ? "text-fg-muted" : "text-fg",
+          working && "font-medium",
           task.status === "cancelled" && "line-through",
         )}
       >
         <InlineText text={task.title} />
       </span>
       <span className="flex shrink-0 items-center gap-2">
-        <Chip tone="outline" size="xs">
-          {task.lane}
-        </Chip>
+        {waiting.length > 0 && (
+          <>
+            <Tooltip content={`Waits for ${waiting.map((t) => t.id).join(", ")}`}>
+              <span
+                data-wf="PlanTaskWaits"
+                className="hidden items-baseline gap-1 text-fg-faint text-xs @md/plan:flex"
+              >
+                after
+                <span className="font-mono tabular">{waiting.map((t) => t.id).join(", ")}</span>
+              </span>
+            </Tooltip>
+            <span aria-hidden className="-mx-1 hidden text-fg-faint text-xs @lg/plan:inline">
+              ·
+            </span>
+          </>
+        )}
+        <Tooltip content={`Area: ${task.lane}`}>
+          <span className="hidden text-fg-faint text-xs @lg/plan:inline">{task.lane}</span>
+        </Tooltip>
         {task.claimed_by && (
           <span className="flex items-center gap-1">
             {leaseExpired && (
