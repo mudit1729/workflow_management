@@ -3,6 +3,7 @@
 // form (parse and render give the same text). `mock/ops.test.ts` runs the same edits through
 // the store and checks the API results.
 import { describe, expect, test } from "vitest";
+import format from "../../../plugins/workflow/skills/using-wf/references/format.md?raw";
 import type { LibrarySrc } from "../source";
 import { toTs } from "../time";
 import {
@@ -35,6 +36,7 @@ import {
   setTaskStatus,
   toggleCriterion,
   toggleStep,
+  verifyCriterion,
 } from "./edit";
 import { loadWorkspace } from "./index";
 import { rebaseWorkspace } from "./rebase";
@@ -103,6 +105,34 @@ describe("goal.md", () => {
     expect(removed).toMatch(/^- \[ \] SC-4: /);
     canonical(path("wf-3k9x2", "goal.md"), next);
     expect(toggleCriterion(next, "SC-4", true)).toBe(next);
+  });
+
+  test("verifying SC-5 ticks it and writes evidence and verified_by under its verify line", () => {
+    const next = verifyCriterion(goal, "SC-5", {
+      evidence: "`cargo test -p wf-index echo_suppression` passed at `4e7a1c2`, see [[#C-6b3nx]]",
+      by: "codex",
+    });
+    const d = diff(goal, next);
+    expect(d.removed).toEqual([
+      "- [ ] SC-5: The daemon shall ignore the watcher echo of its own writes.",
+    ]);
+    expect(d.added).toEqual([
+      "- [x] SC-5: The daemon shall ignore the watcher echo of its own writes.",
+      "  - evidence: `cargo test -p wf-index echo_suppression` passed at `4e7a1c2`, see [[#C-6b3nx]]",
+      "  - verified_by: @codex",
+    ]);
+    // The keys sit after `verify:` (format.md section 4), and the file is still canonical.
+    const lines = next.split("\n");
+    const at = lines.findIndex((l) => l.startsWith("- [x] SC-5:"));
+    expect(lines.slice(at + 1, at + 4).map((l) => l.trim().split(":")[0])).toEqual([
+      "- verify",
+      "- evidence",
+      "- verified_by",
+    ]);
+    canonical(path("wf-3k9x2", "goal.md"), next);
+    // Unticking takes the proof away again.
+    expect(toggleCriterion(next, "SC-5", false)).toBe(goal);
+    expect(() => verifyCriterion(goal, "SC-9", { evidence: "x", by: "codex" })).toThrow(EditError);
   });
 
   test("unticking a verified criterion also removes its evidence and verified_by", () => {
@@ -257,6 +287,19 @@ describe("current_state.md", () => {
     expect(() => answerRequest(state, "Q-zzzzz", { answer: "x", by: "a", at: STAMP })).toThrow(
       EditError,
     );
+  });
+
+  test("the keys of an answer are the ones format.md section 7 documents", () => {
+    // The dashboard and the skills write one shape: `answer`, `answered_by`, `answered_at`.
+    const section = /## 7\. current_state\.md[\s\S]*?## 8\./.exec(format)?.[0] ?? "";
+    expect(section).toContain("`answered_by: @person`");
+    expect(section).toContain("`answered_at: <time>`");
+    expect(section).toContain("`answer`, `answered_by`, `answered_at`");
+    const next = answerRequest(state, "Q-4m2pz", { answer: "approve", by: "shruti", at: STAMP });
+    const keys = diff(state, next)
+      .added.filter((l) => l.startsWith("  - "))
+      .map((l) => l.split(":")[0].replace("  - ", ""));
+    expect(keys).toEqual(["answer", "answered_by", "answered_at"]);
   });
 
   test("answer every open request that refers to a library item", () => {

@@ -340,6 +340,42 @@ describe("requests", () => {
   });
 });
 
+describe("decisions", () => {
+  test("set_decision_status changes the status line of a proposed decision and nothing else", async () => {
+    const before = await server.issue("wf-3k9x2");
+    const proposed = before.decisions.find((d) => d.id === "D-5mh8q");
+    expect(proposed?.status).toBe("proposed");
+
+    await server.ops({
+      op: "set_decision_status",
+      base_rev: before.files_rev["decisions.md"] ?? "",
+      issue: "wf-3k9x2",
+      id: "D-5mh8q",
+      status: "accepted",
+    });
+    const after = await server.issue("wf-3k9x2");
+    const accepted = after.decisions.find((d) => d.id === "D-5mh8q");
+    expect(accepted?.status).toBe("accepted");
+    expect(accepted?.title).toBe(proposed?.title);
+    expect(after.decisions).toHaveLength(before.decisions.length);
+    expect(after.decisions.find((d) => d.id === "D-7f3k2")?.status).toBe(
+      before.decisions.find((d) => d.id === "D-7f3k2")?.status,
+    );
+  });
+
+  test("a decision that does not exist is a 422", async () => {
+    const detail = await server.issue("wf-3k9x2");
+    const err = await failure({
+      op: "set_decision_status",
+      base_rev: detail.files_rev["decisions.md"] ?? "",
+      issue: "wf-3k9x2",
+      id: "D-nope0",
+      status: "rejected",
+    });
+    expect(err.status).toBe(422);
+  });
+});
+
 describe("library", () => {
   test("promote makes a draft with a source backlink and asks the group owner to review", async () => {
     const before = await server.issue("wf-3k9x2");

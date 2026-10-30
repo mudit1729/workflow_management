@@ -153,7 +153,7 @@ const STATES = [
     next: [
       "Run `cargo test -p wf-server sse` and move [[#T-3]] to review.",
       "Claim [[#T-4]] once [[#T-3]] lands.",
-      "Run `wf verify wf-3k9x2 SC-3`.",
+      "Verify SC-3 with the `doing-next-step` skill.",
     ],
   },
   {
@@ -162,7 +162,7 @@ const STATES = [
     next: [
       "Start [[#T-4]] against the mock server.",
       "Review [[#T-3]] when @codex moves it.",
-      "Run `wf verify wf-3k9x2 SC-3`.",
+      "Verify SC-3 with the `doing-next-step` skill.",
     ],
   },
   {
@@ -171,7 +171,7 @@ const STATES = [
     next: [
       "Relay events over `BroadcastChannel` in [[#T-4]].",
       "Start [[#T-5]] when [[#T-4]] lands.",
-      "Run `wf verify wf-3k9x2 SC-4`.",
+      "Verify SC-4 with the `doing-next-step` skill.",
     ],
   },
 ];

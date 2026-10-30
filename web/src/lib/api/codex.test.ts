@@ -1,6 +1,9 @@
 // Codex from the browser: the command "Open in Codex" copies, starting and stopping a run through
 // the hook, and the live bridge that puts a run's moves into the cached lists.
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import readme from "../../../../plugins/workflow/README.md?raw";
+import handingOff from "../../../../plugins/workflow/skills/handing-off/SKILL.md?raw";
+import format from "../../../../plugins/workflow/skills/using-wf/references/format.md?raw";
 import { loadMock } from "./mock-bridge";
 
 const toasts = vi.hoisted(() => {
@@ -18,6 +21,7 @@ import { api } from "./client";
 import { codexCommand, connectCodexLive, useStartCodexRun } from "./codex";
 import { qk } from "./keys";
 import { queryClient } from "./query-client";
+import { resumeCommand, resumePrompt } from "./resume";
 import { capture } from "./test-support";
 import type { CodexRun, Delivery } from "./types";
 
@@ -63,6 +67,23 @@ describe("codexCommand", () => {
   test("it is pure: the same issue gives the same command", () => {
     expect(codexCommand(issue)).toEqual(codexCommand({ ...issue }));
   });
+
+  test("the prompt is the resume prompt of format.md section 15, word for word", () => {
+    // One string in four places: the button, the bundle's last line, the README and handing-off.
+    const template =
+      'Work on <id> "<title>" in <issue path>. Read current_state.md first, then use the wf skills (doing-next-step).';
+    expect(format).toContain(template);
+    const filled = template
+      .replace("<id>", issue.id)
+      .replace("<title>", issue.title)
+      .replace("<issue path>", issue.path);
+    expect(codexCommand(issue).prompt).toBe(filled);
+    expect(resumePrompt(issue)).toBe(filled);
+    expect(resumeCommand(issue)).toBe(`codex '${filled}'`);
+
+    expect(readme).toContain(`codex '${filled}'`);
+    expect(handingOff).toContain(template);
+  });
 });
 
 describe("useStartCodexRun", () => {
@@ -80,11 +101,16 @@ describe("useStartCodexRun", () => {
 
   test("a run with nothing to do resolves to the run, with its reason, and no toast", async () => {
     const { start } = capture(useStartCodexRun);
+    const run = await start("wf-7p4dn", "next_step");
+    expect(run).toMatchObject({ status: "nothing_ready", reason: "The issue is done." });
+    expect(toasts.error).not.toHaveBeenCalled();
+  });
+
+  test("an issue without a plan is planned by the run, not refused", async () => {
+    const { start } = capture(useStartCodexRun);
     const run = await start("wf-ss0lo", "next_step");
-    expect(run).toMatchObject({
-      status: "nothing_ready",
-      reason: "No ready task. Plan the issue first.",
-    });
+    expect(run).toMatchObject({ status: "running", task: "T-1" });
+    expect(run?.phases[0].label).toBe("Plan the issue, claim T-1");
     expect(toasts.error).not.toHaveBeenCalled();
   });
 

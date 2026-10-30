@@ -39,4 +39,4 @@ session: cc-9a1f
 ## Next steps
 1. Land [[wf-t3jp5]] so that SC-5 gets evidence.
 2. Claim [[#T-6]] and start [[wf-p2hs4]].
-3. Run `wf verify wf-b1d7v SC-4` after the board passes the manual check.
+3. Verify [[#SC-4]] with its command after the board passes the manual check.

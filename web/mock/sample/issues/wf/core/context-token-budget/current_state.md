@@ -26,4 +26,4 @@ session: cx-31ab
 ## Next steps
 1. Add the `## Next steps` test to [[#T-2]].
 2. Claim [[#T-3]] after [[#T-2]] lands.
-3. Run `wf verify wf-t3jp5 SC-2`.
+3. Verify [[#SC-2]] with its command.

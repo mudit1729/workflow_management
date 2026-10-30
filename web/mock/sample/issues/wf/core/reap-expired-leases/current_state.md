@@ -29,6 +29,6 @@ session: cx-77c2
 - @codex owns `crates/wf-index/src/reap.rs` under the T-2 lease. Do not edit that file.
 
 ## Next steps
-1. Run `wf resolve wf-q4fs9` to record the answer to [[#Q-9nh2e]].
+1. Answer [[#Q-9nh2e]] in the Needs you list.
 2. Append the change entry in [[#T-2]].
-3. Take over [[#T-3]] with `wf claim wf-q4fs9#T-3 --steal`.
+3. Take over [[#T-3]], whose lease has run out.

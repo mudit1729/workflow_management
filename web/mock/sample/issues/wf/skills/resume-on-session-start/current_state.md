@@ -15,5 +15,5 @@ session: cc-e0b5
 - [[#T-3]] The timing test waits for a review by @shruti.
 
 ## Next steps
-1. Run `wf verify wf-p2hs4 SC-3` after the review.
+1. Verify [[#SC-3]] with its command after the review.
 2. Move the issue to done.

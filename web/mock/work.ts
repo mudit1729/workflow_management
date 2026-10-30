@@ -4,11 +4,14 @@
 // The split is deterministic: keyword templates for the common kinds of work (a bug, research,
 // a migration, a document, a screen, a service) and one generic fallback. The same input always
 // gives the same 3 to 5 proposals. Real Codex runs `codex exec` with the `adding-work` skill.
-// Every title and one-line "why" follows `writing-readable-bulk-text`: the imperative verb comes
-// first, the list has one shape, and the words that tell the lines apart come before the shared
-// subject. Every criterion is an EARS sentence (contract 1.5).
+// Every title follows `writing-readable-bulk-text`: the imperative verb comes first, the list has
+// one shape, and the words that tell the lines apart come before the shared subject. The subject
+// is a noun phrase ("board speed", "handoff bundle"), so each title reads as a sentence. The "why"
+// is the reason the issue exists, as format.md asks of `## Context`. Every criterion is an EARS
+// sentence (contract 1.5).
 import type { ContextLink, Priority, Size, Ts } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
+import { topicOf } from "@/lib/api/names";
 import {
   type Proposal,
   SPLIT_STEPS,
@@ -79,48 +82,76 @@ export function subjectOf(title: string): string {
     const cut = subject.slice(0, MAX_SUBJECT);
     subject = withoutDangling(cut.slice(0, Math.max(cut.lastIndexOf(" "), 12)).trim());
   }
-  return subject || "this work";
+  return !subject || /^(?:it|this|that|them)$/i.test(subject) ? "this work" : subject;
+}
+
+/** Words after which a noun phrase gives way to the rest of the sentence. */
+const PREPOSITIONS = new Set(
+  "with from over in on for to by via at into across between through under using".split(" "),
+);
+
+/** The noun phrase before the first preposition: "error handling to the API" → "error handling". */
+function headPhrase(subject: string): string {
+  const words = subject.split(" ");
+  const at = words.findIndex((w, i) => i > 0 && PREPOSITIONS.has(w.toLowerCase()));
+  return at > 0 ? words.slice(0, at).join(" ") : subject;
+}
+
+/**
+ * The noun phrase the titles of a split are built around. A group name that was cut from the
+ * outcome sentence ("Board feel instant" from "Make the board feel instant …") is a fragment, not
+ * a noun: the sentence is read again for its topic ("board speed"). A name the person wrote
+ * themselves keeps their words, cut before its first preposition.
+ */
+export function subjectFor(input: SplitInput): string {
+  const flat = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
+  const name = flat(input.title);
+  if (name && flat(input.outcome).includes(name)) {
+    const topic = topicOf(input.outcome).topic.join(" ");
+    if (topic) return lowerFirst(topic);
+  }
+  return headPhrase(subjectOf(input.title));
 }
 
 // ---------------------------------------------------------------- templates
 
 interface Slot {
-  /** `S` is the subject. */
+  /** `S` is the subject, a noun phrase: "weekly reports", "board speed". */
   title: (s: string) => string;
   /** An EARS sentence. */
   criterion: (s: string) => string;
-  /** One line, imperative verb first. */
+  /** One line: why the issue exists. It becomes the opening of `## Context` (format.md section 4). */
   why: string;
 }
 
 const GENERIC: Slot[] = [
   {
-    title: (s) => `Define the ${s} behavior`,
-    criterion: (s) => `The ${s} spec shall state the inputs, the outputs and the failure cases.`,
-    why: "Settle the behavior first; every other issue reads it.",
-  },
-  {
-    title: (s) => `Build the ${s} core`,
+    title: (s) => `Define the behavior of ${s}`,
     criterion: (s) =>
-      `When a person uses the ${s}, the system shall complete the main path without an error.`,
-    why: "Deliver the main path so the rest has something to build on.",
+      `The spec for ${s} shall state the inputs, the outputs and the failure cases.`,
+    why: "Every other issue reads the behavior, so settle it first.",
   },
   {
-    title: (s) => `Connect the ${s} to the existing flow`,
+    title: (s) => `Build the core of ${s}`,
     criterion: (s) =>
-      `When the change for the ${s} merges, the system shall pass the existing tests.`,
-    why: "Wire it in early so a clash shows up before release.",
+      `When a person uses ${s}, the system shall complete the main path without an error.`,
+    why: "The rest of the work builds on the main path, so deliver it early.",
   },
   {
-    title: (s) => `Handle failures in the ${s}`,
+    title: (s) => `Connect ${s} to the existing flow`,
+    criterion: (s) => `When the change for ${s} merges, the system shall pass the existing tests.`,
+    why: "Wiring it in early shows a clash with existing code before release.",
+  },
+  {
+    title: (s) => `Handle failures in ${s}`,
     criterion: (s) =>
-      `If the ${s} flow fails, then the system shall show the cause and leave the data unchanged.`,
-    why: "Show the cause of a failure so nobody has to guess.",
+      `If ${s} fails, then the system shall show the cause and leave the data unchanged.`,
+    why: "Failures that hide their cause make people guess, so show the cause.",
   },
   {
-    title: (s) => `Test the ${s} end to end`,
-    criterion: (s) => `The ${s} tests shall cover the main path and each failure case.`,
-    why: "Cover the main path and each failure case before release.",
+    title: (s) => `Test ${s} end to end`,
+    criterion: (s) => `The tests for ${s} shall cover the main path and each failure case.`,
+    why: "Untested paths break after release, so the tests cover each one.",
   },
 ];
 
@@ -129,27 +160,27 @@ const BUG: Slot[] = [
   {
     title: (s) => `Reproduce the ${s} problem`,
     criterion: (s) => `A test for the ${s} problem shall fail before the fix and pass after it.`,
-    why: "Pin the failure in a test before anyone changes code.",
+    why: "Failures that no test pins come back, so reproduce this one first.",
   },
   {
     title: (s) => `Find the cause of the ${s} problem`,
     criterion: (s) => `The change entry shall name the cause of the ${s} problem.`,
-    why: "Name the root cause so the fix does not hide it.",
+    why: "Fixes that skip the root cause hide the problem, so name the cause.",
   },
   {
     title: (s) => `Fix the ${s} problem`,
     criterion: (s) => `When the failing step runs, the ${s} problem shall not occur.`,
-    why: "Change the least code that makes the test pass.",
+    why: "Less changed code means less new risk, so make the smallest change.",
   },
   {
     title: (s) => `Add a regression test for the ${s} problem`,
     criterion: (s) => `The regression test for the ${s} problem shall run in CI.`,
-    why: "Keep the failure from coming back unseen.",
+    why: "Without a regression test the failure comes back unseen.",
   },
   {
     title: () => "Check the fix in a release build",
     criterion: (s) => `When the release build runs, the ${s} problem shall not occur.`,
-    why: "Confirm the fix outside the dev server.",
+    why: "Users run the release build, so confirm the fix there.",
   },
 ];
 
@@ -157,27 +188,27 @@ const RESEARCH: Slot[] = [
   {
     title: (s) => `Frame the question for ${s}`,
     criterion: (s) => `The ${s} note shall state the question and who decides.`,
-    why: "Agree on the question before anyone collects answers.",
+    why: "Answers to different questions cannot be compared, so agree on the question first.",
   },
   {
     title: (s) => `Compare the options for ${s}`,
     criterion: (s) => `The ${s} note shall compare 3 options on cost and risk.`,
-    why: "Put the options side by side on the same measures.",
+    why: "Options judged on different measures cannot be ranked, so use the same measures.",
   },
   {
     title: (s) => `Try the likeliest option for ${s}`,
     criterion: (s) => `The ${s} spike shall run the likeliest option on one real case.`,
-    why: "Test the front runner on real data, not on paper.",
+    why: "Paper results miss real data, so test the front runner on a real case.",
   },
   {
     title: (s) => `Recommend an option for ${s}`,
     criterion: (s) => `The ${s} note shall end with one recommendation and its trade-offs.`,
-    why: "Give the decider one answer and what it costs.",
+    why: "The decider needs one answer and its cost, so end with a recommendation.",
   },
   {
     title: (s) => `Record the decision on ${s}`,
     criterion: (s) => `The decision entry for ${s} shall hold the choice and its reasons.`,
-    why: "Write the choice down so nobody reopens it by accident.",
+    why: "Choices that are not written down get reopened by accident, so record this one.",
   },
 ];
 
@@ -187,27 +218,27 @@ const MIGRATION: Slot[] = [
     title: () => "Inventory what the migration touches",
     criterion: () =>
       "The inventory shall list each caller, file and setting the migration touches.",
-    why: "List every caller before the first move.",
+    why: "Callers missed in the inventory break after the move, so list every caller first.",
   },
   {
     title: () => "Pilot the migration on one slice",
     criterion: () => "When the first slice moves, the system shall pass its tests.",
-    why: "Prove the route on the smallest slice.",
+    why: "The smallest slice proves the route at the lowest cost, so move it first.",
   },
   {
     title: () => "Move the rest of the migration",
     criterion: () => "When the last slice moves, the old path shall have no callers.",
-    why: "Finish the move slice by slice, with the tests green each time.",
+    why: "Moves in slices keep the tests green, so finish it one slice at a time.",
   },
   {
     title: () => "Remove the old path",
     criterion: () => "The old path shall be deleted once no caller uses it.",
-    why: "Delete the old path so nobody uses it again.",
+    why: "Paths that nobody deletes get used again, so remove the old one.",
   },
   {
     title: () => "Check the results after the move",
     criterion: () => "When the migrated code runs, the system shall match the old results.",
-    why: "Compare the results with the old path before you close the issue.",
+    why: "Matching results prove the move lost nothing, so compare them before closing.",
   },
 ];
 
@@ -215,85 +246,84 @@ const DOCS: Slot[] = [
   {
     title: (s) => `Outline the ${s}`,
     criterion: (s) => `The ${s} outline shall list each section and the reader it serves.`,
-    why: "Fix the sections before anyone writes prose.",
+    why: "Prose written before the sections are fixed gets rewritten, so outline first.",
   },
   {
     title: (s) => `Draft the ${s}`,
     criterion: (s) => `The ${s} draft shall cover each step a new reader needs.`,
-    why: "Write every step once, in the order a reader takes them.",
+    why: "Readers take the steps in order, so write every step once in that order.",
   },
   {
     title: (s) => `Run the ${s} steps as written`,
     criterion: (s) => `Each step in the ${s} shall run as written on a clean machine.`,
-    why: "Follow the text exactly; every gap is a defect.",
+    why: "Every gap in the text stops a reader, so follow it exactly.",
   },
   {
     title: (s) => `Review the ${s} with a new reader`,
     criterion: (s) => `The ${s} review shall record each place the reader got stuck.`,
-    why: "Watch a newcomer use it and note where they stop.",
+    why: "Newcomers stop where the author sees no gap, so watch one use it.",
   },
   {
     title: (s) => `Release the ${s} with the next version`,
     criterion: (s) => `When the next version ships, the ${s} shall match it.`,
-    why: "Ship the text with the code so they stay in step.",
+    why: "Text that ships apart from the code drifts, so release them together.",
   },
 ];
 
 const UI: Slot[] = [
   {
-    title: (s) => `Sketch the states of the ${s}`,
-    criterion: (s) => `The ${s} design shall show the empty, loading and error states.`,
-    why: "Draw every state first so the build has no guesses.",
+    title: (s) => `Sketch the states for ${s}`,
+    criterion: (s) => `The design for ${s} shall show the empty, loading and error states.`,
+    why: "Drawing every state first leaves the build with no guesses.",
   },
   {
-    title: (s) => `Build the ${s} view`,
-    criterion: (s) => `When a person opens the ${s}, the view shall show the data within 1 s.`,
-    why: "Put real data on screen so the rest can be reviewed.",
+    title: (s) => `Build the view for ${s}`,
+    criterion: (s) => `When a person opens ${s}, the view shall show the data within 1 s.`,
+    why: "Real data on screen lets the rest be reviewed, so build the view early.",
   },
   {
-    title: (s) => `Wire the ${s} to the data layer`,
-    criterion: (s) => `When the data changes, the ${s} shall update without a reload.`,
-    why: "Read and write through the data layer, never around it.",
+    title: (s) => `Wire ${s} to the data layer`,
+    criterion: (s) => `When the data changes, ${s} shall update without a reload.`,
+    why: "Views that read around the data layer break when the data changes.",
   },
   {
-    title: (s) => `Reach the ${s} by keyboard`,
+    title: (s) => `Reach ${s} by keyboard`,
     criterion: (s) =>
-      `Where a person uses only the keyboard, the ${s} shall let them finish every step.`,
-    why: "Cover keyboard use before the polish starts.",
+      `Where a person uses only the keyboard, ${s} shall let them finish every step.`,
+    why: "Keyboard gaps found late force rework, so cover them before the polish.",
   },
   {
-    title: (s) => `Test the ${s} in the browser`,
-    criterion: (s) => `The ${s} flow shall pass a browser test in CI.`,
-    why: "Prove the flow in a real browser before release.",
+    title: (s) => `Test ${s} in the browser`,
+    criterion: (s) => `The flow for ${s} shall pass a browser test in CI.`,
+    why: "Flows that pass in the dev server can still break in a browser, so test there.",
   },
 ];
 
 const SERVICE: Slot[] = [
   {
-    title: (s) => `Define the ${s} contract`,
-    criterion: (s) => `The ${s} contract shall list each request, response and error.`,
-    why: "Fix the request and response shapes before any code.",
+    title: (s) => `Define the contract for ${s}`,
+    criterion: (s) => `The contract for ${s} shall list each request, response and error.`,
+    why: "Clients cannot start before the shapes are fixed, so define them before any code.",
   },
   {
-    title: (s) => `Build the ${s} route`,
-    criterion: (s) =>
-      `When a client calls the ${s}, the server shall return the documented response.`,
-    why: "Deliver the happy path so clients can start against it.",
+    title: (s) => `Build the route for ${s}`,
+    criterion: (s) => `When a client calls ${s}, the server shall return the documented response.`,
+    why: "Clients can start against a working happy path, so deliver it early.",
   },
   {
-    title: (s) => `Guard the ${s} against bad input`,
+    title: (s) => `Guard ${s} against bad input`,
     criterion: () => "If the input is invalid, then the server shall name the field and refuse it.",
-    why: "Refuse bad input at the edge, with the field named.",
+    why: "Bad input that reaches the core corrupts data, so refuse it at the edge.",
   },
   {
-    title: (s) => `Cover the ${s} with integration tests`,
-    criterion: (s) => `The ${s} tests shall cover each response and each error.`,
-    why: "Run the route the way a client does.",
+    title: (s) => `Cover ${s} with integration tests`,
+    criterion: (s) => `The tests for ${s} shall cover each response and each error.`,
+    why: "Routes tested only by hand break silently, so run them the way a client does.",
   },
   {
-    title: (s) => `Document the ${s} calls`,
-    criterion: (s) => `The ${s} guide shall show one request and one response for each call.`,
-    why: "Show one real call for each route.",
+    title: (s) => `Document the calls for ${s}`,
+    criterion: (s) => `The guide for ${s} shall show one request and one response for each call.`,
+    why: "Callers read the guide before the code, so show one real call for each route.",
   },
 ];
 
@@ -376,12 +406,14 @@ function names(context: string[], resolve: ResolveContext | undefined): string {
  * each. A pure function of the input, so the same group always splits the same way.
  */
 export function proposeIssues(input: SplitInput, resolve?: ResolveContext): Proposal[] {
-  const subject = subjectOf(input.title);
   // The title decides the kind of work; the outcome only breaks a tie when the title says nothing.
   const builds = BUILDING.has((input.title.trim().split(/\s+/)[0] ?? "").toLowerCase());
   const kindOf = (text: string) =>
     FAMILIES.find((f) => !(builds && f.slots === BUG) && f.words.test(text.toLowerCase()))?.slots;
   const slots = kindOf(input.title) ?? kindOf(input.outcome) ?? GENERIC;
+  // A bug group is named after the defect and keeps its words ("login error on Safari"); the
+  // other kinds are built around a noun phrase.
+  const subject = slots === BUG ? subjectOf(input.title) : subjectFor(input);
   const parent = input.size ?? "m";
   const urgent = URGENT.test(`${input.title} ${input.outcome}`);
   const read = input.context.length > 0 ? names(input.context, resolve) : "";
@@ -393,7 +425,7 @@ export function proposeIssues(input: SplitInput, resolve?: ResolveContext): Prop
     priority: urgent && i < 2 ? "urgent" : PRIORITIES[i],
     criterion: slot.criterion(subject),
     // The first issue reads what the person linked, so the context shows in the list.
-    why: i === 0 && read ? `Read ${read}, then settle the behavior.` : slot.why,
+    why: i === 0 && read ? `The behavior rests on ${read}, so settle it first.` : slot.why,
   }));
 }
 
@@ -420,9 +452,14 @@ export async function split(input: SplitInput, options: SplitOptions = {}): Prom
 
 // ---------------------------------------------------------------- the files `create_work` writes
 
-/** The `## Context` text of a new `goal.md` that came without one (the default template's). */
-const DEFAULT_CONTEXT =
-  "Why this matters, who feels the problem today and what changes when it is done.\n\nRun the `write-goal` skill to fill in this section.";
+/**
+ * The `## Context` text of a new `goal.md` that came without one: one real sentence from the title
+ * and the group, never a placeholder. Add work always sends its own reason.
+ */
+function defaultContext(title: string, place: string | undefined): string {
+  const what = title.trim().replace(/[.!?]+$/, "");
+  return place ? `${what}. It belongs to ${place}.` : `${what}.`;
+}
 
 /**
  * Prose for `## Context` may not open a section of its own: a `#` or `##` heading in it (outside a
@@ -450,6 +487,8 @@ export function workIssueGoal(args: {
   created: Ts;
   dir: string;
   issue: WorkIssueInput;
+  /** The group the issue goes in, named in its default context. */
+  place?: string;
 }): string {
   const { issue } = args;
   const src: IssueSrc = {
@@ -466,7 +505,9 @@ export function workIssueGoal(args: {
       blocked_by: [],
       created: args.created,
     },
-    context: keepInSection(issue.context?.replace(/\r\n/g, "\n").trim() ?? "") || DEFAULT_CONTEXT,
+    context:
+      keepInSection(issue.context?.replace(/\r\n/g, "\n").trim() ?? "") ||
+      defaultContext(issue.title, args.place),
     criteria: issue.criteria.map((text) => ({
       text: text.replace(/\s+/g, " ").trim(),
       checked: false,

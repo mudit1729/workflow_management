@@ -67,7 +67,33 @@ describe("useSplitWork", () => {
     await vi.advanceTimersByTimeAsync(1100);
     expect(result?.issues.length).toBeGreaterThanOrEqual(3);
     expect(result?.issues.length).toBeLessThanOrEqual(5);
-    expect(result?.issues[0].title).toBe("Define the weekly reports behavior");
+    expect(result?.issues[0].title).toBe("Define the behavior of weekly reports");
+  });
+
+  test("offline, two overlapping splits report one failure, not two", async () => {
+    const mock = await loadMock();
+    mock.mockControls.setConnection("offline");
+    // The mock reads split offline as a failed request: the same error a dead server gives.
+    const spy = vi
+      .spyOn(api, "splitWork")
+      .mockRejectedValue(new Error("No connection to wf serve"));
+    try {
+      const { split } = capture(useSplitWork);
+      const input = { title: "Add weekly reports", outcome: "", size: "m" as const, context: [] };
+      // StrictMode runs the start effect twice: two calls, one after the other.
+      const [first, second] = await Promise.all([split(input), split(input)]);
+      expect(first).toBeUndefined();
+      expect(second).toBeUndefined();
+      expect(toasts.error).toHaveBeenCalledTimes(1);
+      // The toast has a stable id, so a repeat from elsewhere replaces it instead of stacking.
+      expect(toasts.error.mock.calls[0]).toEqual([
+        "Could not draft with Codex",
+        { id: "work:draft with Codex", description: "No connection to wf serve" },
+      ]);
+    } finally {
+      spy.mockRestore();
+      mock.mockControls.setConnection("live");
+    }
   });
 
   test("a group without a title is a toast and no result", async () => {

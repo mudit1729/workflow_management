@@ -40,4 +40,4 @@ session: cc-7d2e
 ## Next steps
 1. Finish `resync` for lagged clients in [[#T-3]].
 2. Claim [[#T-4]] once [[#T-3]] lands.
-3. Run `wf verify wf-3k9x2 SC-3`.
+3. Verify [[#SC-3]] with its command.

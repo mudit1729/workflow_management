@@ -186,7 +186,7 @@ function buildBlock(f: Fence, file: string, taken: Set<string>): DiagramBlock {
       problem: {
         rule: "F010",
         message: `Archify block holds invalid JSON. ${msg}.`,
-        fix: "Fix the JSON, then run `wf lint --render`.",
+        fix: "Fix the JSON and save the file; the board draws the diagram again.",
       },
     };
   }
@@ -211,7 +211,7 @@ function buildBlock(f: Fence, file: string, taken: Set<string>): DiagramBlock {
     problem: {
       rule: "F011",
       message: `Archify render failed with ${plural(errors.length, "error")}${first ? `. ${first.path}: ${first.msg}` : "."}`,
-      fix: "Fix the JSON paths in the block, then run `wf lint --render`.",
+      fix: "Fix the JSON paths in the block and save the file; the board draws the diagram again.",
     },
   };
 }

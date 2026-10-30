@@ -1,18 +1,35 @@
 // The "Do next step" run (plan D4). Real: the daemon runs `codex exec` with the `doing-next-step`
 // skill on the next ready task. Prototype: a simulated background run whose phases are real
 // markdown edits through the store, about two seconds apart, so the board, the Files view and
-// the file watcher see each one:
+// the file watcher see each one. The skill is the spec; each phase does the steps it names:
 //
-//   claim   plan.md       the task is `in_progress`, `claimed_by: @codex`, with a lease
-//   log     changes.md    a change entry by @codex, in the past tense
-//   verify  plan.md       the task goes to `review`; a CI run starts, then passes
-//   done    plan.md       the steps are ticked and the task is `done` (its lease ends);
-//                         current_state.md moves on;
-//                         a commit with the trailer `Issue: <id>` joins the delivery data
+//   claim   plan.md       an issue without a plan is planned first (`planning-issues`: plan.md
+//                         from the criteria, status `planned`); then the task is `in_progress`,
+//                         `claimed_by: @codex`, with a lease. goal.md: status `in_progress` and,
+//                         unless another author's coordinator lease is live, `claimed_by` and
+//                         `lease_until` (steps 3 and 4)
+//   log     plan.md       the work, verified (steps 5 to 9): the steps are ticked and the task is
+//           goal.md       `done` (`review` when its verify is `manual`); each criterion whose
+//           changes.md    tasks are all done and whose verify is a command is ticked with
+//                         `evidence:` and `verified_by:`; a commit with the trailer
+//                         `Issue: <id>` joins the delivery data; one change entry carries the
+//                         task, criteria, result, evidence, commit and files
+//   verify  (CI)          a CI run starts on the commit, then passes
+//   done    current_state  the state moves on (never under another author's live coordinator
+//           goal.md       lease); goal.md releases the claim and, when every task is done, goes
+//                         to `review` (steps 10 and 11)
 //
 // Git, PR and CI data are not files (plan D2): the commit and the CI run go to `store.delivery`.
 // One run is active per issue. `cancel` stops it and puts the task back in the queue.
-import type { Handle, IssueId, TaskId } from "@/gen/types";
+import type {
+  CriterionId,
+  Handle,
+  IssueId,
+  IssueStatus,
+  TaskId,
+  TaskStatus,
+  Ts,
+} from "@/gen/types";
 import { ApiError, NotFoundError } from "@/lib/api/error";
 import type {
   CodexPhase,
@@ -21,19 +38,26 @@ import type {
   CodexRunKind,
   PipelineRun,
 } from "@/lib/api/types";
+import { draftPlan, taskTitle } from "./codex-plan";
 import { commitSha, toTsSec } from "./delivery";
+import { stripTicks } from "./derive";
 import {
   appendChange,
+  claimIssue,
   claimTask,
   createState,
   moveTask,
   overwriteState,
+  releaseIssue,
+  setIssueStatus,
   setTaskStatus,
   toggleStep,
+  verifyCriterion,
 } from "./md/edit";
-import type { ChangeSrc, IssueSrc, TaskSrc } from "./source";
+import { renderPlan } from "./md/render";
+import type { ChangeSrc, IssueSrc, RequestSrc, StateSrc, TaskSrc } from "./source";
 import type { Draft, Store, Touch } from "./store";
-import { toTs } from "./time";
+import { toTs, tsMs } from "./time";
 import { randomId, slugify } from "./util";
 
 export const CODEX_HANDLE: Handle = "codex";
@@ -46,10 +70,16 @@ const KEEP_RUNS = 30;
 
 const MIN = 60_000;
 
+/** Why a run did not start a task. The text is shown as written. */
 export const NOTHING_READY = {
-  unplanned: "No ready task. Plan the issue first.",
   finished: "Every task is done.",
   waiting: "No ready task. Wait for the tasks in flight.",
+  noCriteria: "The issue has no criteria to plan from. Add one to goal.md first.",
+  closed: (status: IssueStatus) => `The issue is ${status}.`,
+  blockedBy: (issue: IssueId) => `Waiting on ${issue}: it is not done.`,
+  request: (id: string, question: string) => `Waiting on ${id}: ${question}`,
+  coordinator: (holder: Handle) =>
+    `@${holder} holds the lease on this issue and has not planned it. Ask them to plan it.`,
 } as const;
 
 /** A run started, moved to its next phase or ended. */
@@ -89,17 +119,61 @@ export interface Codex {
 
 const tasksOf = (src: IssueSrc): TaskSrc[] => src.plan?.phases.flatMap((p) => p.tasks) ?? [];
 
-type Pick = { task: TaskId } | { reason: string };
+/** What `pickTask` found: a task (to plan first when the issue has no plan), or why there is none. */
+type Pick = { task: TaskId; plan: boolean } | { reason: string };
 
-/** The first ready task in plan order: the rule of the plan view (`Task.ready`). */
+/** Another author holds a live coordinator lease on the issue. */
+function foreignCoordinator(src: IssueSrc, now: number): Handle | undefined {
+  const { claimed_by: holder, lease_until: until } = src.goal;
+  return holder && holder !== CODEX_HANDLE && until && tsMs(until) > now ? holder : undefined;
+}
+
+/**
+ * The next step, by the rules of `doing-next-step` step 3: nothing on a finished issue, nothing
+ * while `blocked_by` names an issue that is not done, nothing while a blocking request touches the
+ * next task; an issue without a plan is planned first, and then T-1 is next; otherwise the first
+ * ready task in plan order (the rule of the plan view, `Task.ready`).
+ */
 function pickTask(store: Store, issue: IssueId): Pick {
-  const tasks = store.derived.details.get(issue)?.plan?.phases.flatMap((p) => p.tasks) ?? [];
-  if (tasks.length === 0) return { reason: NOTHING_READY.unplanned };
-  const ready = tasks.find((t) => t.ready);
-  if (ready) return { task: ready.id };
-  if (tasks.every((t) => t.status === "done" || t.status === "cancelled"))
-    return { reason: NOTHING_READY.finished };
-  return { reason: NOTHING_READY.waiting };
+  const detail = store.derived.details.get(issue);
+  const src = store.issueSrc(issue);
+  if (!detail || !src) return { reason: NOTHING_READY.finished };
+  const { status } = detail.summary;
+  if (status === "done" || status === "cancelled") return { reason: NOTHING_READY.closed(status) };
+  for (const blocker of detail.summary.blocked_by) {
+    const other = store.derived.details.get(blocker);
+    if (other && other.summary.status !== "done")
+      return { reason: NOTHING_READY.blockedBy(blocker) };
+  }
+
+  const tasks = detail.plan?.phases.flatMap((p) => p.tasks) ?? [];
+  let next: { id: TaskId; satisfies: string[] };
+  const plan = tasks.length === 0;
+  if (plan) {
+    if (src.criteria.length === 0) return { reason: NOTHING_READY.noCriteria };
+    const holder = foreignCoordinator(src, store.now());
+    if (holder) return { reason: NOTHING_READY.coordinator(holder) };
+    next = { id: "T-1", satisfies: ["SC-1"] };
+  } else {
+    const ready = tasks.find((t) => t.ready);
+    if (!ready) {
+      const closed = tasks.every((t) => t.status === "done" || t.status === "cancelled");
+      return { reason: closed ? NOTHING_READY.finished : NOTHING_READY.waiting };
+    }
+    next = ready;
+  }
+
+  // A blocking request that touches the task: it names the task, or its ref is a decision that
+  // affects a criterion the task satisfies.
+  const decisionOf = (ref: string | undefined) =>
+    detail.decisions.find((d) => ref?.includes(`#${d.id}]]`));
+  const blocking = (detail.state?.needs_you ?? []).find((r) => {
+    if (r.answered || r.urgency !== "blocking") return false;
+    const names = new RegExp(`\\b${next.id}\\b`).test(`${r.question} ${r.ref ?? ""}`);
+    return names || (decisionOf(r.ref)?.affects ?? []).some((c) => next.satisfies.includes(c));
+  });
+  if (blocking) return { reason: NOTHING_READY.request(blocking.id, blocking.question) };
+  return { task: next.id, plan };
 }
 
 /** The task to start once `finished` is done: the first `todo` whose dependencies are done. */
@@ -232,7 +306,23 @@ interface Active {
   run: CodexRun;
   sha: string;
   branch: string;
-  /** The change entry the log phase wrote. */
+  /** The run writes the plan first: the issue had none. */
+  plans: boolean;
+  /**
+   * The run is the coordinator of the issue (it holds `claimed_by` in goal.md). False for a worker
+   * under another author's live coordinator lease: it claims the task and appends log entries,
+   * and never rewrites goal.md's claim or current_state.md.
+   */
+  coordinator: boolean;
+  /** The status goal.md had before the claim moved it, so a cancel puts it back. */
+  statusBefore?: IssueStatus;
+  /** The task status the work phase left: `done`, or `review` when the verify is `manual`. */
+  after?: TaskStatus;
+  /** The criteria the work phase ticked. */
+  ticked: CriterionId[];
+  /** Criteria whose tasks are all done but whose verify is `manual`: a person checks them. */
+  manual: CriterionId[];
+  /** The change entry the work phase wrote. */
   entry?: string;
   /** The CI run the verify phase started. */
   pipeline?: { id: string; startedMs: number; jobs: string[] };
@@ -246,6 +336,9 @@ const copy = (r: CodexRun): CodexRun => ({ ...r, phases: r.phases.map((p) => ({ 
 const reject = (...gaps: string[]): never => {
   throw new ApiError(422, { diagnostics: [], gaps });
 };
+
+/** `@a`, `@a and @b`: handles as words. */
+const words = (xs: string[]) => xs.join(", ");
 
 export function createCodex(store: Store, options: CodexOptions = {}): Codex {
   let phaseMs = options.phaseMs ?? PHASE_MS;
@@ -274,35 +367,241 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const src = store.issueSrc(a.run.issue);
     return src && tasksOf(src).find((t) => t.id === a.run.task);
   };
+  const leaseUntil = (): Ts => toTs(store.now() + store.world.config.leases_minutes * MIN);
+  const authorModel = () => store.world.authors.find((x) => x.handle === CODEX_HANDLE)?.model;
 
   // ---- the phases
 
-  /** claim: the task is `in_progress`, held by @codex, with a lease. */
+  /** The plan, the state and the entry of planning an issue (`planning-issues`, steps 6 to 8). */
+  function planIssue(a: Active, src: IssueSrc, w: Draft): { touches: Touch[]; title: string } {
+    const { issue } = a.run;
+    const planFile = store.filePath(issue, "plan.md");
+    const changesFile = store.filePath(issue, "changes.md");
+    const stateFile = store.filePath(issue, "current_state.md");
+    const group = store.summary(issue)?.group_path.at(-1) ?? "main";
+    const draft = draftPlan(src, {
+      at: store.stamp(),
+      by: CODEX_HANDLE,
+      lane: slugify(group) || "main",
+    });
+    const tasks = draft.phases.flatMap((p) => p.tasks);
+    const lanes = new Set(tasks.map((t) => t.lane));
+    w.write(planFile, renderPlan(draft));
+
+    const entry: ChangeSrc = {
+      id: store.newId("C-"),
+      ts: store.stamp(),
+      author: CODEX_HANDLE,
+      title: `Wrote the plan with ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${lanes.size} lane${lanes.size === 1 ? "" : "s"}`,
+      kind: "docs",
+      files: ["plan.md"],
+      model: authorModel(),
+      body: `Turned the ${src.criteria.length} criteri${src.criteria.length === 1 ? "on" : "a"} of goal.md into ${tasks.length} task${tasks.length === 1 ? "" : "s"}, one per criterion, in order.`,
+    };
+    w.write(changesFile, appendChange(w.read(changesFile), entry));
+
+    const touches: Touch[] = [
+      { file: planFile, anchors: "all" },
+      { file: changesFile, anchors: [entry.id] },
+    ];
+    // A worker under another author's lease never rewrites the state; a coordinator creates it, or
+    // changes only the summary, the stamp and the next steps (planning-issues, step 8).
+    if (a.coordinator) {
+      const summary = `Planned: ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${lanes.size} lane${lanes.size === 1 ? "" : "s"}; T-1 is ready.`;
+      const existing = w.read(stateFile);
+      const current = src.state;
+      if (existing === undefined || !current)
+        w.write(
+          stateFile,
+          createState({
+            summary,
+            updated_at: store.stamp(),
+            updated_by: CODEX_HANDLE,
+            phase: draft.phases[0].name,
+            needs_you: [],
+            next_steps: ["Claim [[#T-1]] and start the first step."],
+          }),
+        );
+      else
+        w.write(
+          stateFile,
+          overwriteState(existing, {
+            summary,
+            updated_at: store.stamp(),
+            updated_by: CODEX_HANDLE,
+            next_steps: ["Claim [[#T-1]] and start the first step."],
+          }),
+        );
+      touches.push({ file: stateFile, anchors: "all" });
+    }
+    return { touches, title: entry.title };
+  }
+
+  /** claim: [plan], then the task is `in_progress`, held by @codex, with a lease; so is the issue. */
   function claim(a: Active) {
     const { issue, task = "" } = a.run;
-    const file = store.filePath(issue, "plan.md");
-    const leaseUntil = toTs(store.now() + store.world.config.leases_minutes * MIN);
+    const src = store.issueSrc(issue);
+    if (!src) throw new Error(`${issue} is gone.`);
+    const planFile = store.filePath(issue, "plan.md");
+    const goalFile = store.filePath(issue, "goal.md");
+    a.coordinator = !foreignCoordinator(src, store.now());
     store.mutate(CODEX_HANDLE, issue, (w) => {
-      const planned = setTaskStatus(text(w, file), task, "in_progress");
-      w.write(file, claimTask(planned, task, CODEX_HANDLE, leaseUntil));
+      const touches: Touch[] = [];
+      const activity: {
+        issue_id: IssueId;
+        kind: "change" | "lease";
+        author: Handle;
+        title: string;
+      }[] = [];
+      let status = src.goal.status;
+      if (a.plans) {
+        const planned = planIssue(a, src, w);
+        touches.push(...planned.touches);
+        activity.push({
+          issue_id: issue,
+          kind: "change",
+          author: CODEX_HANDLE,
+          title: planned.title,
+        });
+        // planning-issues step 7: only the `status:` line, `backlog` to `planned`.
+        if (status === "backlog") {
+          w.write(goalFile, setIssueStatus(text(w, goalFile), "planned"));
+          touches.push({ file: goalFile, anchors: ["status"] });
+          status = "planned";
+        }
+      }
+
+      w.write(
+        planFile,
+        claimTask(
+          setTaskStatus(text(w, planFile), task, "in_progress"),
+          task,
+          CODEX_HANDLE,
+          leaseUntil(),
+        ),
+      );
+      touches.push({ file: planFile, anchors: [task] });
+
+      // doing-next-step step 4: the coordinator lease and the status. A worker claims the task only.
+      if (a.coordinator) {
+        let goal = text(w, goalFile);
+        if (status === "backlog" || status === "planned") {
+          a.statusBefore = status;
+          goal = setIssueStatus(goal, "in_progress");
+        }
+        w.write(goalFile, claimIssue(goal, CODEX_HANDLE, leaseUntil()));
+        if (!touches.some((t) => t.file === goalFile))
+          touches.push({ file: goalFile, anchors: ["status", "lease_until"] });
+      }
+      if (a.coordinator && !a.plans) {
+        const resolved = resolveAnswered(src, w);
+        touches.push(...resolved.touches);
+        for (const title of resolved.titles)
+          activity.push({ issue_id: issue, kind: "change", author: CODEX_HANDLE, title });
+      }
       const title = `Claimed ${task}`;
+      activity.push({ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title });
       return {
-        touches: [{ file, anchors: [task] }],
-        activity: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
+        touches,
+        activity,
         log: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
       };
     });
   }
 
-  /** log: a change entry in the past tense, with the files the task owns. */
-  function log(a: Active) {
+  /**
+   * doing-next-step, step 2: a request a person answered (`[x]` with an `answer:`) is resolved
+   * before the work starts. Its item leaves `## Needs you`, and a `kind: answer` entry holds the
+   * question and the answer (`logging-work`).
+   */
+  function resolveAnswered(src: IssueSrc, w: Draft): { touches: Touch[]; titles: string[] } {
+    const answered = (src.state?.needs_you ?? []).filter((r) => r.answered);
+    if (!src.state || answered.length === 0) return { touches: [], titles: [] };
+    const changesFile = store.filePath(src.goal.id, "changes.md");
+    const stateFile = store.filePath(src.goal.id, "current_state.md");
+    const entries = answered.map<ChangeSrc>((r) => ({
+      id: store.newId("C-"),
+      ts: store.stamp(),
+      author: CODEX_HANDLE,
+      title: `Resolved ${r.id}`,
+      kind: "answer",
+      model: authorModel(),
+      body: `**Q:** ${r.question}\n**A:** ${r.answer ?? ""} (@${r.answered_by ?? r.to})`,
+    }));
+    w.write(
+      changesFile,
+      entries.reduce<string | undefined>((log, e) => appendChange(log, e), w.read(changesFile)) ??
+        "",
+    );
+    w.write(
+      stateFile,
+      overwriteState(text(w, stateFile), {
+        needs_you: src.state.needs_you.filter((r) => !r.answered),
+      }),
+    );
+    return {
+      touches: [
+        { file: changesFile, anchors: entries.map((e) => e.id) },
+        { file: stateFile, anchors: answered.map((r) => r.id) },
+      ],
+      titles: entries.map((e) => e.title),
+    };
+  }
+
+  /**
+   * log (steps 5 to 9): the work is done and verified. The steps are ticked, the task is `done`
+   * (or `review` when its verify is `manual`, for a person to check), each criterion whose tasks
+   * are all done is ticked with evidence when its verify is a command, the commit lands, and ONE
+   * change entry names the task, criteria, result, evidence, commit and files.
+   */
+  function work(a: Active) {
     const { issue, task = "" } = a.run;
+    const src = store.issueSrc(issue);
     const live = taskOf(a);
-    if (!live) throw new Error(`${task} is gone.`);
-    const file = store.filePath(issue, "changes.md");
+    if (!src || !live) throw new Error(`${task} is gone.`);
+    const planFile = store.filePath(issue, "plan.md");
+    const goalFile = store.filePath(issue, "goal.md");
+    const changesFile = store.filePath(issue, "changes.md");
+
+    const command = stripTicks(live.verify)?.trim();
+    const byHand = !command || command === "manual";
+    const tasks = tasksOf(src);
+    // Step 7: a criterion is ticked when every task that satisfies it is done and its own verify
+    // is a command. A `manual` criterion is never ticked by an agent: a person checks it.
+    const ticks: { id: CriterionId; command: string }[] = [];
+    const manual: CriterionId[] = [];
+    if (!byHand)
+      for (const id of live.satisfies ?? []) {
+        const criterion = src.criteria[Number(/^SC-(\d+)$/.exec(id)?.[1]) - 1];
+        if (!criterion || criterion.checked) continue;
+        const others = tasks.filter(
+          (t) => t.id !== live.id && t.status !== "cancelled" && t.satisfies?.includes(id),
+        );
+        if (!others.every((t) => t.status === "done")) continue;
+        const own = stripTicks(criterion.verify)?.trim();
+        if (own && own !== "manual") ticks.push({ id, command: own });
+        else manual.push(id);
+      }
+
     const steps = live.steps?.length ?? 0;
     const files = live.owns ?? [];
     const where = files.length > 0 ? ` in ${files.map((f) => `\`${f}\``).join(", ")}` : "";
+    const owner = src.goal.owner ?? store.me;
+    const sentences = [
+      steps > 0
+        ? `Worked through ${steps} step${steps === 1 ? "" : "s"} of ${task}${where}.`
+        : `Worked on ${task}${where}.`,
+    ];
+    if (ticks.length > 0)
+      sentences.push(`Ticked ${words(ticks.map((t) => t.id))} with the passing verify command.`);
+    if (byHand) sentences.push(`${task} waits for a manual check by @${owner}.`);
+    else if (manual.length > 0)
+      sentences.push(`${words(manual)} waits for a manual check by @${owner}.`);
+    if (!a.coordinator)
+      sentences.push(
+        "Ran as a worker under another lease, so goal.md and current_state.md stay as they were.",
+      );
+
     const entry: ChangeSrc = {
       id: store.newId("C-"),
       ts: store.stamp(),
@@ -310,38 +609,76 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       title: pastTense(live.title),
       kind: "progress",
       task,
+      criteria: ticks.length > 0 ? ticks.map((t) => t.id) : undefined,
+      result: byHand ? undefined : "pass",
+      evidence: byHand ? undefined : `\`${command}\` passed at \`${a.sha}\``,
+      commit: a.sha,
       files: files.length > 0 ? files : undefined,
-      model: store.world.authors.find((x) => x.handle === CODEX_HANDLE)?.model,
-      body:
-        steps > 0
-          ? `Worked through ${steps} step${steps === 1 ? "" : "s"} of ${task}${where}.`
-          : `Worked on ${task}${where}.`,
+      model: authorModel(),
+      body: sentences.join(" "),
     };
+
     store.mutate(CODEX_HANDLE, issue, (w) => {
-      w.write(file, appendChange(w.read(file), entry));
+      let plan = text(w, planFile);
+      const touched: string[] = [task];
+      (live.steps ?? []).forEach((step, i) => {
+        if (step.done) return;
+        plan = toggleStep(plan, task, i + 1, true);
+        touched.push(`${task}.${i + 1}`);
+      });
+      const after: TaskStatus = byHand ? "review" : "done";
+      w.write(planFile, dropLease(setTaskStatus(plan, task, after), task));
+      const touches: Touch[] = [{ file: planFile, anchors: touched }];
+
+      if (ticks.length > 0) {
+        let goal = text(w, goalFile);
+        for (const t of ticks)
+          goal = verifyCriterion(goal, t.id, {
+            evidence: `\`${t.command}\` passed at \`${a.sha}\`, see [[#${entry.id}]]`,
+            by: CODEX_HANDLE,
+          });
+        w.write(goalFile, goal);
+        touches.push({ file: goalFile, anchors: ticks.map((t) => t.id) });
+      }
+
+      w.write(changesFile, appendChange(w.read(changesFile), entry));
+      touches.push({ file: changesFile, anchors: [entry.id] });
+      a.after = after;
+      a.run.review = byHand || undefined;
       return {
-        touches: [{ file, anchors: [entry.id] }],
+        touches,
         activity: [{ issue_id: issue, kind: "change", author: CODEX_HANDLE, title: entry.title }],
       };
     });
     a.entry = entry.id;
+    a.ticked = ticks.map((t) => t.id);
+    a.manual = manual;
+
+    // Step 8: the commit, with the trailer, on the branch of the issue.
+    store.updateDelivery(issue, (d) => ({
+      ...d,
+      commits: [
+        {
+          sha: a.sha,
+          subject: live.title,
+          author: CODEX_HANDLE,
+          at: toTsSec(store.now()),
+          branch: a.branch,
+          task,
+          files_changed: Math.max(1, live.owns?.length ?? 0),
+          trailer: `Issue: ${issue}`,
+        },
+        ...d.commits,
+      ],
+    }));
+    a.run.commit = a.sha;
   }
 
-  /** verify: the task goes to `review` and a CI run starts. */
+  /** verify: a CI run starts on the commit. It is not a markdown edit. */
   function verify(a: Active) {
-    const { issue, task = "" } = a.run;
+    const { issue } = a.run;
     const live = taskOf(a);
-    if (!live) throw new Error(`${task} is gone.`);
-    const file = store.filePath(issue, "plan.md");
-    store.mutate(CODEX_HANDLE, issue, (w) => {
-      w.write(file, setTaskStatus(text(w, file), task, "review"));
-      const title = `Moved ${task} to review`;
-      return {
-        touches: [{ file, anchors: [task] }],
-        activity: [{ issue_id: issue, kind: "state", author: CODEX_HANDLE, title }],
-        log: [{ issue_id: issue, kind: "state", author: CODEX_HANDLE, title }],
-      };
-    });
+    if (!live) throw new Error(`${a.run.task} is gone.`);
     ciSeq += 1;
     const jobs = jobsFor(live);
     const pipeline: PipelineRun = {
@@ -384,7 +721,23 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     }));
   }
 
-  /** The `current_state.md` after the task is done: what moved, and what comes next. */
+  /** The request that asks a person to check a task whose verify is `manual`. */
+  function checkRequest(src: IssueSrc, finished: TaskSrc): RequestSrc {
+    const blocks = tasksOf(src).some((t) => t.depends_on?.includes(finished.id));
+    return {
+      id: store.newId("Q-"),
+      question: `Check ${finished.id} by hand: ${finished.title}?`,
+      from: CODEX_HANDLE,
+      to: src.goal.owner ?? store.me,
+      kind: "approval",
+      urgency: blocks ? "blocking" : "fyi",
+      asked: store.stamp(),
+      options: ["approve", "reject"],
+      ref: `[[#${finished.id}]]`,
+    };
+  }
+
+  /** The `current_state.md` after the task: what moved, what a person must check, what is next. */
   function stateAfter(a: Active, src: IssueSrc, finished: TaskSrc, w: Draft): string | undefined {
     const file = store.filePath(a.run.issue, "current_state.md");
     const current = src.state;
@@ -392,64 +745,100 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     // A file that does not read (broken frontmatter) is the person's to fix, not ours to replace.
     if (exists && !current) return undefined;
 
+    const owner = src.goal.owner ?? store.me;
+    const inReview = finished.status === "review";
     const next = nextAfter(src, finished);
     const others = tasksOf(src).filter(
       (t) => t.id !== finished.id && t.status !== "done" && t.status !== "cancelled",
     );
-    const summary = next
-      ? `${finished.id} is done; ${next.id} is next.`
-      : others.length === 0
-        ? "Every task is done; the criteria wait for checks."
-        : `${finished.id} is done; no task is ready yet.`;
-    const first = next
-      ? `Start [[#${next.id}]] ${next.title}.`
-      : others.length === 0
-        ? "Check the criteria and close the issue."
-        : "Wait for the tasks in flight.";
-    const mentions = (line: string) => line.includes(`[[#${finished.id}]]`);
-    const done = `[[#${finished.id}]] ${finished.title}.${a.entry ? ` See [[#${a.entry}]].` : ""}`;
-    const nextSteps = [
-      first,
-      ...(current?.next_steps ?? []).filter((l) => !mentions(l) && l !== first),
+    const verified = a.ticked.length
+      ? ` and ${words(a.ticked)} ${a.ticked.length === 1 ? "is" : "are"} verified`
+      : "";
+    const summary = inReview
+      ? `${finished.id} is in review; it waits for a manual check.`
+      : next
+        ? `${finished.id} is done${verified}; ${next.id} is next.`
+        : others.length === 0
+          ? `Every task is done${verified}; the criteria wait for checks.`
+          : `${finished.id} is done${verified}; no task is ready yet.`;
+    // Gaps first (a manual check), then the next task, then the older next steps.
+    const asks = [
+      ...(inReview ? [`Ask @${owner} to verify [[#${finished.id}]] by hand.`] : []),
+      ...a.manual.map((id) => `Ask @${owner} to verify ${id} by hand.`),
     ];
+    const first =
+      asks[0] ??
+      (next
+        ? `Start [[#${next.id}]] ${next.title}.`
+        : others.length === 0
+          ? "Check the criteria and close the issue."
+          : "Wait for the tasks in flight.");
+    const mentions = (line: string) => line.includes(`[[#${finished.id}]]`);
+    // A task in review is not done: it waits for a person, so it sits under Blocked.
+    const pointer = `[[#${finished.id}]] ${finished.title}.${a.entry ? ` See [[#${a.entry}]].` : ""}`;
+    const done = inReview
+      ? []
+      : [
+          pointer,
+          ...a.ticked.map(
+            (id) => `[[#${id}]] has evidence at ${a.sha}.${a.entry ? ` See [[#${a.entry}]].` : ""}`,
+          ),
+        ];
+    const blocked = inReview
+      ? [`[[#${finished.id}]] waits for @${owner} to check it by hand. See [[#${a.entry}]].`]
+      : [];
+    const nextSteps = [
+      ...new Set([first, ...asks, ...(current?.next_steps ?? []).filter((l) => !mentions(l))]),
+    ].slice(0, 4);
+    const requests = inReview ? [checkRequest(src, finished)] : [];
 
     if (!current || !exists)
       return createState({
         summary,
         updated_at: store.stamp(),
         updated_by: CODEX_HANDLE,
-        needs_you: [],
-        done: [done],
-        next_steps: nextSteps.slice(0, 4),
+        needs_you: requests,
+        done: done.length ? done : undefined,
+        blocked: blocked.length ? blocked : undefined,
+        next_steps: nextSteps,
       });
-    return overwriteState(text(w, file), {
+    const patch: Partial<StateSrc> = {
       summary,
       updated_at: store.stamp(),
       updated_by: CODEX_HANDLE,
-      done: [...(current.done ?? []), done],
+      done: [...(current.done ?? []), ...done],
       in_flight: (current.in_flight ?? []).filter((l) => !mentions(l)),
-      next_steps: nextSteps.slice(0, 4),
+      blocked: [...(current.blocked ?? []).filter((l) => !mentions(l)), ...blocked],
+      next_steps: nextSteps,
+    };
+    return overwriteState(text(w, file), {
+      ...patch,
+      needs_you: [...current.needs_you, ...requests],
     });
   }
 
-  /** done: the steps are ticked, the task is `done`, the state moves on, a commit lands. */
+  /**
+   * done (steps 10 and 11): the state moves on, the issue gives up its claim and, when every task
+   * is done, goes to `review`. Under another author's live coordinator lease neither file is
+   * rewritten; the change entry already says so.
+   */
   function finish(a: Active) {
     const { issue, task = "" } = a.run;
     const src = store.issueSrc(issue);
     const live = taskOf(a);
     if (!src || !live) throw new Error(`${task} is gone.`);
-    const planFile = store.filePath(issue, "plan.md");
+    if (!a.coordinator) return;
+    const goalFile = store.filePath(issue, "goal.md");
     const stateFile = store.filePath(issue, "current_state.md");
     store.mutate(CODEX_HANDLE, issue, (w) => {
-      let plan = text(w, planFile);
-      const touched: string[] = [task];
-      (live.steps ?? []).forEach((step, i) => {
-        if (step.done) return;
-        plan = toggleStep(plan, task, i + 1, true);
-        touched.push(`${task}.${i + 1}`);
-      });
-      w.write(planFile, dropLease(setTaskStatus(plan, task, "done"), task));
-      const touches: Touch[] = [{ file: planFile, anchors: touched }];
+      const touches: Touch[] = [];
+      let goal = text(w, goalFile);
+      if (src.goal.claimed_by === CODEX_HANDLE) goal = releaseIssue(goal);
+      const closed = tasksOf(src).every((t) => t.status === "done" || t.status === "cancelled");
+      if (closed && src.goal.status === "in_progress") goal = setIssueStatus(goal, "review");
+      w.write(goalFile, goal);
+      touches.push({ file: goalFile, anchors: ["status", "lease_until"] });
+
       const state = stateAfter(a, src, live, w);
       if (state !== undefined) {
         w.write(stateFile, state);
@@ -462,28 +851,11 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         log: [{ issue_id: issue, kind: "state", author: CODEX_HANDLE, title }],
       };
     });
-    store.updateDelivery(issue, (d) => ({
-      ...d,
-      commits: [
-        {
-          sha: a.sha,
-          subject: live.title,
-          author: CODEX_HANDLE,
-          at: toTsSec(store.now()),
-          branch: a.branch,
-          task,
-          files_changed: Math.max(1, live.owns?.length ?? 0),
-          trailer: `Issue: ${issue}`,
-        },
-        ...d.commits,
-      ],
-    }));
-    a.run.commit = a.sha;
   }
 
   const STEPS: Record<CodexPhaseId, (a: Active) => void> = {
     claim,
-    log,
+    log: work,
     verify,
     done: finish,
   };
@@ -496,18 +868,38 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     active.delete(a.run.id);
   };
 
-  /** Put the task back in the queue when this run still holds it. */
+  /**
+   * Give back what the run holds: the task goes back in the queue when it is still in flight, and
+   * the issue loses the claim and the status the claim moved (doing-next-step, step 11).
+   */
   function release(a: Active) {
     const { issue, task = "" } = a.run;
+    const src = store.issueSrc(issue);
     const live = taskOf(a);
-    if (!live || live.claimed_by !== CODEX_HANDLE) return;
-    if (live.status !== "in_progress" && live.status !== "review") return;
-    const file = store.filePath(issue, "plan.md");
+    const holdsTask =
+      !a.after &&
+      live?.claimed_by === CODEX_HANDLE &&
+      (live.status === "in_progress" || live.status === "review");
+    const holdsIssue = a.coordinator && src?.goal.claimed_by === CODEX_HANDLE;
+    if (!holdsTask && !holdsIssue) return;
     store.mutate(CODEX_HANDLE, issue, (w) => {
-      w.write(file, moveTask(text(w, file), task, "todo"));
+      const touches: Touch[] = [];
+      if (holdsTask) {
+        const file = store.filePath(issue, "plan.md");
+        w.write(file, moveTask(text(w, file), task, "todo"));
+        touches.push({ file, anchors: [task] });
+      }
+      if (holdsIssue && src) {
+        const file = store.filePath(issue, "goal.md");
+        let goal = releaseIssue(text(w, file));
+        if (a.statusBefore && !a.after && src.goal.status === "in_progress")
+          goal = setIssueStatus(goal, a.statusBefore);
+        w.write(file, goal);
+        touches.push({ file, anchors: ["status", "lease_until"] });
+      }
       const title = `Released ${task}`;
       return {
-        touches: [{ file, anchors: [task] }],
+        touches,
         activity: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
         log: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
       };
@@ -571,8 +963,11 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const task = a.run.task;
     if (!live) return `${task} is gone.`;
     const mine = live.claimed_by === CODEX_HANDLE;
-    const open = live.status === "in_progress" || live.status === "review";
-    return mine && open ? undefined : `${task} changed while Codex worked on it.`;
+    // Before the work phase the task is in flight; after it, it stays as the run left it.
+    const expected = a.after
+      ? live.status === a.after
+      : live.status === "in_progress" || live.status === "review";
+    return mine && expected ? undefined : `${task} changed while Codex worked on it.`;
   }
 
   function step(a: Active, id: CodexPhaseId) {
@@ -601,8 +996,8 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
 
   // ---- the public side
 
-  const labels = (task: TaskId): Record<CodexPhaseId, string> => ({
-    claim: `Claim ${task}`,
+  const labels = (task: TaskId, plans: boolean): Record<CodexPhaseId, string> => ({
+    claim: plans ? `Plan the issue, claim ${task}` : `Claim ${task}`,
     log: "Log the change",
     verify: "Run CI",
     done: `Finish ${task}`,
@@ -640,20 +1035,28 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     }
 
     const src = store.issueSrc(issue);
-    const task = src && tasksOf(src).find((t) => t.id === picked.task);
-    if (!task) reject(`Task ${picked.task} does not exist.`);
-    const names = labels(picked.task);
+    // The title of a task that does not exist yet comes from the criterion it will satisfy.
+    const title = picked.plan
+      ? taskTitle(src?.criteria[0]?.text ?? "", 1)
+      : src && tasksOf(src).find((t) => t.id === picked.task)?.title;
+    if (!src || title === undefined) reject(`Task ${picked.task} does not exist.`);
+    const names = labels(picked.task, picked.plan);
     const run: CodexRun = {
       ...base,
       task: picked.task,
-      task_title: task?.title,
+      task_title: title,
       phase: "claim",
       phases: PHASES.map<CodexPhase>((p) => ({ id: p, label: names[p], state: "pending" })),
+      ...(picked.plan ? { plans: true } : {}),
     };
     const a: Active = {
       run,
       sha: commitSha(`${issue}:${picked.task}:${id}`),
-      branch: `${issue}/${slugify(task?.title ?? picked.task)}`,
+      branch: `${issue}/${slugify(title ?? picked.task)}`,
+      plans: picked.plan,
+      coordinator: true,
+      ticked: [],
+      manual: [],
       timers: [],
     };
     runs = [run, ...runs].slice(0, KEEP_RUNS);
@@ -685,7 +1088,13 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       // The task is gone or changed: the run still ends.
     }
     stopPipeline(a);
-    finishRun(a, "cancelled", "Stopped before the task finished.");
+    finishRun(
+      a,
+      "cancelled",
+      a.after
+        ? "Stopped after the task was done; the state was not updated."
+        : "Stopped before the task finished.",
+    );
     return copy(a.run);
   }
 

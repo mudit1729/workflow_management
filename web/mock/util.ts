@@ -38,6 +38,48 @@ export function hashColor(text: string): number {
   return (Number.parseInt(rev(text), 16) % 8) + 1;
 }
 
+/**
+ * The color of a new group: the lowest of 1 to 8 that no sibling uses (`adding-work`, step 5).
+ * When the siblings use all eight, the least used one that comes first.
+ */
+export function lowestUnusedColor(siblings: readonly { color?: number }[]): number {
+  const used = new Map<number, number>();
+  for (const { color } of siblings)
+    if (color !== undefined && color >= 1 && color <= 8)
+      used.set(color, (used.get(color) ?? 0) + 1);
+  let best = 1;
+  for (let c = 1; c <= 8; c++) {
+    if ((used.get(c) ?? 0) < (used.get(best) ?? 0)) best = c;
+    if (!used.has(c)) return c;
+  }
+  return best;
+}
+
+/** Words a folder name can do without ("connect the single sign-on to the flow"). */
+const STOP_WORDS = new Set("a an and at by for from in into of on or the to with".split(" "));
+
+/** The longest folder name `folderName` makes, so a name stays readable. */
+const MAX_SLUG = 48;
+
+/**
+ * A folder name for a title (format.md section 1): at most 5 words, small words left out,
+ * lowercase kebab-case. A hyphenated word ("sign-on") is one word. `fallback` for an empty title.
+ */
+export function folderName(title: string, fallback = ""): string {
+  const words = title
+    .trim()
+    .split(/\s+/)
+    .filter((w) => slugify(w) !== "");
+  const kept = words.filter((w) => !STOP_WORDS.has(w.toLowerCase().replace(/[^a-z]/g, "")));
+  const slugs: string[] = [];
+  for (const w of (kept.length > 0 ? kept : words).slice(0, 5)) {
+    const next = [...slugs, slugify(w)].join("-");
+    if (next.length > MAX_SLUG && slugs.length > 0) break;
+    slugs.push(slugify(w));
+  }
+  return slugs.join("-").slice(0, MAX_SLUG).replace(/-+$/, "") || fallback;
+}
+
 export function slugify(title: string): string {
   return title
     .toLowerCase()

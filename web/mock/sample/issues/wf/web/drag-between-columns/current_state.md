@@ -14,5 +14,5 @@ session: cc-61f3
 - [[#T-3]] The rollback test waits for a review by @shruti.
 
 ## Next steps
-1. Run `wf verify wf-z9mw2 SC-4` after the review.
+1. Verify [[#SC-4]] with its command after the review.
 2. Move the issue to done.

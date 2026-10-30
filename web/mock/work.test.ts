@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ServerEvent } from "@/gen/types";
 import { ApiError } from "@/lib/api/error";
+import { suggestGroupNames } from "@/lib/api/names";
 import { SPLIT_STEPS, type SplitInput, type WorkIssueInput } from "@/lib/api/types";
 import { classifyEars } from "./ears";
 import { SAMPLE } from "./sample-files";
@@ -92,7 +93,7 @@ describe("split", () => {
   );
 
   test.each(Object.entries(INPUTS))(
-    "%s: a criterion is an EARS sentence, a why is one imperative line",
+    "%s: a criterion is an EARS sentence, a why is one line that gives the reason",
     (_, input) => {
       for (const p of proposeIssues(input)) {
         // `verify: manual` is what `create_work` writes under the criterion, so it is measurable.
@@ -124,11 +125,11 @@ describe("split", () => {
     expect(first("bug")).toBe("Reproduce the tab-title count problem");
     expect(first("research")).toBe("Frame the question for queue engines");
     expect(first("migration")).toBe("Inventory what the migration touches");
-    expect(first("service")).toBe("Define the SSO login contract");
-    expect(first("generic")).toBe("Define the weekly reports behavior");
+    expect(first("service")).toBe("Define the contract for SSO login");
+    expect(first("generic")).toBe("Define the behavior of weekly reports");
     // The title decides: an outcome that mentions an error does not make a screen a bug.
     const screen = proposeIssues({ ...INPUTS.ui, outcome: "Show an error when a filter fails." });
-    expect(screen[0].title).toBe("Sketch the states of the board filters");
+    expect(screen[0].title).toBe("Sketch the states for board filters");
   });
 
   test("the subject loses its opening verb, its comma and its length", () => {
@@ -160,10 +161,8 @@ describe("split", () => {
 
   test("an error in a title that builds something is not a bug group", () => {
     const first = (title: string) => proposeIssues({ title, outcome: "", context: [] })[0].title;
-    expect(first("Add error handling to the API")).toBe(
-      "Define the error handling to the API contract",
-    );
-    expect(first("Improve error messages")).toBe("Define the error messages behavior");
+    expect(first("Add error handling to the API")).toBe("Define the contract for error handling");
+    expect(first("Improve error messages")).toBe("Define the behavior of error messages");
     // A title that names the defect stays a bug group.
     expect(first("Fix error banner flicker")).toBe("Reproduce the error banner flicker problem");
     expect(first("Login error on Safari")).toBe("Reproduce the login error on Safari problem");
@@ -187,7 +186,7 @@ describe("split", () => {
       (id) => names[id],
     );
     expect(out[0].why).toBe(
-      "Read Rescan subtrees on every event and workspace, then settle the behavior.",
+      "The behavior rests on Rescan subtrees on every event and workspace, so settle it first.",
     );
     expect(out[1].why).toBe(proposeIssues(INPUTS.generic)[1].why);
   });
@@ -197,7 +196,7 @@ describe("split", () => {
     const out = proposeIssues({ ...INPUTS.generic, context: ["lib-long"] }, (id) =>
       id === "lib-long" ? long : undefined,
     );
-    expect(out[0].why).toBe(`Read ${long}, then settle the behavior.`);
+    expect(out[0].why).toBe(`The behavior rests on ${long}, so settle it first.`);
     expect(out[0].why).not.toContain("…");
   });
 
@@ -208,7 +207,101 @@ describe("split", () => {
       c: "Review promoted items before agents read them",
     };
     const out = proposeIssues({ ...INPUTS.generic, context: ["a", "b", "c"] }, (id) => titles[id]);
-    expect(out[0].why).toBe(`Read ${titles.a} and 2 more, then settle the behavior.`);
+    expect(out[0].why).toBe(`The behavior rests on ${titles.a} and 2 more, so settle it first.`);
+  });
+
+  // Ordinary sentences, the way a person types an outcome. The group name is a noun phrase and
+  // every title reads as a sentence around it (the Name step and the split share names.ts).
+  const SENTENCES: { outcome: string; name: string; titles: string[] }[] = [
+    {
+      outcome: "Make the board feel instant when a lot of agents write at once",
+      name: "Board speed",
+      titles: [
+        "Sketch the states for board speed",
+        "Build the view for board speed",
+        "Wire board speed to the data layer",
+        "Reach board speed by keyboard",
+      ],
+    },
+    {
+      outcome:
+        "Agents can resume any issue from the handoff bundle without reading the whole folder",
+      name: "Handoff bundle",
+      titles: [
+        "Define the behavior of handoff bundle",
+        "Build the core of handoff bundle",
+        "Connect handoff bundle to the existing flow",
+        "Handle failures in handoff bundle",
+      ],
+    },
+    {
+      outcome: "Teams install the workflow skills with one command",
+      name: "Workflow skills",
+      titles: [
+        "Define the behavior of workflow skills",
+        "Build the core of workflow skills",
+        "Connect workflow skills to the existing flow",
+        "Handle failures in workflow skills",
+      ],
+    },
+    {
+      outcome: "Let people sign in with single sign-on",
+      name: "Single sign-on",
+      titles: [
+        "Define the behavior of single sign-on",
+        "Build the core of single sign-on",
+        "Connect single sign-on to the existing flow",
+        "Handle failures in single sign-on",
+      ],
+    },
+    {
+      outcome: "Make onboarding smoother for a new teammate",
+      name: "Onboarding smoothness",
+      titles: [
+        "Sketch the states for onboarding smoothness",
+        "Build the view for onboarding smoothness",
+        "Wire onboarding smoothness to the data layer",
+        "Reach onboarding smoothness by keyboard",
+      ],
+    },
+  ];
+
+  test.each(SENTENCES)(
+    "the outcome %# gives a noun name and titles that read as sentences",
+    (c) => {
+      const names = suggestGroupNames(c.outcome);
+      expect(names).toHaveLength(3);
+      expect(names[0]).toBe(c.name);
+      const titles = proposeIssues({
+        title: names[0],
+        outcome: c.outcome,
+        size: "m",
+        context: [],
+      }).map((p) => p.title);
+      expect(titles).toEqual(c.titles);
+      for (const t of titles) expect(t, t).not.toMatch(/\b(feel|can|install|write|resume)\b/);
+    },
+  );
+
+  test("a name cut from the sentence is read again for its noun", () => {
+    // The names the Name step used to offer for the first sentence were fragments.
+    const outcome = SENTENCES[0].outcome;
+    for (const title of ["Board feel instant", "Instant"]) {
+      const titles = proposeIssues({ title, outcome, size: "m", context: [] }).map((p) => p.title);
+      expect(titles, title).toEqual(SENTENCES[0].titles);
+    }
+    // A name the person wrote keeps their words.
+    expect(
+      proposeIssues({ title: "Faster boards", outcome, size: "m", context: [] })[1].title,
+    ).toBe("Build the view for faster boards");
+  });
+
+  test("a why is a reason, not an instruction", () => {
+    for (const input of Object.values(INPUTS))
+      for (const p of proposeIssues(input))
+        expect(p.why, p.why).not.toMatch(
+          /^(Settle|Deliver|Wire|Show|Cover|Pin|Name|Change|Keep|Confirm|Put|Write|Read|Run|Follow|List|Prove|Delete|Draw|Refuse|Agree|Fix|Test|Compare|Give|Ship|Watch|Finish)\b/,
+        );
   });
 
   test("an urgent outcome raises the first two priorities", () => {
@@ -263,7 +356,9 @@ describe("split takes about 2 s and reports three steps", () => {
     });
     await vi.advanceTimersByTimeAsync(3 * SPLIT_STEP_MS);
     const { issues } = await done;
-    expect(issues[0].why).toMatch(/^Read .+ and workflow\.toml, then settle the behavior\.$/);
+    expect(issues[0].why).toMatch(
+      /^The behavior rests on .+ and workflow\.toml, so settle it first\.$/,
+    );
     expect(issues[0].why).not.toContain("lib-4tz7c");
   });
 });
@@ -313,6 +408,19 @@ async function findings(paths: string[]) {
 describe("create_work", () => {
   const proposals = proposeIssues(INPUTS.generic);
 
+  test("the issue ids ascend in the order the issues were given, so the board keeps the proposed order", async () => {
+    const parent = await groupId("web");
+    const res = (await server.ops({
+      op: "create_work",
+      base_rev: await rev(),
+      group: { parent, title: "Order check" },
+      issues: proposals.map((p) => issueFrom(p)),
+    })) as { work?: { issueIds: string[] } };
+    const ids = res.work?.issueIds ?? [];
+    expect(ids).toHaveLength(proposals.length);
+    expect([...ids].sort()).toEqual(ids);
+  });
+
   test("a new group and its issues are written as files in one commit with one activity entry", async () => {
     const parent = await groupId("web");
     const events: ServerEvent[] = [];
@@ -339,19 +447,17 @@ describe("create_work", () => {
     });
     expect(activity[0].issue_id).toBe(res.work?.issueIds[0]);
 
-    // `_group.md` and one `goal.md` per issue, nothing else.
+    // `_group.md` and one `goal.md` per issue, nothing else. A folder name has at most 5 words
+    // and leaves the small ones out (format.md section 1).
     const added = server.store.paths().filter((p) => !before.has(p));
     const groupDir = "issues/wf/web/single-sign-on";
     expect(added.sort()).toEqual(
       [
         `${groupDir}/_group.md`,
-        ...proposals.map(
-          (p) =>
-            `${groupDir}/${p.title
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "")}/goal.md`,
-        ),
+        `${groupDir}/define-behavior-weekly-reports/goal.md`,
+        `${groupDir}/build-core-weekly-reports/goal.md`,
+        `${groupDir}/connect-weekly-reports-existing-flow/goal.md`,
+        `${groupDir}/handle-failures-weekly-reports/goal.md`,
       ].sort(),
     );
     expect(server.store.text(`${groupDir}/_group.md`)).toMatch(
@@ -417,7 +523,7 @@ describe("create_work", () => {
     })) as { work?: { groupId: string; issueIds: string[] } };
     expect(res.work?.groupId).toBe(group);
     const added = server.store.paths().filter((p) => !before.has(p));
-    expect(added).toEqual(["issues/wf/core/define-the-weekly-reports-behavior/goal.md"]);
+    expect(added).toEqual(["issues/wf/core/define-behavior-weekly-reports/goal.md"]);
     const goal = server.store.text(added[0]) ?? "";
     expect(goal).toContain("Teammates sign in with company SSO.");
     expect(goal).toContain("## Links\n\n- Glossary: lease — A time-limited claim");
@@ -439,10 +545,10 @@ describe("create_work", () => {
     expect(res.work?.issueIds).toHaveLength(2);
     expect(new Set(res.work?.issueIds).size).toBe(2);
     expect(
-      server.store.text("issues/wf/core/define-the-weekly-reports-behavior/goal.md"),
+      server.store.text("issues/wf/core/define-behavior-weekly-reports/goal.md"),
     ).toBeDefined();
     expect(
-      server.store.text("issues/wf/core/define-the-weekly-reports-behavior-2/goal.md"),
+      server.store.text("issues/wf/core/define-behavior-weekly-reports-2/goal.md"),
     ).toBeDefined();
   });
 
@@ -563,6 +669,102 @@ describe("create_work", () => {
       /does not exist/,
     );
     expect(server.store.paths().join("\n")).toBe(paths);
+  });
+
+  test("the outcome becomes the goal line of _group.md, in one line", async () => {
+    const parent = await groupId("web");
+    await server.ops({
+      op: "create_work",
+      base_rev: await rev(),
+      group: {
+        parent,
+        title: "Single sign-on",
+        goal: "  Let people sign in\nwith single sign-on.  ",
+      },
+      issues: [issueFrom(proposals[0])],
+    });
+    const file = server.store.text("issues/wf/web/single-sign-on/_group.md") ?? "";
+    expect(file).toMatch(
+      /\ntitle: Single sign-on\ngoal: Let people sign in with single sign-on\.\nowner: "@shruti"\n/,
+    );
+    // The board reads it: the group node carries the goal for its tooltip.
+    const find = (n: Awaited<ReturnType<typeof server.snapshot>>["groups"]): string | undefined =>
+      n.title === "Single sign-on" ? n.goal : n.children.map(find).find(Boolean);
+    expect(find((await server.snapshot()).groups)).toBe("Let people sign in with single sign-on.");
+    expect(await findings(["issues/wf/web/single-sign-on/_group.md"])).toEqual([]);
+
+    // No goal given: no `goal:` line.
+    await server.ops({
+      op: "create_work",
+      base_rev: await rev(),
+      group: { parent, title: "Quiet group", goal: "   " },
+      issues: [issueFrom(proposals[0])],
+    });
+    expect(server.store.text("issues/wf/web/quiet-group/_group.md")).not.toContain("goal:");
+  });
+
+  test("a new group takes the lowest color no sibling uses", async () => {
+    const colors = async (parent: string) => {
+      const snap = await server.snapshot();
+      const find = (n: typeof snap.groups): typeof snap.groups | undefined =>
+        n.id === parent ? n : n.children.map(find).find(Boolean);
+      return (find(snap.groups)?.children ?? []).map((c) => c.color);
+    };
+    const parent = await groupId("wf");
+    const made: number[] = [];
+    for (const title of ["Alpha group", "Beta group", "Gamma group"]) {
+      const used = await colors(parent);
+      await server.ops({
+        op: "create_work",
+        base_rev: await rev(),
+        group: { parent, title },
+        issues: [issueFrom(proposals[0])],
+      });
+      const next = (await colors(parent)).filter(
+        (c, i, all) => all.indexOf(c) === i && !used.includes(c),
+      );
+      const lowest = [1, 2, 3, 4, 5, 6, 7, 8].find((c) => !used.includes(c));
+      // Every sibling keeps its color, and the new one is the lowest free number.
+      expect(next).toEqual(lowest === undefined ? [] : [lowest]);
+      made.push(lowest ?? 0);
+    }
+    expect(new Set(made).size).toBe(3);
+    // new_group follows the same rule.
+    const used = await colors(parent);
+    await server.ops({
+      op: "new_group",
+      base_rev: await rev(),
+      parent,
+      title: "Delta",
+      slug: "delta",
+    });
+    const after = await colors(parent);
+    expect(used).not.toContain(after.at(-1));
+  });
+
+  test("a folder name has at most 5 words and leaves the small ones out", async () => {
+    const group = await groupId("core");
+    const res = (await server.ops({
+      op: "create_work",
+      base_rev: await rev(),
+      group,
+      issues: [
+        issueFrom(proposals[0], { title: "Connect the single sign-on to the existing flow" }),
+        issueFrom(proposals[1], {
+          title: "Handle every one of the odd failures in the login flow today",
+        }),
+        issueFrom(proposals[2], { title: "The to of" }),
+      ],
+    })) as { work?: { issueIds: string[] } };
+    const dirs = (await server.snapshot()).issues
+      .filter((i) => res.work?.issueIds.includes(i.id))
+      .map((i) => i.path.split("/").at(-1));
+    expect(dirs).toEqual([
+      "connect-single-sign-on-existing-flow",
+      "handle-every-one-odd-failures",
+      "the-to-of",
+    ]);
+    for (const d of dirs) expect((d ?? "").split("-").length).toBeLessThanOrEqual(6);
   });
 
   test("a simulated conflict names the group file", async () => {

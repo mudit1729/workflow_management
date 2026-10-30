@@ -283,6 +283,28 @@ export function toggleCriterion(text: string, id: string, checked: boolean): str
   return d.toString();
 }
 
+const CRITERION_ORDER = ["verify", "evidence", "verified_by", "scenario"] as const;
+
+/**
+ * Tick a criterion with proof (`doing-next-step`, step 7): the checkbox, then `evidence:` and
+ * `verified_by:` under it, in the key order of the contract. Ticking without proof is
+ * `toggleCriterion`.
+ */
+export function verifyCriterion(
+  text: string,
+  id: string,
+  proof: { evidence: string; by: string },
+): string {
+  const d = new Doc(toggleCriterion(text, id, true));
+  const n = /^SC-(\d+)$/.exec(id)?.[1];
+  const line = n ? find(d, CRITERION_LINE(n)) : -1;
+  if (line < 0) throw new EditError(`Criterion ${id} does not exist.`);
+  const b = metaBlock(d, line, true);
+  putMeta(d, b, "evidence", proof.evidence.replace(/\s*\n\s*/g, " ").trim(), CRITERION_ORDER);
+  putMeta(d, b, "verified_by", at(proof.by), CRITERION_ORDER);
+  return d.toString();
+}
+
 // ---------------------------------------------------------------- plan.md
 
 const TASK_ORDER = [
@@ -591,13 +613,13 @@ const TEMPLATES: Record<IssueTemplate, { context: string; criteria: string[]; la
   {
     default: {
       context:
-        "Why this matters, who feels the problem today and what changes when it is done.\n\nRun the `write-goal` skill to fill in this section.",
+        "Why this matters, who feels the problem today and what changes when it is done.\n\nWrite this section before the issue is planned.",
       criteria: ["When the work is complete, the system shall behave as the context describes."],
       labels: [],
     },
     bug: {
       context:
-        "What happens today, what should happen and the steps to reproduce it.\n\nRun the `write-goal` skill to fill in this section.",
+        "What happens today, what should happen and the steps to reproduce it.\n\nWrite this section before the issue is planned.",
       criteria: [
         "When the failing step runs, the system shall behave as the context describes.",
         "A regression test shall cover the failing step.",
@@ -606,7 +628,7 @@ const TEMPLATES: Record<IssueTemplate, { context: string; criteria: string[]; la
     },
     research: {
       context:
-        "The question to answer, why it matters and who decides.\n\nRun the `write-goal` skill to fill in this section.",
+        "The question to answer, why it matters and who decides.\n\nWrite this section before the issue is planned.",
       criteria: [
         "The research note shall answer the question with a recommendation and its trade-offs.",
       ],
@@ -614,7 +636,7 @@ const TEMPLATES: Record<IssueTemplate, { context: string; criteria: string[]; la
     },
     doc: {
       context:
-        "Who reads this document and what they can do once they have read it.\n\nRun the `write-goal` skill to fill in this section.",
+        "Who reads this document and what they can do once they have read it.\n\nWrite this section before the issue is planned.",
       criteria: ["The document shall explain each step a new reader needs to finish the task."],
       labels: ["docs"],
     },

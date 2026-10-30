@@ -22,6 +22,7 @@ import {
   newGroupFile,
   newIssueGoal,
   promote as promoteTexts,
+  setDecisionStatus as setDecisionStatusText,
   setIssueStatus,
   toggleCriterion as toggleCriterionText,
   toggleStep as toggleStepText,
@@ -29,7 +30,7 @@ import {
 import type { IssueSrc, LibrarySrc, RequestSrc, TaskSrc, WorldSrc } from "./source";
 import type { Applied, Draft, Mutation, Store } from "./store";
 import { dateIn, toTs } from "./time";
-import { hashColor, slugify } from "./util";
+import { folderName, lowestUnusedColor, slugify } from "./util";
 import { workIssueGoal } from "./work";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -113,6 +114,8 @@ export function applyOp(store: Store, op: WfOp): OpResult {
       return toggleStep(store, op);
     case "answer_request":
       return answerRequest(store, op);
+    case "set_decision_status":
+      return setDecisionStatus(store, op);
     case "promote":
       return promote(store, op);
     case "new_issue":
@@ -292,6 +295,34 @@ function answerRequest(store: Store, op: Of<"answer_request">): OpResult {
       touches: [{ file, anchors: [op.id] }],
       activity: [{ issue_id: op.issue, kind: "request", author: by, title: `Answered ${op.id}` }],
       log: [{ issue_id: op.issue, kind: "state", author: by, title: `Answered ${op.id}` }],
+    };
+  });
+  return result(store, m, op.issue);
+}
+
+// ---------------------------------------------------------------- decisions
+
+/** Accept or reject a proposed decision: the one line of an entry that `logging-work` lets change. */
+function setDecisionStatus(store: Store, op: Of<"set_decision_status">): OpResult {
+  const live = need(
+    issueIn(store.world, op.issue).decisions.find((d) => d.id === op.id),
+    `Decision ${op.id}`,
+  );
+  const file = store.filePath(op.issue, "decisions.md");
+  store.guard(file, op.id, op.base_rev, () => ({ status: live.status }));
+  if (live.status === op.status) return result(store, store.unchanged(file, op.issue), op.issue);
+
+  const by = store.me;
+  const title = `${op.status === "accepted" ? "Accepted" : op.status === "rejected" ? "Rejected" : "Reopened"} ${op.id}`;
+  const m = store.mutate(by, op.issue, (w) => {
+    w.write(
+      file,
+      edit(() => setDecisionStatusText(read(w, file), op.id, op.status)),
+    );
+    return {
+      touches: [{ file, anchors: [op.id] }],
+      activity: [{ issue_id: op.issue, kind: "state", author: by, title }],
+      log: [{ issue_id: op.issue, kind: "state", author: by, title }],
     };
   });
   return result(store, m, op.issue);
@@ -681,7 +712,7 @@ function newGroup(store: Store, op: Of<"new_group">): OpResult {
         slug: op.slug,
         parent: parent.id,
         owner: by,
-        color: op.color ?? hashColor(id),
+        color: op.color ?? lowestUnusedColor(siblings),
         order: siblings.reduce((max, g) => Math.max(max, g.order), 0) + 1,
         implicit: false,
       }),
@@ -700,10 +731,11 @@ function newGroup(store: Store, op: Of<"new_group">): OpResult {
 const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
 const SIZES = ["xs", "s", "m", "l"];
 
-/** A folder name for a title: the slug, never ending in a hyphen, `fallback` when empty. */
-function slugFor(title: string, fallback: string): string {
-  return slugify(title).replace(/-+$/, "") || fallback;
-}
+/** A goal as one line: the whitespace collapsed, `undefined` when empty. */
+const oneLine = (text: string | undefined) => text?.replace(/\s+/g, " ").trim() || undefined;
+
+/** A folder name for a title: at most 5 words, small words left out, `fallback` when empty. */
+const slugFor = folderName;
 
 /** The first of `base`, `base-2`, `base-3`… that `taken` does not hold. */
 function freeSlug(base: string, taken: Set<string>): string {
@@ -785,16 +817,21 @@ function createWork(store: Store, op: CreateWorkOp): WorkOpResult {
         slug,
         parent: parent.id,
         owner: by,
-        color: hashColor(groupId),
+        color: lowestUnusedColor(siblings),
         order: siblings.reduce((max, g) => Math.max(max, g.order), 0) + 1,
         implicit: false,
+        goal: oneLine(op.group.goal),
       }),
     };
   }
 
   const created = store.stamp();
-  const files = op.issues.map((issue) => {
-    const id = freshId(`${store.world.config.id_prefix}-`);
+  // The ids ascend in the order the issues were given: the issues share one timestamp, so the board
+  // breaks the tie by id, and the work order Codex proposed stays the order on the board.
+  const prefix = `${store.world.config.id_prefix}-`;
+  const ids = op.issues.map(() => freshId(prefix)).sort();
+  const files = op.issues.map((issue, i) => {
+    const id = ids[i];
     const slug = freeSlug(slugFor(issue.title, "issue"), taken);
     taken.add(slug);
     const dir = `${groupDir}/${slug}`;
@@ -803,7 +840,7 @@ function createWork(store: Store, op: CreateWorkOp): WorkOpResult {
       id,
       title: issue.title.trim(),
       path: `${dir}/goal.md`,
-      text: workIssueGoal({ id, owner: by, created, dir, issue: clean }),
+      text: workIssueGoal({ id, owner: by, created, dir, issue: clean, place: groupTitle }),
     };
   });
   const issueIds = files.map((f) => f.id);

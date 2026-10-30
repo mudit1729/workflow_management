@@ -554,6 +554,8 @@ export type Op =
       checked: boolean;
     }
   | { op: "answer_request"; base_rev: Rev; issue: IssueId; id: RequestId; answer: string }
+  /** Accept or reject a proposed decision: the `status:` line of its entry in `decisions.md`. */
+  | { op: "set_decision_status"; base_rev: Rev; issue: IssueId; id: EntryId; status: DecisionStatus }
   | {
       op: "promote";
       base_rev: Rev;

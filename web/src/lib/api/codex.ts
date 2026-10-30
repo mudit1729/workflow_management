@@ -1,6 +1,7 @@
 // Codex from the browser (plan D3, D4).
-//  - `codexCommand` is the text "Open in Codex" copies: one prompt that names the issue and the
-//    folder. The installed wf skills do the rest, so the command never goes stale.
+//  - `codexCommand` is the text "Open in Codex" copies: the resume prompt of format.md section 15,
+//    which names the issue and the folder. The installed wf skills do the rest, so the command
+//    never goes stale.
 //  - `useStartCodexRun` starts and stops a background "Do next step" run; `useCodexRuns` lists the
 //    runs and follows them live. A run's edits reach the board through the ordinary live stream,
 //    because each phase is a real markdown edit; the run itself and its git and CI data have
@@ -8,29 +9,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import type { IssueId, IssueSummary } from "@/gen/types";
+import type { IssueId } from "@/gen/types";
 import { api } from "./client";
 import { firstProblem, isUnprocessableError, NotFoundError } from "./error";
 import { qk } from "./keys";
 import { isRealApi, loadMock } from "./mock-bridge";
 import { queryClient } from "./query-client";
+import { type ResumeIssue, resumeCommand, resumePrompt } from "./resume";
 import type { CodexRun, CodexRunKind } from "./types";
 
 // ---------------------------------------------------------------- the command
 
-/** Wrap text in single quotes for a POSIX shell; a single quote inside becomes `'\''`. */
-const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
-
 /**
- * What "Open in Codex" copies. `prompt` names the issue and its folder (relative to the
- * workspace) and points at the skill; `command` is `codex` with the prompt as one quoted argument.
+ * What "Open in Codex" copies. `prompt` is the resume prompt of `format.md` section 15 (it names the
+ * issue and its folder and points at the skill); `command` is `codex` with the prompt as one quoted
+ * argument, the interactive form. `codex exec '<prompt>'` is the headless form.
  */
-export function codexCommand(issue: Pick<IssueSummary, "id" | "title" | "path">): {
+export function codexCommand(issue: ResumeIssue): {
   prompt: string;
   command: string;
 } {
-  const prompt = `Work on ${issue.id} "${issue.title}" in ${issue.path}. Read current_state.md first, then use the wf skills (doing-next-step).`;
-  return { prompt, command: `codex ${shellQuote(prompt)}` };
+  return { prompt: resumePrompt(issue), command: resumeCommand(issue) };
 }
 
 // ---------------------------------------------------------------- the live bridge
@@ -139,9 +138,10 @@ function explain(err: unknown) {
 export interface CodexRunControls {
   /**
    * Start a run. Resolves to the run: check `status`, because a run with nothing to do ends at once
-   * as `nothing_ready` with a `reason` to show ("No ready task. Plan the issue first."). Resolves
-   * to `undefined` after a toast when the request itself failed, for example when the issue
-   * already has an active run.
+   * as `nothing_ready` with a `reason` to show ("The issue is done.", "Waiting on wf-r6jk2: it is
+   * not done."). An issue without a plan is not refused: the run plans it first. Resolves to
+   * `undefined` after a toast when the request itself failed, for example when the issue already
+   * has an active run.
    */
   start: (issueId: IssueId, kind: CodexRunKind) => Promise<CodexRun | undefined>;
   /** Stop an active run and release its claim. Resolves to the cancelled run. */

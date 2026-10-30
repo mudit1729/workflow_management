@@ -717,7 +717,7 @@ function buildIssue(
       "goal.md",
       statusAt,
       `The issue is done, but ${open} of ${progress.criteria.total} criteria ${open === 1 ? "is" : "are"} not verified.`,
-      "Reopen the issue, or add evidence with `wf check --evidence`.",
+      "Reopen the issue, or add an `evidence:` line under each open criterion.",
     );
   }
   if (signals.in_progress_no_plan)
@@ -727,7 +727,7 @@ function buildIssue(
       "goal.md",
       statusAt,
       "The issue is in progress without plan.md.",
-      "Run the `write-plan` skill.",
+      "Press Do next step, or run the `planning-issues` skill.",
     );
   if (signals.stale)
     diag(
@@ -736,7 +736,7 @@ function buildIssue(
       "goal.md",
       statusAt,
       `No change entry or state update for ${ago(now - tsMs(freshest))} (limit ${cfg.staleness.issue_hours} h).`,
-      "Append a change, or run the `write-current-state` skill.",
+      "Append a change with the `logging-work` skill, or run the `handing-off` skill.",
     );
   if (active && coordState === "expired" && g.lease_until)
     diag(
@@ -745,7 +745,7 @@ function buildIssue(
       "goal.md",
       where("goal.md", "lease_until", "\nlease_until:"),
       `The coordinator lease of @${g.claimed_by} expired ${ago(now - tsMs(g.lease_until))} ago.`,
-      "Renew it with `wf heartbeat`, or take it with `wf claim --steal`.",
+      "Renew it with the `doing-next-step` skill, or take it over there and say so in the change entry.",
     );
   for (const t of expiredTasks) {
     // The `lease_until:` line inside the task's block.
@@ -760,7 +760,7 @@ function buildIssue(
       "plan.md",
       posOf(text, "- lease_until:", from),
       `The lease of @${t.claimed_by} on ${t.id} expired ${ago(now - tsMs(t.lease_until ?? ""))} ago.`,
-      `Renew it with \`wf heartbeat ${id}#${t.id}\`, or take it with \`wf claim ${id}#${t.id} --steal\`.`,
+      `Renew it with the \`doing-next-step\` skill, or take ${t.id} over there and say so in the change entry.`,
     );
   }
   if (signals.state_behind_changes && src.state) {
@@ -771,7 +771,7 @@ function buildIssue(
       "current_state.md",
       where("current_state.md", "updated_at", "updated_at:"),
       `current_state.md is older than the latest ${plural(behind, "change")}.`,
-      "Run the `write-current-state` skill.",
+      "Run the `handing-off` skill.",
     );
   }
   if (state) {
@@ -803,7 +803,7 @@ function buildIssue(
         "goal.md",
         at,
         `${c.id} is ticked without evidence.`,
-        `Run \`wf verify ${id} ${c.id}\`, or add \`evidence:\`.`,
+        `Verify ${c.id} with the \`doing-next-step\` skill, or add \`evidence:\`.`,
       );
     if (src.plan && c.satisfied_by.length === 0)
       diag("Q006", "info", "goal.md", at, `${c.id} is not covered by any task's \`satisfies\`.`);
@@ -1089,7 +1089,7 @@ function buildLibrary(
         col: p.col,
         span: p.span,
         message: `Review is overdue since ${l.review_after}.`,
-        fix: `Run the \`curate-library\` skill, then \`wf library approve ${l.id}\` or \`retire\`.`,
+        fix: `Review ${l.id}, then press Approve in the Library or retire it.`,
       });
       diagnostics.sort((x, y) => x.line - y.line);
     }

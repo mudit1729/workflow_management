@@ -17,17 +17,24 @@ import {
   type WorkOpResult,
 } from "./types";
 
+/**
+ * Say why a request failed, once. The toast has a stable id per kind of request, so two failures
+ * of the same request (React StrictMode runs an effect twice in development) replace each other
+ * instead of stacking.
+ */
 function explain(err: unknown, what: string) {
+  const id = `work:${what}`;
   if (isConflictError(err)) {
-    toast.warning(`${err.body.reason}. Try again.`, { description: "Nothing was added." });
+    toast.warning(`${err.body.reason}. Try again.`, { id, description: "Nothing was added." });
     return;
   }
   if (isUnprocessableError(err)) {
     const { message, hint } = firstProblem(err);
-    toast.error(message, hint ? { description: hint } : undefined);
+    toast.error(message, { id, ...(hint ? { description: hint } : {}) });
     return;
   }
   toast.error(`Could not ${what}`, {
+    id,
     description: err instanceof Error ? err.message : "Try again in a moment.",
   });
 }
@@ -61,7 +68,9 @@ export function useSplitWork(): SplitWork {
     try {
       return await api.splitWork(input, show);
     } catch (err) {
-      explain(err, "split the group");
+      // A later call took over (the person went back, or StrictMode ran the effect twice): its
+      // answer is the one to report.
+      if (latest.current === call) explain(err, "draft with Codex");
       return undefined;
     } finally {
       show(-1);

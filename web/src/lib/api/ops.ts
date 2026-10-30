@@ -11,6 +11,7 @@ import type {
   ContextLink,
   Criterion,
   CriterionId,
+  DecisionStatus,
   EntryId,
   GroupId,
   IssueDetail,
@@ -408,6 +409,34 @@ export function useAnswerRequest() {
       });
     },
     [],
+  );
+}
+
+// ---------------------------------------------------------------- decisions
+
+/** Accept or reject a proposed decision (the `status:` line of its entry in `decisions.md`). */
+export function useSetDecisionStatus(issueId: IssueId) {
+  return useCallback(
+    (args: { id: EntryId; status: DecisionStatus; base_rev?: string }) =>
+      run({
+        op: {
+          op: "set_decision_status",
+          base_rev: args.base_rev ?? cachedFileRev(issueId, "decisions.md"),
+          issue: issueId,
+          id: args.id,
+          status: args.status,
+        },
+        issue: issueId,
+        optimistic: () =>
+          patchDetail(issueId, (d) => ({
+            ...d,
+            decisions: d.decisions.map((x) =>
+              x.id === args.id ? { ...x, status: args.status } : x,
+            ),
+          })),
+        rebase: async (o) => ({ ...o, base_rev: await freshRev(issueId, "decisions.md") }),
+      }),
+    [issueId],
   );
 }
 

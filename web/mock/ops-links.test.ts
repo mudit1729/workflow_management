@@ -106,7 +106,7 @@ describe("new_issue with context", () => {
   test("without context or links it is the template", async () => {
     const { dir } = await newIssue();
     const text = store.text(`${dir}/goal.md`) ?? "";
-    expect(text).toContain("Run the `write-goal` skill");
+    expect(text).toContain("Write this section before the issue is planned");
     expect(text).not.toContain("## Links");
   });
 

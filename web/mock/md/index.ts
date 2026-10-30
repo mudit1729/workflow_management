@@ -315,7 +315,7 @@ function load(input: Record<string, string>, opts: LoadOptions): LoadedWorkspace
         "error",
         0,
         "This folder has both `goal.md` and `_group.md`. wf treats it as an issue and ignores the group file.",
-        "Move the group file out, or split the issue into a group (`wf split-issue`).",
+        "Move the group file out, or move the issue's files into a folder of their own.",
       );
     }
     issueDirOf[id] = dir;

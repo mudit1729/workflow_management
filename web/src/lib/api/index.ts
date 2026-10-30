@@ -24,6 +24,7 @@ export {
 } from "./files";
 export { type MoveGateState, requestMove, useMoveGate, useMoveIssue } from "./gate";
 export { qk } from "./keys";
+export { MAX_NAME, suggestGroupNames, type Topic, topicOf } from "./names";
 export {
   useAddLinks,
   useAnswerRequest,
@@ -31,6 +32,7 @@ export {
   useNewGroup,
   useNewIssue,
   usePromote,
+  useSetDecisionStatus,
   useSetTaskStatus,
   useToggleCriterion,
   useToggleStep,
@@ -44,6 +46,7 @@ export {
   useSnapshot,
 } from "./queries";
 export { queryClient } from "./query-client";
+export { type ResumeIssue, resumeCommand, resumePrompt, shellQuote } from "./resume";
 export {
   type Inbox,
   issuesInGroup,
@@ -59,10 +62,14 @@ export {
 } from "./selectors";
 export {
   allSkills,
+  CODEX_AGENTS_COMMAND,
   CODEX_INSTALL_COMMAND,
   claudeInstallCommands,
+  claudeInstallGroups,
+  claudeTeamCommands,
   codexInstallCommands,
   type InstallCommand,
+  type InstallGroup,
   SKILLS_REPO,
   type Skill,
   type SkillPlugin,

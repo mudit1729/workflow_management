@@ -390,7 +390,7 @@ describe("wf-3k9x2, the dogfood issue", () => {
     });
     expect(st?.failed_attempts.length).toBe(1);
     expect(st?.next_steps).toHaveLength(3);
-    expect(st?.next_steps[2]).toBe("Run `wf verify wf-3k9x2 SC-3`.");
+    expect(st?.next_steps[2]).toBe("Verify [[#SC-3]] with its command.");
     expect(st?.in_flight_tasks).toContain("T-3");
   });
 

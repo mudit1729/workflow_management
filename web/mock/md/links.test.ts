@@ -73,14 +73,14 @@ describe("new issue with context and links", () => {
     expect(goal).toContain(
       "## Context\n\nAgents lose their claim.\n\nThey need to know why.\n\n## Success criteria",
     );
-    expect(goal).not.toContain("write-goal");
+    expect(goal).not.toContain("Write this section");
     expect(goal).not.toContain("## Links");
   });
 
   test("an empty context keeps the template text", () => {
     const plain = newIssueGoal({ ...base, dir });
     expect(newIssueGoal({ ...base, context: "  \n ", dir })).toBe(plain);
-    expect(plain).toContain("Run the `write-goal` skill");
+    expect(plain).toContain("Write this section before the issue is planned");
   });
 
   test("links become the bullets of ## Links, after the criteria, in the order given", () => {

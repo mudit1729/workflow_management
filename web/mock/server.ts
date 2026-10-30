@@ -236,7 +236,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     context: async (id, budget) => {
       await delay();
       if (!store.derived.details.has(id)) throw new NotFoundError(`Issue ${id}`);
-      return contextBundle(store.derived, id, budget, store.now());
+      return contextBundle(store.derived, id, budget, store.now(), store.delivery(id));
     },
     ops: async (op) => {
       await delay();
@@ -332,6 +332,8 @@ function targetFile(store: Store, op: WfOp): string {
     case "set_task_status":
     case "toggle_step":
       return store.filePath(op.issue, "plan.md");
+    case "set_decision_status":
+      return store.filePath(op.issue, "decisions.md");
     case "answer_request":
     case "promote":
       return store.filePath(op.issue, "current_state.md");

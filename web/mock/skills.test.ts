@@ -2,8 +2,11 @@
 import { describe, expect, test } from "vitest";
 import {
   allSkills,
+  CODEX_AGENTS_COMMAND,
   CODEX_INSTALL_COMMAND,
   claudeInstallCommands,
+  claudeInstallGroups,
+  claudeTeamCommands,
   codexInstallCommands,
   SKILLS_REPO,
 } from "@/lib/api/skills";
@@ -149,8 +152,43 @@ describe("install commands", () => {
     expect(commands[1]).toBe("/plugin install workflow@workflow-marketplace");
   });
 
-  test("Codex: the install script", () => {
-    expect(codexInstallCommands().map((c) => c.command)).toEqual([CODEX_INSTALL_COMMAND]);
+  test("Claude, for the whole team: the same two steps with --scope project, which commits them", () => {
+    const commands = claudeTeamCommands(skillsCatalog()).map((c) => c.command);
+    expect(commands).toEqual([
+      `claude plugin marketplace add ${SKILLS_REPO} --scope project`,
+      "claude plugin install workflow@workflow-marketplace --scope project",
+    ]);
+  });
+
+  test("Claude: two groups, just me and everyone on the repository, and none without a marketplace", () => {
+    const groups = claudeInstallGroups(skillsCatalog());
+    expect(groups.map((g) => g.title)).toEqual(["Just me", "Everyone on the repository"]);
+    expect(groups[1].hint).toContain(".claude/settings.json");
+    expect(claudeInstallGroups({ plugins: [] })).toEqual([]);
+    expect(claudeTeamCommands(undefined)).toEqual([]);
+  });
+
+  test("Codex: copy the skills, then tell Codex to use them", () => {
+    expect(codexInstallCommands().map((c) => c.command)).toEqual([
+      CODEX_INSTALL_COMMAND,
+      CODEX_AGENTS_COMMAND,
+    ]);
     expect(CODEX_INSTALL_COMMAND).toBe("scripts/install-skills.sh --codex");
+    expect(CODEX_AGENTS_COMMAND).toBe("scripts/install-skills.sh --print-agents-md >> AGENTS.md");
+  });
+
+  test("every script the panel names is a flag install-skills.sh has", () => {
+    const script = Object.values(
+      import.meta.glob("../../scripts/install-skills.sh", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>,
+    )[0];
+    expect(script).toContain("install-skills");
+    for (const c of codexInstallCommands()) {
+      const flag = /--[a-z-]+/.exec(c.command)?.[0] ?? "";
+      expect(script).toContain(`${flag})`);
+    }
   });
 });

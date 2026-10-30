@@ -7,11 +7,17 @@ import { useQuery } from "@tanstack/react-query";
 import { qk } from "./keys";
 import { isRealApi, loadMock } from "./mock-bridge";
 
-/** The repository `/plugin marketplace add` points at. One place to change it. */
+/**
+ * The team's repository: what `/plugin marketplace add` points at, and what the install panel
+ * names. One place to change it.
+ */
 export const SKILLS_REPO = "mudit1729/workflow_management";
 
 /** Copies the skills for Codex into `.agents/skills`. */
 export const CODEX_INSTALL_COMMAND = "scripts/install-skills.sh --codex";
+
+/** Prints the AGENTS.md snippet that tells Codex to use the skills; appended to the file. */
+export const CODEX_AGENTS_COMMAND = "scripts/install-skills.sh --print-agents-md >> AGENTS.md";
 
 export interface Skill {
   /** The skill's name: its folder, and the `name` of its frontmatter. */
@@ -74,7 +80,16 @@ export interface InstallCommand {
   command: string;
 }
 
-/** What to run in Claude Code: add the marketplace once, then install each plugin. */
+/** The commands for one audience of one tool, in the order to run them. */
+export interface InstallGroup {
+  /** Who it is for: "Just me", "Everyone on the repository". */
+  title: string;
+  /** Where to run it, and what to commit. */
+  hint: string;
+  commands: InstallCommand[];
+}
+
+/** What to run in Claude Code, for one person: add the marketplace once, then install each plugin. */
 export function claudeInstallCommands(catalog: SkillsCatalog | undefined): InstallCommand[] {
   const marketplace = catalog?.marketplace?.name;
   if (!catalog || !marketplace) return [];
@@ -87,9 +102,49 @@ export function claudeInstallCommands(catalog: SkillsCatalog | undefined): Insta
   ];
 }
 
-/** What to run for Codex, from a clone of the repository. */
+/**
+ * The same two steps for everyone who opens the repository: `--scope project` writes them to
+ * `.claude/settings.json`, which is committed, so Claude Code offers the plugin to each person.
+ */
+export function claudeTeamCommands(catalog: SkillsCatalog | undefined): InstallCommand[] {
+  const marketplace = catalog?.marketplace?.name;
+  if (!catalog || !marketplace) return [];
+  return [
+    {
+      label: "Add the marketplace to the repository",
+      command: `claude plugin marketplace add ${SKILLS_REPO} --scope project`,
+    },
+    ...catalog.plugins.map((p) => ({
+      label: `Install ${p.name} for the repository`,
+      command: `claude plugin install ${p.name}@${marketplace} --scope project`,
+    })),
+  ];
+}
+
+/** Claude Code's two audiences: you, then the whole team. Empty without a marketplace. */
+export function claudeInstallGroups(catalog: SkillsCatalog | undefined): InstallGroup[] {
+  const mine = claudeInstallCommands(catalog);
+  const team = claudeTeamCommands(catalog);
+  if (mine.length === 0) return [];
+  return [
+    { title: "Just me", hint: "Run in a Claude Code session", commands: mine },
+    {
+      title: "Everyone on the repository",
+      hint: "Run in a shell, then commit .claude/settings.json",
+      commands: team,
+    },
+  ];
+}
+
+/**
+ * What to run for Codex, from a clone of the repository: copy the skills, then tell Codex to use
+ * them. Commit `.agents/skills` and `AGENTS.md` and the whole team has both.
+ */
 export function codexInstallCommands(): InstallCommand[] {
-  return [{ label: "Copy the skills to .agents/skills", command: CODEX_INSTALL_COMMAND }];
+  return [
+    { label: "Copy the skills to .agents/skills", command: CODEX_INSTALL_COMMAND },
+    { label: "Tell Codex to use them", command: CODEX_AGENTS_COMMAND },
+  ];
 }
 
 async function fetchSkills(): Promise<SkillsCatalog> {

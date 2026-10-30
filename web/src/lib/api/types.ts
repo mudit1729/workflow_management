@@ -36,8 +36,12 @@ export interface WorkIssueInput {
   links?: ContextLink[];
 }
 
-/** An existing group by id, or a new group to create under `parent`. */
-export type WorkGroup = GroupId | { parent: GroupId; title: string };
+/**
+ * An existing group by id, or a new group to create under `parent`. `goal` is the outcome in one
+ * line: it becomes `goal:` in `_group.md` (`adding-work`, step 5), and the board shows it as the
+ * tooltip of the group.
+ */
+export type WorkGroup = GroupId | { parent: GroupId; title: string; goal?: string };
 
 /**
  * Add work: the group (new or existing) and 1 to 8 issues, written as `_group.md` and `goal.md`
@@ -214,6 +218,10 @@ export interface CodexRun {
   commit?: string;
   /** The CI run the run added. */
   pipeline?: string;
+  /** The issue had no plan: the run wrote `plan.md` first, then claimed the first task. */
+  plans?: boolean;
+  /** The task ended in `review`, not `done`: a person checks it by hand (its verify is `manual`). */
+  review?: boolean;
 }
 
 /** An op without its tag and revision: what a write hook takes. */
