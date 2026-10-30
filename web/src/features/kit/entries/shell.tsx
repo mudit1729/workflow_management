@@ -3,17 +3,9 @@ import { toast } from "sonner";
 import { GroupTree } from "@/app/GroupTree";
 import { getMockControls } from "@/app/mock-controls";
 import { LiveBadge, NavRail } from "@/app/NavRail";
-import { NewGroupDialog } from "@/app/NewGroupDialog";
-import { NewIssueDialog } from "@/app/NewIssueDialog";
 import { NotifyBanner } from "@/app/NotifyBanner";
 import { RouteError, RouteNotFound, RoutePending } from "@/app/RouteStates";
-import {
-  openCommandPalette,
-  openNewGroup,
-  openNewIssue,
-  openShortcuts,
-  useShell,
-} from "@/app/shell-store";
+import { openCommandPalette, openShortcuts, useShell } from "@/app/shell-store";
 import { Button, Chip } from "@/components/ui";
 import type { ActivityEvent } from "@/gen/types";
 import { requestMove, useSnapshot } from "@/lib/api";
@@ -110,43 +102,6 @@ function ShortcutsDialogBody() {
         Open the shortcuts
       </Button>
     </V>
-  );
-}
-
-// The shell no longer mounts the two old dialogs (Add work replaced them), so the entries do.
-function NewIssueDialogBody() {
-  return (
-    <>
-      <NewIssueDialog />
-      <V label="open" note="Creating one writes to the mock data and opens the new issue.">
-        <Button variant="secondary" size="sm" onClick={() => openNewIssue()}>
-          New issue
-        </Button>
-      </V>
-      <V label="open with a group preselected">
-        <Button variant="secondary" size="sm" onClick={() => openNewIssue("g-web01")}>
-          New issue in wf / web
-        </Button>
-      </V>
-    </>
-  );
-}
-
-function NewGroupDialogBody() {
-  return (
-    <>
-      <NewGroupDialog />
-      <V label="open">
-        <Button variant="secondary" size="sm" onClick={() => openNewGroup()}>
-          New group
-        </Button>
-      </V>
-      <V label="open with a parent preselected">
-        <Button variant="secondary" size="sm" onClick={() => openNewGroup("g-wf001")}>
-          New group in wf
-        </Button>
-      </V>
-    </>
   );
 }
 
@@ -417,20 +372,6 @@ export const shellEntries: KitEntry[] = [
     "src/app/NotifyBanner.tsx",
     "Blocking requests are worth a browser notification, but only if you ask for them; the banner asks once, in the nav, and then gets out of the way.",
     NotifyBannerBody,
-  ),
-  entry(
-    "Shell",
-    "NewIssueDialog",
-    `${SRC}/NewIssueDialog.tsx`,
-    "Creating an issue needs only a group, a slug and a title; the dialog asks for exactly that and writes the folder for you.",
-    NewIssueDialogBody,
-  ),
-  entry(
-    "Shell",
-    "NewGroupDialog",
-    `${SRC}/NewGroupDialog.tsx`,
-    "A group is a folder with a _group.md; the dialog makes that choice (parent, name, color) explicit so roll-ups stay meaningful.",
-    NewGroupDialogBody,
   ),
   entry(
     "Shell",

@@ -10,6 +10,7 @@ import {
   CollapsibleTrigger,
   Tooltip,
 } from "@/components/ui";
+import { useRunActive } from "@/features/codex";
 import type { CurrentState, IssueDetail, Task } from "@/gen/types";
 import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -169,7 +170,9 @@ function StateMeta({ state, detail }: StateSnapshotProps) {
   const stale = age > limitHours;
   const updatedMs = parseTs(state.updated_at);
   const newer = detail.changes.filter((c) => parseTs(c.ts) > updatedMs).length;
-  const behind = detail.summary.signals.state_behind_changes || newer > 0;
+  // Codex writes the snapshot last: while it works, "behind" is expected and stays quiet (Q005).
+  const running = useRunActive(detail.summary.id);
+  const behind = !running && (detail.summary.signals.state_behind_changes || newer > 0);
   const tinted = stale || behind;
   const overLimit = state.word_count > WORD_LIMIT;
 

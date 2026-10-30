@@ -52,7 +52,7 @@ export interface TemplateOpts {
 /**
  * A new issue's goal.md. `context` replaces the placeholder under `## Context`; `links` become
  * the bullets of `## Links`, a file link relative to `dir` (the folder of the new issue). The
- * text is the one the New issue dialog's `new_issue` op writes.
+ * text is the one the `new_issue` op writes.
  */
 export function goalTemplate(o: {
   id: string;

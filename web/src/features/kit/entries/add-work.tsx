@@ -1,5 +1,4 @@
-// Kit entries for + Add work (plan D6) and the board's Needs you filter (D5). Not registered
-// here: the integrator adds `addWorkEntries` to `registry.ts`.
+// Kit entries for + Add work (plan D6) and the board's Needs you filter (D5).
 //
 // The dialog is shown as its inside, screen by screen, in a framed surface (the real dialog is
 // modal and would cover the page). Every frame runs the real flow on the sample workspace the kit
@@ -18,7 +17,7 @@ import {
   splitSignature,
 } from "@/features/add-work/flow";
 import { ChoiceList, KeyCap, ProgressDots, ToggleChip } from "@/features/add-work/parts";
-import { SplitCard, SplitProgress } from "@/features/add-work/steps/SplitStep";
+import { SplitCard, SplitProgress, StartIn } from "@/features/add-work/steps/SplitStep";
 import { useAddWorkFlow } from "@/features/add-work/useAddWorkFlow";
 import { BoardPage } from "@/features/board";
 import { NeedsYouToggle } from "@/features/board/BoardToolbar";
@@ -175,16 +174,17 @@ function AddWorkDialogBody() {
       />
       <Screen
         label="8 · Codex splits it (runs the mock split, about 2 s)"
-        note="Three steps, then the proposals. Keep or drop each, change size and priority."
+        note="Three steps, then the proposals."
         step="split"
         draft={groupDraft}
         height={640}
       />
       <Screen
-        label="9 · Review: where the issues start"
-        step="review"
+        label="8 · The proposals: keep or drop, where they start, add"
+        note="The last screen of a group. Backlog or Planned (keys 1 and 2), and the button adds the kept issues: no separate review."
+        step="split"
         draft={withRows}
-        height={640}
+        height={720}
       />
       <Screen
         label="Issue path · the title (verb first)"
@@ -326,12 +326,11 @@ function ProgressDotsBody() {
     "priority",
     "context",
     "split",
-    "review",
   ];
   return (
     <>
-      {[0, 3, 8].map((i) => (
-        <V key={i} label={`question ${i + 1} of 9`} note="Dots behind you go back." width={260}>
+      {[0, 3, 7].map((i) => (
+        <V key={i} label={`question ${i + 1} of 8`} note="Dots behind you go back." width={260}>
           <div className="flex justify-center py-1">
             <ProgressDots steps={steps} index={i} onGo={() => {}} />
           </div>
@@ -375,6 +374,19 @@ function SplitCardBody() {
       />
       <Card label="dropped" row={{ ...base[1], keep: false }} />
     </>
+  );
+}
+
+function StartInBody() {
+  const [value, setValue] = useState<"backlog" | "planned">("backlog");
+  return (
+    <V
+      label="Backlog (default) or Planned"
+      note="Keys 1 and 2 on the split screen. Planned issues are ready to start."
+      width={520}
+    >
+      <StartIn value={value} onChange={setValue} />
+    </V>
   );
 }
 
@@ -477,6 +489,13 @@ export const addWorkEntries: KitEntry[] = [
     `${SRC}/steps/SplitStep.tsx`,
     "One issue Codex proposed: keep or drop it, change its size and priority, edit the title only when asked.",
     SplitCardBody,
+  ),
+  entry(
+    "Shell",
+    "SplitStart",
+    `${SRC}/steps/SplitStep.tsx`,
+    "Where the issues start is two buttons on the same screen as the proposals, so adding a group needs no review screen.",
+    StartInBody,
   ),
   entry(
     "Shell",

@@ -72,7 +72,7 @@ function IssueViewBody() {
     <>
       <V
         label="drawer · wf-3k9x2"
-        note="Tabs Now · Goal · Plan · Log · Files; keys 1–5 switch."
+        note="Tabs Now · Goal · Criteria · Plan · Log · Git · CI · Files; keys 1–8 switch."
         width={560}
         height={680}
       >

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { GroupNode } from "@/gen/types";
 import {
   canContinue,
+  clicksToAdd,
   createArgs,
   emptyDraft,
+  GROUP_CLICK_BUDGET,
+  GROUP_TYPED_LINES,
   isDirty,
   keptRows,
   MAX_WHERE_BUTTONS,
@@ -12,6 +15,7 @@ import {
   pickWhere,
   priorityFor,
   rowsFrom,
+  STATUSES,
   slugOf,
   splitSignature,
   startsWithVerb,
@@ -19,6 +23,7 @@ import {
   subjectPhrase,
   suggestNames,
   titleProblem,
+  typedLines,
   whereOptions,
 } from "./flow";
 
@@ -51,7 +56,7 @@ const TREE = group("g-root", "Issues", [
 ]);
 
 describe("stepsFor", () => {
-  it("asks the group path in the planned order", () => {
+  it("asks the group path in the planned order and ends with the split", () => {
     expect(stepsFor("group", false)).toEqual([
       "kind",
       "where",
@@ -61,8 +66,12 @@ describe("stepsFor", () => {
       "priority",
       "context",
       "split",
-      "review",
     ]);
+  });
+
+  it("has no separate review on the group path: the split screen adds the issues", () => {
+    expect(stepsFor("group", false)).not.toContain("review");
+    expect(stepsFor("group", false).at(-1)).toBe("split");
   });
 
   it("asks the issue path without a split and with its own status question", () => {
@@ -87,6 +96,31 @@ describe("stepsFor", () => {
 
   it("starts on the group path until the person picks one", () => {
     expect(stepsFor(undefined, false)).toEqual(stepsFor("group", false));
+  });
+});
+
+describe("the click budget", () => {
+  it("adds a group in at most 8 clicks, the one that opens the dialog included, and one typed line", () => {
+    expect(GROUP_CLICK_BUDGET).toBe(8);
+    expect(GROUP_TYPED_LINES).toBe(1);
+    expect(clicksToAdd("group", false)).toBeLessThanOrEqual(GROUP_CLICK_BUDGET);
+    expect(typedLines("group", false)).toBe(GROUP_TYPED_LINES);
+  });
+
+  it("counts: open, what, where, name, size, priority, context, add", () => {
+    // 8 screens, the outcome is typed (Enter), so 7 button screens and the click that opens it.
+    expect(stepsFor("group", false)).toHaveLength(8);
+    expect(clicksToAdd("group", false)).toBe(8);
+  });
+
+  it("is shorter when the caller already knows the kind", () => {
+    expect(clicksToAdd("group", true)).toBe(7);
+    expect(clicksToAdd("issue", true)).toBe(7);
+  });
+
+  it("keeps a lone issue within the budget too, with one typed line", () => {
+    expect(clicksToAdd("issue", false)).toBeLessThanOrEqual(GROUP_CLICK_BUDGET);
+    expect(typedLines("issue", false)).toBe(1);
   });
 });
 
@@ -224,6 +258,25 @@ describe("validation", () => {
     expect(canContinue({ ...draft, name: "Sign-in" }, "name", wf)).toBe(true);
     expect(canContinue(draft, "split", wf)).toBe(false);
   });
+
+  it("lets the split screen add once an issue is kept, and not before", () => {
+    const wf = TREE.children[0];
+    const base = emptyDraft({ kind: "group", where: "g-wf", name: "Sign-in" });
+    const rows = rowsFrom(
+      [
+        { key: "p1", title: "Define it", size: "s", priority: "high", criterion: "A", why: "W" },
+        { key: "p2", title: "Build it", size: "m", priority: "high", criterion: "B", why: "W" },
+      ],
+      "high",
+    );
+    const withRows = (keep: boolean[]) => ({
+      ...base,
+      split: { signature: "x", rows: rows.map((r, i) => ({ ...r, keep: keep[i] })) },
+    });
+    expect(canContinue(withRows([true, true]), "split", wf)).toBe(true);
+    expect(canContinue(withRows([false, true]), "split", wf)).toBe(true);
+    expect(canContinue(withRows([false, false]), "split", wf)).toBe(false);
+  });
 });
 
 describe("the split", () => {
@@ -269,6 +322,35 @@ describe("the split", () => {
     expect(splitSignature({ ...base, size: "l" })).not.toBe(same);
     // The draft's priority and status do not change what Codex reads.
     expect(splitSignature({ ...base, priority: "low", status: "planned" })).toBe(same);
+  });
+});
+
+describe("where the issues start", () => {
+  const rows = rowsFrom(
+    [{ key: "p1", title: "Define it", size: "s", priority: "high", criterion: "A", why: "W" }],
+    "high",
+  );
+  const draft = (status?: "backlog" | "planned") =>
+    emptyDraft({
+      kind: "group",
+      where: "g-wf",
+      outcome: "Let people sign in",
+      name: "Sign-in",
+      split: { signature: "x", rows },
+      ...(status ? { status } : {}),
+    });
+
+  it("offers Backlog first and Planned second, the keys 1 and 2", () => {
+    expect(STATUSES.map((s) => s.value)).toEqual(["backlog", "planned"]);
+  });
+
+  it("starts in Backlog unless the person picks Planned on the split screen", () => {
+    expect(createArgs(draft())?.issues[0].status).toBe("backlog");
+    expect(createArgs(draft("planned"))?.issues[0].status).toBe("planned");
+  });
+
+  it("does not change what Codex read, so the proposals stay when the choice changes", () => {
+    expect(splitSignature(draft("planned"))).toBe(splitSignature(draft("backlog")));
   });
 });
 
@@ -365,8 +447,18 @@ describe("createArgs", () => {
 describe("isDirty", () => {
   it("is clean until the person typed or picked something", () => {
     expect(isDirty(emptyDraft({ kind: "group", where: "g-wf" }))).toBe(false);
+    // Backlog or Planned alone is not worth a "discard?": the proposals above it are.
+    expect(isDirty(emptyDraft({ kind: "group", where: "g-wf", status: "planned" }))).toBe(false);
     expect(isDirty(emptyDraft({ kind: "group", outcome: "Let people sign in" }))).toBe(true);
     expect(isDirty(emptyDraft({ kind: "issue", title: "Fix it" }))).toBe(true);
     expect(isDirty(emptyDraft({ kind: "group", name: "Sign-in" }))).toBe(true);
+  });
+
+  it("asks before discarding Codex's proposals, even with nothing else typed", () => {
+    const rows = rowsFrom(
+      [{ key: "p1", title: "Define it", size: "s", priority: "high", criterion: "A", why: "W" }],
+      "high",
+    );
+    expect(isDirty(emptyDraft({ kind: "group", split: { signature: "x", rows } }))).toBe(true);
   });
 });

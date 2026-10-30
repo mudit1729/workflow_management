@@ -1,4 +1,4 @@
-// "Add context" in the Links section of the Goal tab: the same search the New issue dialog uses.
+// "Add context" in the Links section of the Goal tab: the same search the New file dialog uses.
 // A pick is written at once (`add_links`), and the row shows up in Links when the board re-reads
 // goal.md. The list stays open so several items can go in one visit.
 import { Plus } from "lucide-react";

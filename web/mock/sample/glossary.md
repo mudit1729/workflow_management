@@ -8,7 +8,7 @@
 
 ## workflow
 - kind: noun
-- means: Work in motion: the Board and the Inbox of a workspace, read from its issues and their `current_state.md` files.
+- means: Work in motion: the Board of a workspace, with a Needs you filter for the requests that wait on you, read from its issues and their `current_state.md` files.
 - avoid: tracker
 - see: issue, workdatabase
 

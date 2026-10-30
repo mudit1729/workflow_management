@@ -1,5 +1,4 @@
-// Kit entries of Workdatabase · Skills (src/features/skills). Not registered in registry.ts yet:
-// integration adds `skillsEntries` there.
+// Kit entries of Workdatabase · Skills (src/features/skills).
 import { InstallPanel, SkillItemView, SkillRow, SkillSource, SkillsView } from "@/features/skills";
 import { allSkills, type Skill, type SkillsCatalog, useSkills } from "@/lib/api";
 import { entry, type KitEntry, Loading, Sandbox, V } from "../kit-ui";

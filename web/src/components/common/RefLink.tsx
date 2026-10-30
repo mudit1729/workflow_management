@@ -24,7 +24,7 @@ const SUB_KIND: { prefix: RegExp; noun: string; tab: IssueTab; log?: LogView }[]
   { prefix: /^C-/, noun: "Change", tab: "log", log: "changes" },
   { prefix: /^D-/, noun: "Decision", tab: "log", log: "decisions" },
   { prefix: /^L-/, noun: "Learning", tab: "log", log: "learnings" },
-  { prefix: /^SC-/, noun: "Criterion", tab: "goal" },
+  { prefix: /^SC-/, noun: "Criterion", tab: "criteria" },
   { prefix: /^T-/, noun: "Task", tab: "plan" },
   { prefix: /^Q-/, noun: "Request", tab: "now" },
 ];

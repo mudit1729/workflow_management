@@ -4,15 +4,15 @@
 import { Outlet } from "@tanstack/react-router";
 import { Menu, Search } from "lucide-react";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { MoveGateDialog } from "@/components/common";
 import { Button } from "@/components/ui";
-import { AddWorkDialog } from "@/features/add-work";
 import { useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLayoutMode } from "@/lib/hooks";
 import { CommandPalette } from "./CommandPalette";
 import { DevPanel } from "./DevPanel";
+import { AddWorkDialog, preloadViews, whenIdle } from "./lazy-views";
 import { LiveBadge, NavRail } from "./NavRail";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { useShell } from "./shell-store";
@@ -21,6 +21,29 @@ import { useNavRail } from "./useNavRail";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 const OPEN_NAV_ID = "wf-open-nav";
+
+/**
+ * Add work mounts when it is first wanted, or when the browser is idle after the first paint
+ * (which also fetches the other lazy views), so its chunk is there by the first click.
+ */
+function AddWorkHost() {
+  const open = useShell((s) => s.addWorkOpen);
+  const [idle, setIdle] = useState(false);
+  useEffect(
+    () =>
+      whenIdle(() => {
+        preloadViews();
+        setIdle(true);
+      }),
+    [],
+  );
+  if (!open && !idle) return null;
+  return (
+    <Suspense fallback={null}>
+      <AddWorkDialog />
+    </Suspense>
+  );
+}
 
 export function AppShell() {
   const mobile = useLayoutMode() === "mobile";
@@ -63,7 +86,7 @@ export function AppShell() {
 
       <CommandPalette />
       <ShortcutsDialog />
-      <AddWorkDialog />
+      <AddWorkHost />
       <MoveGateDialog />
       <GlobalShortcuts />
     </div>

@@ -12,12 +12,14 @@ import type { AddWorkFlow } from "./useAddWorkFlow";
 function primaryLabel(flow: AddWorkFlow): string {
   const { draft, step } = flow;
   if (step === "context") return draft.context.length > 0 ? "Continue" : "Skip";
-  if (step === "split") return "Review";
+  if (step === "split") {
+    // The last screen of a group: the button writes it. It names what will be written.
+    const kept = keptRows(draft).length;
+    return kept > 0 ? `Add ${countIssues(kept)} to ${draft.name.trim()}` : "Add issues";
+  }
   if (step === "review") {
     const place = flow.places.find((p) => p.id === draft.where);
-    if (draft.kind === "issue")
-      return `Add issue to ${place && !place.root ? place.node.title : "the top level"}`;
-    return `Add ${countIssues(keptRows(draft).length)} to ${draft.name.trim()}`;
+    return `Add issue to ${place && !place.root ? place.node.title : "the top level"}`;
   }
   return "Continue";
 }

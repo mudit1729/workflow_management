@@ -192,6 +192,25 @@ describe("split", () => {
     expect(out[1].why).toBe(proposeIssues(INPUTS.generic)[1].why);
   });
 
+  test("a long library title is named in full, never cut mid-word", () => {
+    const long = "Rescan subtrees instead of trusting notify on macOS";
+    const out = proposeIssues({ ...INPUTS.generic, context: ["lib-long"] }, (id) =>
+      id === "lib-long" ? long : undefined,
+    );
+    expect(out[0].why).toBe(`Read ${long}, then settle the behavior.`);
+    expect(out[0].why).not.toContain("…");
+  });
+
+  test("two long titles name the first and count the rest", () => {
+    const titles: Record<string, string> = {
+      a: "Rescan subtrees instead of trusting notify on macOS",
+      b: "Splice one value span; never re-serialize frontmatter",
+      c: "Review promoted items before agents read them",
+    };
+    const out = proposeIssues({ ...INPUTS.generic, context: ["a", "b", "c"] }, (id) => titles[id]);
+    expect(out[0].why).toBe(`Read ${titles.a} and 2 more, then settle the behavior.`);
+  });
+
   test("an urgent outcome raises the first two priorities", () => {
     const out = proposeIssues({ ...INPUTS.generic, outcome: "Fix it today, this is a blocker." });
     expect(out.map((p) => p.priority)).toEqual(["urgent", "urgent", "medium", "medium"]);

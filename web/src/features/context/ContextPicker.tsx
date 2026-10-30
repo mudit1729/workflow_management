@@ -1,4 +1,4 @@
-// "Context from Workdatabase": a field in the New issue dialog (and the New file dialog) that
+// "Context from Workdatabase": a field in the New file dialog that
 // collects library items, glossary terms, files and decisions an agent should read with the
 // issue. The Add button opens a command-style search right under the field, in the flow of the
 // form (a popover would cover the fields it adds context to); picks show as removable chips.

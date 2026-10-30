@@ -15,6 +15,7 @@ import {
   groupChain,
   issueAuthors,
   laneSummary,
+  needsYou,
   singleLane,
   summarize,
 } from "@/features/board/filter";
@@ -28,7 +29,7 @@ import {
 } from "@/features/board/KanbanColumn";
 import { Swimlane } from "@/features/board/Swimlane";
 import type { GroupNode, IssueStatus, IssueSummary, WorkspaceSnapshot } from "@/gen/types";
-import { issuesInGroup } from "@/lib/api";
+import { issuesInGroup, useInbox } from "@/lib/api";
 import { BOARD_COLUMNS } from "@/lib/status";
 import { entry, type KitEntry, Sandbox, V, WithSnapshot, WithSummary } from "../kit-ui";
 import { ISSUE, LONG_TITLE } from "./data";
@@ -223,25 +224,36 @@ function chainTo(root: GroupNode, id: string): GroupNode[] {
 
 function ToolbarDemo({
   label,
+  note,
   width,
   group,
   filtered,
+  needs,
   swim,
 }: {
   label: string;
+  note?: string;
   width: number;
   group?: string;
   filtered?: boolean;
+  /** The Needs you filter is on (`?needs=me`). */
+  needs?: boolean;
   swim: "child" | "none";
 }) {
+  const inbox = useInbox();
   return (
-    <V label={label} width={width}>
+    <V label={label} note={note} width={width}>
       <WithSnapshot>
         {(snap) => {
           const chain = group ? chainTo(snap.groups, group) : [snap.groups];
           const scope = issuesInGroup(chain[chain.length - 1], snap.issues);
           const open = scope.filter((i) => i.status !== "cancelled");
-          const visible = filtered ? open.filter((i) => i.signals.needs_you > 0) : open;
+          const mine = needsYou(inbox.all, snap.config.author);
+          const visible = needs
+            ? open.filter((i) => mine.issues.has(i.id))
+            : filtered
+              ? open.filter((i) => i.signals.needs_you > 0)
+              : open;
           const authors = snap.authors
             .map((a) => ({
               handle: a.handle,
@@ -250,17 +262,18 @@ function ToolbarDemo({
             .sort((a, b) => b.count - a.count);
           return (
             <div className="@container/board overflow-hidden rounded-md border border-border">
-              <Sandbox path="/w">
+              <Sandbox path={needs ? "/w?needs=me" : "/w"}>
                 <BoardToolbar
                   chain={chain}
                   summary={summarize(visible)}
                   scopedTotal={open.length}
-                  filtered={Boolean(filtered)}
+                  filtered={Boolean(filtered || needs)}
                   authors={authors}
                   me={snap.config.author}
                   canSwim={chain[chain.length - 1].children.length > 0}
                   swim={swim}
                   cancelledCount={scope.length - open.length}
+                  needsYou={{ requests: mine.requests, issues: mine.issues.size }}
                 />
               </Sandbox>
             </div>
@@ -282,6 +295,13 @@ function BoardToolbarBody() {
         swim="none"
       />
       <ToolbarDemo label="filtered view" width={1040} filtered swim="child" />
+      <ToolbarDemo
+        label="Needs you on (?needs=me)"
+        note="A toggle with the count of open requests. On, the board shows only the issues that wait on you."
+        width={1040}
+        needs
+        swim="child"
+      />
       <ToolbarDemo label="narrow board (container query)" width={560} group="g-web01" swim="none" />
     </>
   );
@@ -485,7 +505,7 @@ export const boardEntries: KitEntry[] = [
     "Workflow · Board",
     "BoardToolbar",
     `${SRC}/BoardToolbar.tsx`,
-    "The Workflow tabs, scope, filters and New issue sit in one 44 px bar that adapts to the width of the board, so the drawer can dock beside it without crowding it.",
+    "The Workflow tabs, scope, filters, Needs you and + Add work sit in one 44 px bar that adapts to the width of the board, so the drawer can dock beside it without crowding it.",
     BoardToolbarBody,
   ),
   entry(

@@ -1,6 +1,4 @@
-// Kit entries of the Criteria, Git and CI tabs (plan D1 and D2). Not registered yet: the integrator
-// adds `issueDeliveryEntries` to `registry.ts`, and may give Git and CI groups of their own in
-// `kit-ui.tsx` (they sit in Issue · Goal and Issue · Log for now).
+// Kit entries of the Criteria, Git and CI tabs (plan D1 and D2): one group per tab.
 import { CiDot, RunStateIcon, TrailerCopy } from "@/features/issue/delivery-ui";
 import { CiTab, PipelineRow } from "@/features/issue/tabs/CiTab";
 import { CriteriaTab } from "@/features/issue/tabs/CriteriaTab";
@@ -435,49 +433,49 @@ function RunStateIconBody() {
 
 export const issueDeliveryEntries: KitEntry[] = [
   entry(
-    "Issue · Goal",
+    "Issue · Criteria",
     "CriteriaTab",
     `${SRC}/tabs/CriteriaTab.tsx`,
     "Criteria have a tab of their own: the checklist you tick and the coverage by task sit together, so how we know the issue is done is one key away (3).",
     CriteriaTabBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · Git",
     "GitTab",
     `${SRC}/tabs/GitTab.tsx`,
     "Pull requests and commits of the issue, derived from git and GitHub, so anyone can trace a task to the code that did it. The empty state says how a commit finds the issue.",
     GitTabBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · Git",
     "PullRequestRow",
     `${SRC}/tabs/GitTab.tsx`,
     "One pull request: state, review and checks in a fixed order, so a failed check or a requested change is the only thing that stands out.",
     PullRequestRowBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · Git",
     "CommitRow",
     `${SRC}/tabs/GitTab.tsx`,
     "One commit: sha, subject, author, time, branch, pull request. The T-n pill is the link back to the plan.",
     CommitRowBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · CI",
     "CiTab",
     `${SRC}/tabs/CiTab.tsx`,
     "Pipeline runs of the issue, newest first, each open to its jobs. A run that Codex starts shows up here without a reload.",
     CiTabBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · CI",
     "PipelineRow",
     `${SRC}/tabs/CiTab.tsx`,
     "One CI run: workflow, result, duration, trigger, branch and sha, with the jobs under it. A failed run names the failed job before you open it.",
     PipelineRowBody,
   ),
   entry(
-    "Issue · Log",
+    "Issue · CI",
     "RunStateIcon",
     `${SRC}/delivery-ui.tsx`,
     "The glyph for a CI run, a job or a pull request's checks: green check, red cross, a turning arc while it runs, a dashed ring while it waits.",

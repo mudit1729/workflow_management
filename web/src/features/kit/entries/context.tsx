@@ -1,9 +1,7 @@
-// Context from the Workdatabase: the picker in the New issue dialog, what the agent gets, and the
+// Context from the Workdatabase: the picker (New file), what the agent gets, and the
 // links as the Goal tab shows them. The sample items are read from the sample world (web/mock/sample) by id, so
 // the previews show and size the real library items, terms, files and decisions.
 import { type ReactNode, useMemo, useState } from "react";
-import { openNewIssueWithContext } from "@/app/NewIssueDialog";
-import { Button, Textarea } from "@/components/ui";
 import {
   AddContextButton,
   ContextChip,
@@ -280,61 +278,6 @@ function AddContextButtonBody() {
   );
 }
 
-// ---------------------------------------------------------------- the dialog
-
-const DIALOG_CONTEXT = "Agents lose their claim when a lease runs out, and nobody tells them why.";
-
-function NewIssueContextBlock({ samples }: { samples: Samples }) {
-  const [context, setContext] = useState(DIALOG_CONTEXT);
-  const [items, setItems] = useState([samples.reviewed, samples.draft, samples.file]);
-  return (
-    <div className="flex flex-col gap-4">
-      <Textarea
-        aria-label="Context"
-        value={context}
-        onChange={(e) => setContext(e.target.value)}
-        rows={2}
-        placeholder="Why this matters, in 1–2 short paragraphs."
-        className="max-h-[8.25rem] min-h-14"
-      />
-      <ContextPicker value={items} onChange={setItems} />
-      {items.length > 0 && <ContextPreview items={items} />}
-    </div>
-  );
-}
-
-function NewIssueContextBody() {
-  return (
-    <>
-      <V
-        label="open the dialog with context filled in"
-        note="The dialog grows to its large size when it holds context. Create writes goal.md with the context and the links."
-      >
-        <WithSamples>
-          {(s) => (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                openNewIssueWithContext({
-                  group: "g-web01",
-                  context: DIALOG_CONTEXT,
-                  items: [s.reviewed, s.draft, s.file],
-                })
-              }
-            >
-              New issue with context
-            </Button>
-          )}
-        </WithSamples>
-      </V>
-      <V label="the context block of the dialog" width={600}>
-        <WithSamples>{(s) => <NewIssueContextBlock samples={s} />}</WithSamples>
-      </V>
-    </>
-  );
-}
-
 export const contextEntries: KitEntry[] = [
   entry(
     "Workdatabase",
@@ -375,14 +318,7 @@ export const contextEntries: KitEntry[] = [
     "Issue · Goal",
     "AddContextButton",
     `${SRC}/AddContextButton.tsx`,
-    "Adds context to an issue that already exists, with the same search as the New issue dialog.",
+    "Adds context to an issue that already exists, with the same search as the Add work flow.",
     AddContextButtonBody,
-  ),
-  entry(
-    "Shell",
-    "NewIssueContext",
-    "src/app/NewIssueDialog.tsx",
-    "The context part of the New issue dialog: a few lines of prose, the picker and the preview.",
-    NewIssueContextBody,
   ),
 ];

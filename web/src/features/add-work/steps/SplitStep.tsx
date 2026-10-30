@@ -1,5 +1,7 @@
 // "Codex splits it": the three steps Codex goes through, then its proposals as cards. Each card
 // keeps or drops an issue and changes its size and priority; the title is edited only on demand.
+// This is the last screen of the group path: it also asks where the issues start (Backlog or
+// Planned, keys 1 and 2) and its primary button adds them, so there is no separate review.
 import { Check, CircleAlert, LoaderCircle, Pencil, RotateCw } from "lucide-react";
 import {
   type KeyboardEvent,
@@ -9,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { StatusIcon } from "@/components/common";
 import { Button, Input, Segmented } from "@/components/ui";
 import type { Priority, Size } from "@/gen/types";
 import { useSplitWork } from "@/lib/api";
@@ -19,8 +22,11 @@ import {
   rowsFrom,
   SIZE_LABEL,
   type SplitRow,
+  STATUSES,
   splitSignature,
+  type WorkStatus,
 } from "../flow";
+import { KeyHint, useDigitKeys } from "../parts";
 import type { AddWorkFlow } from "../useAddWorkFlow";
 import { Screen } from "./shared";
 
@@ -84,6 +90,16 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
   const rows = current?.rows ?? [];
   const kept = rows.filter((r) => r.keep).length;
 
+  // 1 and 2 pick where the issues start once there is something to add.
+  useDigitKeys(
+    current
+      ? (n) => {
+          const status = STATUSES[n - 1];
+          if (status) patch({ status: status.value });
+        }
+      : undefined,
+  );
+
   let body: ReactNode;
   let hint: ReactNode;
   if (failed && !current) {
@@ -115,9 +131,10 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
     hint = "This takes a few seconds.";
     body = <SplitProgress steps={steps} step={step} pending={pending} />;
   } else {
-    hint = `Codex proposed ${rows.length} issues for “${name}”. Drop what you do not need and adjust the rest.`;
+    hint = `Codex proposed ${rows.length} issues for “${name}”. Drop what you do not need, adjust the rest and add them.`;
     body = (
       <>
+        <StartIn value={draft.status} onChange={(status) => patch({ status })} />
         <ul data-wf="SplitCards" className="flex min-w-0 flex-col gap-2">
           {rows.map((row) => (
             <li key={row.key}>
@@ -134,6 +151,7 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
             Split again
           </Button>
         </div>
+        <KeyHint>Press 1 for Backlog or 2 for Planned. Enter adds the issues.</KeyHint>
       </>
     );
   }
@@ -142,6 +160,35 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
     <Screen flow={flow} title="Codex splits it into issues" hint={hint}>
       {body}
     </Screen>
+  );
+}
+
+// ---------------------------------------------------------------- where the issues start
+
+/** Two buttons: the issues start in Backlog or in Planned. Backlog is the answer until changed. */
+export function StartIn({
+  value,
+  onChange,
+}: {
+  value: WorkStatus;
+  onChange: (value: WorkStatus) => void;
+}) {
+  const hint = STATUSES.find((s) => s.value === value)?.hint;
+  return (
+    <div data-wf="SplitStart" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+      <span className="text-fg-muted text-sm">Start in</span>
+      <Segmented<WorkStatus>
+        aria-label="Where the issues start"
+        value={value}
+        onChange={onChange}
+        options={STATUSES.map((s) => ({
+          value: s.value,
+          label: s.label,
+          icon: <StatusIcon status={s.value} size={14} />,
+        }))}
+      />
+      <span className="min-w-0 truncate text-fg-faint text-sm">{hint}</span>
+    </div>
   );
 }
 

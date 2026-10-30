@@ -25,7 +25,7 @@ import {
   useNow,
 } from "@/components/common";
 import { Button, IconButton, Tooltip } from "@/components/ui";
-import { CodexActions } from "@/features/codex";
+import { CodexActions, useRunActive } from "@/features/codex";
 import type { IssueDetail, Lease, Priority } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { absolute, hoursSince, parseTs } from "@/lib/format";
@@ -485,6 +485,9 @@ interface SignalRow {
 function IssueSignals({ detail }: { detail: IssueDetail }) {
   const now = useNow();
   const s = detail.summary;
+  // While Codex works, the log runs ahead of current_state.md on purpose (Q005): a row that comes
+  // and goes mid-run would push the tabs down and up again.
+  const running = useRunActive(s.id);
   const rows: SignalRow[] = [];
 
   if (s.signals.done_unmet) {
@@ -511,7 +514,7 @@ function IssueSignals({ detail }: { detail: IssueDetail }) {
       text: last ? `No activity for ${longDuration(hoursSince(last, now))}` : "No recent activity",
     });
   }
-  if (s.signals.state_behind_changes) {
+  if (s.signals.state_behind_changes && !running) {
     const behind = changesSinceState(detail);
     rows.push({
       key: "state_behind_changes",

@@ -39,6 +39,7 @@ import {
   CommandList,
   Kbd,
 } from "@/components/ui";
+import { copyCodexCommand, useNextStep } from "@/features/codex";
 import { useFilesNav } from "@/features/files";
 import type {
   GlossaryTerm,
@@ -47,17 +48,15 @@ import type {
   IssueSummary,
   LibrarySummary,
 } from "@/gen/types";
-import type { CodexRunControls, Skill, WorkspaceFileInfo } from "@/lib/api";
+import type { Skill, WorkspaceFileInfo } from "@/lib/api";
 import {
   allSkills,
-  codexCommand,
   useGlossary,
   useGroupTree,
   useIssueMap,
   useMoveIssue,
   useSkills,
   useSnapshot,
-  useStartCodexRun,
   useWorkspaceFiles,
 } from "@/lib/api";
 import { parseTs } from "@/lib/format";
@@ -232,6 +231,8 @@ interface Action {
   keywords?: string[];
   /** Keep the palette open (sub-pages). */
   stay?: boolean;
+  /** Shown but not runnable (a run is going). */
+  disabled?: boolean;
   run: () => void;
 }
 
@@ -504,6 +505,7 @@ function RootPage({
             icon={a.icon}
             shortcut={a.shortcut}
             hint={a.hint}
+            disabled={a.disabled}
             onSelect={() => runAction(a)}
           >
             {a.label}
@@ -565,7 +567,8 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   const setDensity = usePrefs((s) => s.setDensity);
   const { collapsed: navCollapsed, toggle: toggleNav } = useNavRail();
   const shell = useShell();
-  const { start: startRun } = useStartCodexRun();
+  // The same hook and the same copy as the header and the card menu: one toast per run.
+  const nextStep = useNextStep(openIssue);
 
   const dark = resolveTheme(theme) === "dark";
   const actions: Action[] = [
@@ -604,19 +607,16 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
           "handoff",
           openIssue.title,
         ],
-        run: () =>
-          void copyText(
-            codexCommand(openIssue).command,
-            `Codex command copied for ${openIssue.id}. Paste it in a terminal.`,
-          ),
+        run: () => void copyCodexCommand(openIssue),
       },
       {
         id: "next-step",
         label: `Do the next step of ${openIssue.id}`,
         icon: <StepForward {...ICON} />,
-        hint: "Codex, in the background",
+        hint: nextStep.busy ? "Codex is working on it" : "Codex, in the background",
         keywords: ["codex", "run", "continue", "agent", "do next step", openIssue.title],
-        run: () => void doNextStep(openIssue, startRun),
+        disabled: nextStep.busy,
+        run: () => void nextStep.start(),
       },
       {
         id: "move",
@@ -763,21 +763,6 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   );
 
   return actions;
-}
-
-// ---------------------------------------------------------------- Codex
-
-/** Start a Codex run on the next ready task and say what happened. */
-async function doNextStep(issue: IssueSummary, start: CodexRunControls["start"]) {
-  const run = await start(issue.id, "next_step");
-  if (!run) return; // The hook has already said why.
-  if (run.status === "nothing_ready") {
-    toast(run.reason ?? "No task is ready.", { description: issue.id });
-    return;
-  }
-  toast(`Codex started${run.task ? ` ${run.task}` : ""} on ${issue.id}`, {
-    description: run.task_title,
-  });
 }
 
 // ---------------------------------------------------------------- move page

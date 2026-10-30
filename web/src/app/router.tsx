@@ -8,13 +8,15 @@ import {
   redirect,
   useParams,
 } from "@tanstack/react-router";
+import { Suspense } from "react";
 import { WorkspaceView } from "@/features/files";
-import { IssueDrawer, IssuePage } from "@/features/issue";
 import { KitPage } from "@/features/kit";
 import { GlossaryPage, LibraryView } from "@/features/library";
-import { SkillsView, validateSkillsSearch } from "@/features/skills";
+// The search validator lives apart from the view, so the view can load when /skills opens.
+import { validateSkillsSearch } from "@/features/skills/search";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
+import { IssueDrawer, IssuePage, SkillsView } from "./lazy-views";
 import { RouteError, RouteNotFound, RoutePending } from "./RouteStates";
 import {
   validateBoardSearch,
@@ -55,7 +57,13 @@ const drawerRoute = createRoute({
   validateSearch: validateIssueSearch,
   component: function DrawerRoute() {
     const { id } = drawerRoute.useParams();
-    return <IssueDrawer id={id} />;
+    // Nothing shows while the chunk arrives: the board is already there, and the drawer is a
+    // moment away (the browser fetched it when it was idle).
+    return (
+      <Suspense fallback={null}>
+        <IssueDrawer id={id} />
+      </Suspense>
+    );
   },
 });
 
@@ -66,7 +74,11 @@ const issueRoute = createRoute({
   validateSearch: validateIssueSearch,
   component: function IssueRoute() {
     const { id } = issueRoute.useParams();
-    return <IssuePage id={id} />;
+    return (
+      <Suspense fallback={<RoutePending />}>
+        <IssuePage id={id} />
+      </Suspense>
+    );
   },
 });
 
@@ -108,11 +120,18 @@ const glossaryRoute = createRoute({
 });
 
 // /skills — the plugins and skills of this repository, and how to install them. `?skill=` opens one.
+// Loaded on demand (see lazy-views.tsx), so the main bundle stays small.
 const skillsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "skills",
   validateSearch: validateSkillsSearch,
-  component: SkillsView,
+  component: function SkillsRoute() {
+    return (
+      <Suspense fallback={<RoutePending />}>
+        <SkillsView />
+      </Suspense>
+    );
+  },
 });
 
 // /inbox is gone (plan D5): what needs you is a filter of the board. Old links still land there.

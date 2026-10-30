@@ -1,13 +1,11 @@
-// The Add work flow opens from the shell store, and the old entry points still reach it.
+// The Add work flow opens from the shell store.
 import { beforeEach, describe, expect, test } from "vitest";
-import { openAddWork, openNewGroup, openNewIssue, useShell } from "./shell-store";
+import { openAddWork, useShell } from "./shell-store";
 
 beforeEach(() => {
   useShell.setState({
     addWorkOpen: false,
     addWorkStart: undefined,
-    newIssueOpen: false,
-    newGroupOpen: false,
   });
 });
 
@@ -44,29 +42,5 @@ describe("openAddWork", () => {
     expect(state().addWorkStart).toEqual({ kind: "issue", group: "g-web01" });
     state().setAddWorkOpen(true, { kind: "group" });
     expect(state().addWorkStart).toEqual({ kind: "group" });
-  });
-});
-
-describe("the old entry points open the old dialogs until Add work replaces them", () => {
-  test("openNewIssue(group) opens New issue in that group", () => {
-    openNewIssue("g-web01");
-    expect(state().newIssueOpen).toBe(true);
-    expect(state().newIssueGroup).toBe("g-web01");
-    expect(state().addWorkOpen).toBe(false);
-  });
-
-  test("openNewGroup(parent) opens New group under that parent", () => {
-    openNewGroup("g-wf001");
-    expect(state().newGroupOpen).toBe(true);
-    expect(state().newGroupParent).toBe("g-wf001");
-    expect(state().addWorkOpen).toBe(false);
-  });
-
-  test("the legacy dialog state still works for callers that set it directly", () => {
-    state().setNewIssueOpen(true, "g-web01");
-    expect(state().newIssueOpen).toBe(true);
-    expect(state().newIssueGroup).toBe("g-web01");
-    state().setNewGroupOpen(true, "g-wf001");
-    expect(state().newGroupParent).toBe("g-wf001");
   });
 });

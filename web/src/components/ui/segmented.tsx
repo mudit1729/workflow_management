@@ -70,8 +70,8 @@ export function Segmented<T extends string>({
             "data-[state=on]:bg-bg data-[state=on]:text-fg data-[state=on]:ring-1 data-[state=on]:ring-border",
             "dark:data-[state=on]:bg-border dark:data-[state=on]:ring-border-strong",
             "[&>svg]:size-[14px] [&>svg]:shrink-0",
-            // Phones get 24 px+ tap targets (WCAG 2.5.8): these switch the board's status,
-            // the inbox filter and the library kind.
+            // Phones get 24 px+ tap targets (WCAG 2.5.8): these switch the board's status
+            // and the library kind.
             size === "sm"
               ? "h-5 gap-1 px-1.5 text-xs max-md:h-7 max-md:px-2.5"
               : "h-6 gap-1.5 px-2 text-sm max-md:h-8",

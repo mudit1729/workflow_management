@@ -6,4 +6,4 @@ export { type CodexIssue, copyCodexCommand, OPEN_IN_CODEX_HINT } from "./open-in
 export { RunNotice, RunProgress, RunStatus, type RunStatusProps } from "./RunStatus";
 export { RunsList, RunsPopover } from "./RunsPopover";
 export { runLine, runWord } from "./run-copy";
-export { useCardRun, useCodexIssue, useNextStep } from "./use-codex";
+export { useCardRun, useCodexIssue, useNextStep, useRunActive } from "./use-codex";

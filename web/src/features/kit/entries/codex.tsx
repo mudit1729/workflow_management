@@ -1,6 +1,6 @@
-// Kit entries for the Codex buttons (plan D3, D4). Integration registers `codexEntries` in
-// `registry.ts`. The live variants run the real mock: a click starts a run in the sample copy the
-// kit holds, and the run takes about six seconds. The static variants show one state each.
+// Kit entries for the Codex buttons (plan D3, D4). The live variants run the real mock: a click
+// starts a run in the sample copy the kit holds, and the run takes about six seconds. The static
+// variants show one state each.
 import { Play } from "lucide-react";
 import { Button } from "@/components/ui";
 import { IssueCard } from "@/features/board";

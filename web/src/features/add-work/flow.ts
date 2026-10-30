@@ -22,7 +22,11 @@ export type StepId =
   | "split"
   | "review";
 
-/** One question per screen. The group path ends with Codex's split and a review. */
+/**
+ * One question per screen. The group path ends with Codex's split, which is also where the
+ * proposals are kept or dropped, where they start (Backlog or Planned) and where they are added:
+ * there is no separate review.
+ */
 export const GROUP_STEPS: readonly StepId[] = [
   "kind",
   "where",
@@ -32,10 +36,12 @@ export const GROUP_STEPS: readonly StepId[] = [
   "priority",
   "context",
   "split",
-  "review",
 ];
 
-/** The single-issue path asks the same things, minus the split, and asks the status itself. */
+/**
+ * The single-issue path asks the same things, minus the split, and asks the status itself. A lone
+ * issue keeps a review: it is the one place its answers are checked before it is written.
+ */
 export const ISSUE_STEPS: readonly StepId[] = [
   "kind",
   "where",
@@ -51,6 +57,27 @@ export const ISSUE_STEPS: readonly StepId[] = [
 export function stepsFor(kind: WorkKind | undefined, skipKind: boolean): StepId[] {
   const all = kind === "issue" ? ISSUE_STEPS : GROUP_STEPS;
   return skipKind ? all.filter((s) => s !== "kind") : [...all];
+}
+
+/** The screens whose answer is typed. Every other screen is answered with one click. */
+const TYPED_STEPS: readonly StepId[] = ["outcome", "title"];
+
+/** What adding a group may cost: clicks, counting the one that opens the dialog, and typed lines. */
+export const GROUP_CLICK_BUDGET = 8;
+export const GROUP_TYPED_LINES = 1;
+
+/**
+ * Clicks it takes to add work with the default answers: one to open the dialog, one per screen
+ * that is answered with a button (a typed screen is answered with Enter), and the last screen's
+ * button counts as that screen's click. Choosing Planned instead of Backlog is one more.
+ */
+export function clicksToAdd(kind: WorkKind | undefined, skipKind: boolean): number {
+  return 1 + stepsFor(kind, skipKind).filter((s) => !TYPED_STEPS.includes(s)).length;
+}
+
+/** Typed lines on a path. */
+export function typedLines(kind: WorkKind | undefined, skipKind: boolean): number {
+  return stepsFor(kind, skipKind).filter((s) => TYPED_STEPS.includes(s)).length;
 }
 
 /** The word on a progress dot and in the dot's tooltip. */
@@ -471,7 +498,7 @@ export function canContinue(draft: Draft, step: StepId, parent: GroupNode | unde
     case "split":
       return keptRows(draft).length > 0;
     case "review":
-      return draft.kind === "issue" ? !titleProblem(draft.title) : keptRows(draft).length > 0;
+      return !titleProblem(draft.title);
     default:
       return true;
   }

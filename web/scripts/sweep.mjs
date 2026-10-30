@@ -1,6 +1,6 @@
 // Screenshot every route at several widths and themes in one browser session, check each page for
 // runtime errors and page-level scroll, and optionally build contact sheets for quick review.
-// usage: node scripts/sweep.mjs --out <dir> [--routes "/w,/inbox"] [--widths 1440,1680,390]
+// usage: node scripts/sweep.mjs --out <dir> [--routes "/w,/skills"] [--widths 1440,1680,390]
 //          [--themes light,dark] [--sheets] [--wait 600] [--sample]
 // The board starts without issues and the default routes name sample issues: pass --sample to load
 // the sample world (26 issues) in each page before its route opens. /kit holds the sample itself.
@@ -17,21 +17,26 @@ export const ROUTES = [
   "/w?swim=none",
   "/w?group=g-web01",
   "/w?show=cancelled",
+  "/w?needs=me",
   "/w/i/wf-3k9x2?tab=now",
   "/w/i/wf-3k9x2?tab=goal",
+  "/w/i/wf-3k9x2?tab=criteria",
   "/w/i/wf-3k9x2?tab=plan",
   "/w/i/wf-3k9x2?tab=log",
   "/w/i/wf-3k9x2?tab=log&log=decisions",
   "/w/i/wf-3k9x2?tab=log&log=learnings",
+  "/w/i/wf-3k9x2?tab=git",
+  "/w/i/wf-3k9x2?tab=ci",
   "/w/i/wf-3k9x2?tab=files",
   "/i/wf-3k9x2",
   "/w/i/wf-7yq2m?tab=goal",
   "/i/wf-g5rx8?tab=plan",
   "/w/i/wf-h2tb7?tab=plan",
-  "/inbox",
   "/lib",
   "/lib/lib-4tz7c",
   "/lib?tab=glossary",
+  "/skills",
+  "/skills?skill=adding-work",
   "/kit",
 ];
 

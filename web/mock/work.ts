@@ -357,13 +357,18 @@ function sizeOf(parent: Size, slot: number): Size {
 /** What a context id stands for in the list ("Rescan subtrees on every event"), if known. */
 export type ResolveContext = (id: string) => string | undefined;
 
-/** "A", "A and B". Only the first two names, so the line stays one line. */
+/** A line of "Read …" longer than this names one item and counts the others. */
+const MAX_READ_CHARS = 96;
+
+/**
+ * "A", "A and B": the full titles of the first two items, never cut. When both would run the
+ * line long, the first one is named and the rest are counted ("A and 2 more").
+ */
 function names(context: string[], resolve: ResolveContext | undefined): string {
-  return context
-    .map((id) => resolve?.(id) ?? id)
-    .slice(0, 2)
-    .map((n) => (n.length > 40 ? `${n.slice(0, 39).trimEnd()}…` : n))
-    .join(" and ");
+  const all = context.map((id) => resolve?.(id) ?? id);
+  const pair = all.slice(0, 2).join(" and ");
+  if (all.length < 2 || pair.length <= MAX_READ_CHARS) return pair;
+  return `${all[0]} and ${all.length - 1} more`;
 }
 
 /**

@@ -104,7 +104,7 @@ function ButtonBody() {
               <span>
                 <Button variant={v}>
                   <Plus {...ICON} />
-                  New issue
+                  Add work
                 </Button>
               </span>
               <span>
@@ -598,7 +598,7 @@ function TooltipBody() {
             Plain
           </Button>
         </Tooltip>
-        <Tooltip content="New issue" shortcut="n">
+        <Tooltip content="Add work" shortcut="n">
           <Button variant="secondary" size="sm">
             With shortcut
           </Button>
@@ -797,7 +797,7 @@ function InlineCommand({ start = "" }: { start?: string }) {
           <CommandSeparator />
           <CommandGroup heading="Actions">
             <CommandItem shortcut="n" icon={<Plus {...ICON} />}>
-              New issue
+              Add work
             </CommandItem>
             <CommandItem shortcut="mod+b">Toggle the sidebar</CommandItem>
             <CommandItem disabled>Disabled action</CommandItem>
@@ -830,8 +830,8 @@ function CommandBody() {
               <CommandItem onSelect={() => setOpen(false)} shortcut="g w">
                 Board
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)} shortcut="g i">
-                Inbox
+              <CommandItem onSelect={() => setOpen(false)} shortcut="g f">
+                Files
               </CommandItem>
             </CommandGroup>
           </CommandList>

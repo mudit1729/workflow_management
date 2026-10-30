@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type CodexRun, useCodexRuns, useStartCodexRun } from "@/lib/api";
 import { useOpenIssue } from "@/lib/nav";
-import { followRun, type OpenIssue, useWatchedIssue } from "./follow-run";
+import { followRun, type OpenIssue } from "./follow-run";
 import type { CodexIssue } from "./open-in-codex";
 import { activeRun } from "./run-copy";
 
@@ -58,7 +58,6 @@ export function useCodexIssue(issue: CodexIssue): CodexIssueState {
   const openIssue = useOpenIssue();
   const [starting, setStarting] = useState(false);
   const [outcome, setOutcome] = useState<CodexRun | undefined>();
-  useWatchedIssue(issue.id);
 
   const active = useActiveRun(runs, setOutcome);
 
@@ -117,6 +116,30 @@ export function useCardRun(issueId: string): CodexRun | undefined {
   return active ?? flash;
 }
 
+/** After a run ends the issue is read again; this long the screens still wait for that read. */
+const SETTLE_MS = 1500;
+
+/**
+ * True while Codex works on the issue, and a moment after it stops. Codex writes `current_state.md`
+ * last, so during a run the log is ahead of it by design (Q005); the header and the Now tab hold
+ * that signal back until the run is over and the issue has been read again, so nothing above the
+ * tabs appears and disappears while the run goes.
+ */
+export function useRunActive(issueId: string): boolean {
+  const going = activeRun(useCodexRuns(issueId)) !== undefined;
+  const [settling, setSettling] = useState(false);
+  const was = useRef(going);
+  useEffect(() => {
+    const ended = was.current && !going;
+    was.current = going;
+    if (!ended) return;
+    setSettling(true);
+    const timer = setTimeout(() => setSettling(false), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [going]);
+  return going || settling;
+}
+
 export interface NextStep {
   /** True while Codex works on the issue. */
   busy: boolean;
@@ -125,16 +148,19 @@ export interface NextStep {
 }
 
 /**
- * "Do next step" from a place that has no strip (the card menu). Starting is the whole answer: the
- * card shows the run, a toast says when it ends, and a run with nothing to do says why at once.
+ * "Do next step" from a place that has no strip (the card menu, the palette). Starting is the whole
+ * answer: the card shows the run, one toast says when it ends (the same toast whichever button
+ * started the run), and a run with nothing to do says why at once. Without an issue (the palette
+ * with nothing open) it is idle and `start` does nothing.
  */
-export function useNextStep(issue: CodexIssue): NextStep {
+export function useNextStep(issue: CodexIssue | undefined): NextStep {
   const runs = useCodexRuns();
   const { start } = useStartCodexRun();
   const openIssue = useOpenIssue();
-  const busy = runs.some((r) => r.issue === issue.id && r.status === "running");
+  const busy = !!issue && runs.some((r) => r.issue === issue.id && r.status === "running");
 
   const begin = useCallback(async () => {
+    if (!issue) return undefined;
     const run = await start(issue.id, "next_step");
     if (!run) return run;
     if (run.status === "running") followRun(run, issue, openIssue);

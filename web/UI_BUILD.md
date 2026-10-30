@@ -1,13 +1,5 @@
 # wf web UI: build contract (prototype on mocks)
 
-> **Orchestrator note (read first if you are the `diagram` or `library-inbox` builder).**
-> Those two builders were started early in a separate run, and they own their files.
-> If you are one of them in the main run: do NOT write, edit or format any file. Run
-> `node web/scripts/wait-for.mjs <your key>` (key = `diagram` or `library-inbox`) with a
-> 10-minute Bash timeout, from the repo root. Re-run it while it prints `STILL_WAITING`.
-> When it prints a JSON report, return exactly that report as your structured result.
-> Every other builder: ignore this note.
-
 This file is the integration contract for the parallel UI build. Every builder
 follows it exactly. The product contract is `docs/plan/contract.md` (§1.10 API,
 §1.11 frontend, §1.12 tokens, Part 3 §6 UI). If this file and the product contract
@@ -17,10 +9,16 @@ Goal: a clickable prototype of every UI element, running on mock data, so the us
 can review each element and give feedback. It must look finished: calm, precise,
 Linear-like. It is also the real `web/` codebase, so write production-quality code.
 
+The product goals behind the screens (plan `docs/plan/proposals/codex-workflow-plan.md`): (1) distribute skills and plugins across the team
+(Workdatabase · Skills), (2) hand anyone the full context of an issue (the Now, Goal, Criteria, Plan, Log, Git, CI and Files tabs, the Open in Codex
+button and the `wf context` bundle), (3) keep issues and tasks traceable (task ↔ commit ↔ CI run, every change a markdown diff).
+
 **The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
 markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
 what the board shows, edit a file there, or open **Workdatabase · Files** in the UI. Never add a
-TypeScript object that holds content.
+TypeScript object that holds content. The one thing that is not markdown is git, pull request and CI data: in the product it is
+derived from git and GitHub and never stored in the workspace (plan D2), so the prototype reads a fixture
+(`mock/fixtures/delivery-sample.json`) and what a Codex run adds.
 
 **The shipped workspace is empty of issues.** `web/mock/workspace/` holds the config, authors,
 glossary, the library and the six groups (`wf`, `core`, `web`, `skills`, `platform`, `auth`), and no
@@ -37,25 +35,45 @@ feedback; the user quotes them.
 
 ```
 Workspace: wf            the container: workspace name, groups, workflow.toml
-├─ Workflow              work in motion         sub-views: Board · Inbox
-└─ Workdatabase          everything stored      sub-views: Library · Glossary · Files
+├─ Workflow              work in motion         sub-view: Board (with its Needs you filter)
+└─ Workdatabase          everything stored      sub-views: Library · Glossary · Files · Skills
 ```
 
-- A **view** is Workflow or Workdatabase; a **sub-view** is one page of it (Board, Inbox, Library,
-  Glossary, Files). Say "Workflow · Board", "Workdatabase · Files". "Workspace files" is now
-  "Workdatabase · Files" (the nav and the top bar say just "Files").
+| word | means | where it shows |
+|---|---|---|
+| **Workflow** | work in motion | nav view, top bar name, tab title |
+| **Board** | the one Workflow sub-view: the issues as columns, with its filters | `/w`, drawer `/w/i/$id`, full page `/i/$id` |
+| **Needs you** | a board filter: only the issues that have an open request for the acting person. It replaces the inbox | toolbar toggle with a count, `/w?needs=me`, palette "Workflow · Needs you" |
+| **Workdatabase** | everything stored as markdown | nav view, top bar name |
+| **Library · Glossary · Files** | the stored notes, the terms and the raw files | `/lib`, `/glossary`, `/files` |
+| **Skills** | the plugins and skills of the repository and how a team installs them (goal 1: distribute skills) | `/skills` |
+| **Add work** | the one way in: a group that Codex splits into issues, or one issue | the toolbar's `+ Add work`, `n`, palette "Add work…" |
+| **Open in Codex / Do next step** | the two Codex buttons beside each other: copy the command, or let Codex do the next ready task in the background | issue header, card menu, palette |
+| **Criteria · Git · CI** | the issue tabs added next to Goal and Log (see "issue tabs") | `?tab=criteria`, `git`, `ci` |
+| **Kit** | the prototype's own component gallery, not a view | `/kit`, `g k` |
+
+- A **view** is Workflow or Workdatabase; a **sub-view** is one page of it (Board, Library, Glossary,
+  Files, Skills). Say "Workflow · Board", "Workdatabase · Files". "Workspace files" is now
+  "Workdatabase · Files" (the nav and the top bar say just "Files"). **There is no inbox**: no route (`/inbox`
+  redirects to `/w?needs=me`), no nav item, no shortcut, no sub-view. A request that waits on you shows on its
+  card, in the issue's Now tab and behind the Needs you filter.
 - **One top bar per page.** Each sub-view page starts its 44 px top bar with `ViewTabs`
   (`@/components/common`): the view's name and icon, a faint separator, then the sub-views as
-  real links (underline tabs; under 900 px the name gives way to the icon, under 420 px the icon goes too; counts: Inbox = my open requests, accent when above zero; Library =
-  items; Glossary = terms; Files = files, with a red lint dot when any file has errors). The
+  real links (underline tabs; under 900 px the name gives way to the icon, under 420 px the icon goes too; counts: Library =
+  items; Glossary = terms; Files = files, with a red lint dot when any file has errors; Skills = skills). The
   page's own controls follow (filters, search, actions) and stay visually secondary. The Board,
   its drawer (`/w/i/$id`) and the full issue page (`/i/$id`) all count as Board.
 - The **Groups** tree in the nav rail filters the Workflow board; it belongs to neither view.
 - **Kit** (`/kit`, `g k`) is the prototype's own tooling, not a view. It sits near the footer of
   the nav.
-- Page and tab titles: `(3) Workflow · wf`, `Workflow · Inbox · wf`, `Workdatabase · wf` (Library),
-  `Workdatabase · Glossary · wf`, `Workdatabase · Files · wf`, `Kit · wf`; 3 = my open inbox count.
-  A view's home sub-view (Board, Library) is not named in the title; the others are.
+- Page and tab titles: `(3) Workflow · wf`, `Workdatabase · wf` (Library), `Workdatabase · Glossary · wf`,
+  `Workdatabase · Files · wf`, `Workdatabase · Skills · wf`, `Kit · wf`; 3 = my open needs-you requests (no count at
+  zero). A view's home sub-view (Board, Library) is not named in the title; the others are.
+- **The user's rule for every control:** buttons are preferred over multiple choice, multiple choice over
+  drop-down menus, drop-down menus over typing. Add work asks one question per screen and types only one line.
+- **UI and skills are two doors to the same markdown.** The UI should usually work without Codex, and Codex
+  must be able to replicate the flow with the `plugins/workflow` skills without the UI. Both only ever make
+  minimal text edits to the workspace files, so either can continue the other's work (see `features/skills`).
 
 ## Ground rules
 
@@ -114,22 +132,30 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | path | renders | search |
 |---|---|---|
 | `/` | redirect to `/w` | |
-| `/w` | `BoardLayout` → `BoardPage` | `group, swim, author, q, show` |
+| `/w` | `BoardLayout` → `BoardPage` | `group, swim, author, q, show, needs` (`needs=me` is the Needs you filter) |
 | `/w/i/$id` | `BoardLayout` → `BoardPage` + `IssueDrawer id` | board search + `tab, log` |
 | `/i/$id` | `IssuePage id` | `tab, log` |
-| `/inbox` | Workflow · Inbox: `InboxView` | |
+| `/inbox` | **gone**: redirects to `/w?needs=me`, so an old link still lands on the filter | |
 | `/lib` | Workdatabase · Library: `LibraryView` (three layout modes, see its section) | `kind, q` (`?tab=glossary` redirects to `/glossary`, keeping `q`) |
 | `/lib/$id` | `LibraryView` with `LibraryItemView id` open | `kind, q` |
 | `/glossary` | Workdatabase · Glossary: `GlossaryPage` from `@/features/library` (renders its own top bar with `ViewTabs`) | `q` |
 | `/files` | Workdatabase · Files: `WorkspaceView` (tree + source of every workspace file; edit, create, delete) | `path` (workspace-relative, kept exactly as typed), `line` (scroll to and flash that line) |
+| `/skills` | Workdatabase · Skills: `SkillsView` from `@/features/skills` (the repository's plugins and skills, how to install them, the SKILL.md of the open one) | `skill` (the open skill: `/skills?skill=adding-work`) |
 | `/kit` | `KitPage` (component gallery) | |
 
-Every route renders inside the one `AppShell`. `subViewForPath(pathname)` (`@/components/common`) is
-the single place that says which sub-view a path belongs to (`/w`, `/w/…` and `/i/…` → Board);
-`ViewTabs`, the `NavRail` and the tab title all use it.
+`tab` is one of `now, goal, criteria, plan, log, git, ci, files` (`ISSUE_TABS` in `@/lib/nav`, the order of keys 1 to 8); `log` is
+`changes, decisions, learnings`. Add work is not a route: it is a dialog opened through the shell store (`openAddWork`).
+
+Every route renders inside the one `AppShell`. `subViewForPath(pathname)` (`@/components/common`)
+is the single place that says which sub-view a path belongs to (`/w`, `/w/…` and `/i/…` → Board; `/skills` → Skills;
+`/inbox` belongs to no sub-view, the router redirects it before anything renders);
+`ViewTabs`, the `NavRail` and the tab title all use it. **Lazy chunks:** the issue views (`IssueDrawer`, `IssuePage`, the whole
+issue feature), the Add work dialog and `SkillsView` are `React.lazy` in `app/lazy-views.tsx`, so the first paint carries the shell and the board;
+the browser fetches the rest when idle (`preloadViews`). `/skills`'s search validator lives in `features/skills/search.ts` so the router does not import the view.
 
 Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`,
-`useIssueTab`, `useGo` from `@/lib/nav` (`/glossary` has no `useGo` helper: use a `Link` or `useNavigate`); the Files feature has `useFilesNav` and
+`useIssueTab`, `useGo` (`board`, `needsYou`, `library`, `libraryItem`, `issuePage`, `kit`) from `@/lib/nav` (`/glossary` and `/skills` have no `useGo` helper: use a `Link` or
+`useNavigate`; the Skills feature has `useSkillsNav` and `skillHref`); the Files feature has `useFilesNav` and
 `filesHref` (`@/features/files`). Hash routing is used when `VITE_HASH_ROUTER=1`
 (`/#/files?path=…`, as in the static build).
 
@@ -191,9 +217,10 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   highlightLine?, maxHeight?, compact? })` — mono block; the marked line has a 2 px `border-danger` left bar (a real `border-l-2`, the
   same bar `JsonSource` uses), never an inset shadow.
 - `ViewTabs({ view: "workflow" | "workdatabase", className? })` — the sub-view tabs of a view as real links (`Link`,
-  `aria-current="page"` on the active one), after the view's name and icon. Workflow: Board · Inbox (accent count above
-  zero); Workdatabase: Library · Glossary · Files (counts, lint dot when a file has errors). Also exports `VIEWS`,
-  `SUBVIEWS` (label, route, shortcut per sub-view), `subViewForPath(path)`, `useActiveSubView()`, `useViewCounts()`.
+  `aria-current="page"` on the active one), after the view's name and icon. Workflow: Board (no count: what waits on you is the
+  board's Needs you filter); Workdatabase: Library · Glossary · Files · Skills (counts, lint dot when a file has errors). Also exports `VIEWS`,
+  `SUBVIEWS` (label, route, shortcut per sub-view), `subViewForPath(path)`, `useActiveSubView()`, `useViewCounts()`
+  (`library, glossary, files, skills, fileErrors`).
 - `CopyButton({ text, label })`
 - `MoveGateDialog()` — rendered once by the shell. Reads `useMoveGate()` from `@/lib/api`. Two modes:
   illegal move ("backlog → done is not an allowed move…" + "Move anyway") and done gate (lists `gaps`,
@@ -206,7 +233,9 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 `src/lib/api/index.ts` re-exports:
 - `queryClient` (TanStack Query client)
 - `api` — `{ snapshot(), issue(id), libraryItem(id), glossary(), search(q, scope?, k?), context(id, budget?), ops(op),
-  files(), file(path), writeFile({ path, text, base_rev? }), deleteFile({ path, base_rev? }) }`.
+  files(), file(path), writeFile({ path, text, base_rev? }), deleteFile({ path, base_rev? }),
+  delivery(id), splitWork(input, onStep?), codexRuns(issue?), startCodexRun(issue, kind), cancelCodexRun(id), skills() }`
+  (the last six are the delivery, work, codex and skills additions below).
   Uses the in-memory mock server (`@mock/server`) unless `import.meta.env.VITE_API === "real"`, then `fetch("/api/…")`
   (the file calls are prototype endpoints beyond contract §1.10: `GET /api/files`, `GET|PUT|DELETE /api/files/{path}`).
   `ops` rejects with `ApiError { status: 409 | 422, body: Conflict | Unprocessable }`.
@@ -216,7 +245,8 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - Selectors (built on `useSnapshot`): `useAuthors(): Map<string, Author>`, `useAuthor(handle)`, `useMe(): string`
   (acting author = `config.author`), `useIssueSummary(id)`, `useIssueMap(): Map<id, IssueSummary>`,
   `useGroupTree(): GroupNode | undefined`, `useGroup(id)`, `useGroupIndex(): Map<id, GroupNode>`,
-  `issuesInGroup(root: GroupNode, issues): IssueSummary[]` (whole subtree), `useInbox(): { mine: NeedsYouItem[], all: NeedsYouItem[], count: number }`.
+  `issuesInGroup(root: GroupNode, issues): IssueSummary[]` (whole subtree), `useInbox(): { mine: NeedsYouItem[], all: NeedsYouItem[], count: number }`
+  (the name is kept for the data: the open requests of the workspace. It feeds the Needs you filter and the tab title; there is no inbox page).
 - Writes (all optimistic, all go through `api.ops`, 409 → rollback + sonner toast
   `"goal.md changed by @codex — reapply?"` with a Reapply action; 422 → toast with first diagnostic):
   - `useMoveIssue(): { move(issue: IssueSummary, to: IssueStatus): void }` — illegal move or done gaps → opens the
@@ -225,7 +255,8 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
   - `useToggleCriterion(issueId)`, `useToggleStep(issueId)`, `useSetTaskStatus(issueId)`, `useAnswerRequest()`,
     `usePromote()`, `useApproveLibrary()`, `useNewIssue()`, `useNewGroup()`, `useAddLinks()` (adds `## Links` bullets to goal.md: the
     "Add context" button) — each returns
-    `(args) => Promise<OpResult | undefined>`.
+    `(args) => Promise<OpResult | undefined>`. (`useNewIssue` and `useNewGroup` stay as ops, but no dialog calls them: the New issue
+    and New group dialogs are gone, and `useCreateWork` below is the way in.)
   - `useWriteWorkspaceFile(): (args: { path, text, base_rev? }) => Promise<{ rev } | undefined>` — saves a whole file;
     toasts 409/422/other itself and resolves `undefined`. `useDeleteWorkspaceFile(): (args: { path, base_rev? }) => Promise<void>`
     — throws `ApiError`/`NotFoundError`, the caller explains. (Plain functions: `writeWorkspaceFile`, `deleteWorkspaceFile`.)
@@ -240,6 +271,39 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - `useActivity(): ActivityEvent[]` — latest 50, newest first.
 - Activity toasts: only `notable` events (needs-you, blocked, expired lease), via sonner, with "Open" action.
 - Optional browser notifications for blocking requests when `usePrefs().notifications` is on.
+
+#### Delivery, work, codex and skills (the data layer of the Codex workflow, plan D2, D4, D6, D7)
+
+All four sit beside the markdown ones in `src/lib/api/` and `web/mock/`, with tests (`mock/{delivery,work,codex,skills}.test.ts`,
+`src/lib/api/{work,codex}.test.ts`).
+
+- **`delivery` (`lib/api/delivery.ts`, `mock/delivery.ts`, `mock/fixtures/delivery-sample.json`).** `useDelivery(issueId?): { commits, prs, pipelines, isLoading, error }`,
+  each list newest first. Git, pull request and CI data are **derived and never stored in the workspace** (plan D2): a commit belongs to an
+  issue when its message has the trailer `Issue: wf-xxxxx` or its branch is named `wf-xxxxx/…`; pull requests and checks come from GitHub
+  through `gh`. The prototype reads the fixture while the sample is loaded (times written at `RECORDED_AT` and shifted like the sample files)
+  plus whatever a Codex run adds; the shipped workspace and every new issue start with none. The Git and CI tabs read this.
+- **`work` (`lib/api/work.ts`, `mock/work.ts`).** `useSplitWork(): { split(input), steps, step, pending }` takes `{ title, outcome, size?, context[] }` and
+  returns `{ issues: Proposal[] }` (3 to 5, one EARS criterion each, a one-line "why"; `SPLIT_STEPS` are the three visible progress steps; about 2 s).
+  The prototype's split is deterministic (keyword families and a generic fallback; the same input always splits the same way) and written
+  with `writing-readable-bulk-text`: the verb first, one shape per list. The first issue's "why" names the context the person linked, in
+  full (a title is never cut mid-word; two long titles become "A and 2 more"). `useCreateWork()` takes
+  `{ group: GroupId | { parent, title }, issues: WorkIssueInput[] }` (1 to 8 issues) and creates the group (`_group.md`) and every `goal.md` in **one commit**
+  (one delta, one activity line). Real Codex runs `codex exec` with the `adding-work` skill.
+- **`codex` (`lib/api/codex.ts`, `mock/codex.ts`).** `codexCommand(issue)` is a pure function returning `{ prompt, command }`, the text
+  "Open in Codex" copies. `useCodexRuns(issueId?)` lists runs (newest first) and follows them live; `useStartCodexRun()` returns
+  `{ start(issueId, "next_step"), cancel(runId) }`. A run is `{ id, issue, kind, status: running | done | failed | cancelled | nothing_ready, by, task?, task_title?, phase?, phases[], started_at, finished_at?, reason?, commit?, pipeline? }`.
+  The prototype's run is a **simulated background run whose phases are real markdown edits** through the store, 2 s apart (claim: the task is
+  `in_progress` with a lease; log: a change entry by `@codex`; verify: the task goes to `review` and a CI run starts and passes; done: steps
+  ticked, task `done`, `current_state.md` moves on, a commit with the trailer `Issue: <id>` joins the delivery data). Each phase is visible as a markdown diff
+  and reaches the board through the ordinary live stream; the run itself, its commit and its CI run have a small stream of their own
+  (`subscribeCodex`). One run per issue; Cancel puts the task back in the queue. `window.__wf.setCodexPhaseMs(ms)` changes the 2 s.
+- **`skills` (`lib/api/skills.ts`, `mock/skills.ts`).** `useSkills(): SkillsCatalog`, `allSkills(catalog)` and the install-command builders
+  `claudeInstallCommands(plugin)`, `codexInstallCommands(plugin)`, `CODEX_INSTALL_COMMAND`. The catalog is read from the repository's own files,
+  `plugins/*/skills/*/SKILL.md`, `plugins/*/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` (`import.meta.glob`, so what is
+  committed is what shows; the dev server lets Vite reach above `web/`).
+- **`openAddWork(start?)`** is in the shell store (`app/shell-store.ts`), not in the data layer: `start` is `{ kind?: "group" | "issue", group? }`.
+  `useShell` also holds `paletteOpen`, `shortcutsOpen`, `addWorkOpen`, `devPanelOpen`, `mobileNavOpen` and `narrowNavOpen`. The old
+  `newIssueOpen`, `newGroupOpen`, `openNewIssue` and `openNewGroup` are gone.
 
 #### Markdown first: how `web/mock/` works
 
@@ -332,17 +396,20 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - **Tests** read the files as they ship: `mock/md/*.test.ts` (grammar of every file, the declared findings, tolerant reader,
   edits, rebase, templates), `mock/world.test.ts`, `mock/ops.test.ts`, `mock/files.test.ts`, `mock/server.test.ts`. A large
   hand edit of the workspace can break a test that names an issue by id; fix the test or the edit.
-- **`window.__wf`** (`mockControls`): `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"|"offline"), reset() }`.
-  Latency 80–160 ms.
+- **`window.__wf`** (`mockControls`): `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"|"offline"), reset(), loadSample(), holdSample(), setCodexPhaseMs(ms) }`.
+  Latency 80–160 ms. Playwright smoke tests start from `reset()` (the empty board) or `loadSample()` (26 issues).
 
 ### shell builder: `src/main.tsx`, `src/app/**`
 
 - `main.tsx` imports `@fontsource-variable/inter` and `./styles/base.css`, renders `<App/>`.
 - `app/App.tsx` — QueryClientProvider, TooltipProvider, RouterProvider, `<Toaster/>`, `<MoveGateDialog/>`,
   theme + density sync (`usePrefs` → `document.documentElement.dataset`), `startLive` once, tab title
-  `"(3) Workflow · wf"` (see Naming) where 3 = my open inbox count; `tabTitle(path, workspace, count)` lives in `app/tab-title.ts`.
+  `"(3) Workflow · wf"` (see Naming) where 3 = my open needs-you requests; `tabTitle(path, workspace, count)` lives in `app/tab-title.ts`.
 - `app/router.tsx` — TanStack Router, code-based route tree per the table above; `validateSearch` for each route;
-  `createHashHistory()` when `VITE_HASH_ROUTER === "1"`; register the router type.
+  `createHashHistory()` when `VITE_HASH_ROUTER === "1"`; register the router type. `/inbox` is a route whose `beforeLoad` redirects to
+  `/w?needs=me`. The issue drawer, the issue page and `/skills` render lazy components inside a `Suspense` (`app/lazy-views.tsx`).
+- `app/lazy-views.tsx` — `IssueDrawer`, `IssuePage`, `AddWorkDialog` and `SkillsView` as `React.lazy`; `preloadViews()` fetches their chunks;
+  `whenIdle(fn)` runs a callback when the browser is idle. This keeps the main chunk under the 500 kB warning (the build must stay free of it).
 - `app/AppShell.tsx` — grid `[NavRail | Main]`, viewport-locked. Main hosts the route outlet. `RailSlot` is the rail's grid cell:
   below 1100 px it is the 52 px icon rail (see NavRail) and, when opened, the full rail floats over the page in the same 52 px cell
   (no page jump) with a click-away layer, both at `z-overlay`. Below 768 px a top bar (`MobileTopBar`: menu, name, Prototype, search)
@@ -355,25 +422,32 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   **768 to 1099 px: always the icon rail** whatever was saved (`useNavRail`, `NARROW_RAIL_QUERY`), so a tablet in portrait keeps its page
   width; ⌘B, `[` and the expand button then open the full rail as an overlay that is saved nowhere. Content: a faint "Workspace" label
   above the workspace name ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid
-  icon, the accent Inbox count on it) with indented sub-items Board (`g w`) and Inbox (`g i`, count), **Workdatabase** (Database icon;
-  `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`), each with a faint count; then the **Groups** tree (it filters the Workflow
+  icon) with its one sub-item Board (`g w`), **Workdatabase** (Database icon; `g d`) with Library (`g l`), Glossary (`g g`), Files (`g f`)
+  and Skills (`g s`), each with a faint count; then the **Groups** tree (it filters the Workflow
   board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme (system/light/dark), density, notifications
-  toggle, ⌘K hint, `?` hint. Icon rail: one icon per view, tooltips list the sub-views. The phone sheet mirrors the expanded rail.
-  Active states follow the route (`useActiveSubView`).
+  toggle, ⌘K hint, `?` hint. **There is no Inbox item and no inbox count**: what needs you is the board's Needs you filter. Icon rail:
+  one icon per view, tooltips list the sub-views. The phone sheet mirrors the expanded rail. Active states follow the route
+  (`useActiveSubView`). `NotifyBanner` (the opt-in for browser notifications of blocking requests) sits in the nav.
 - `app/GroupTree.tsx` — `role="tree"`; nested groups from `useGroupTree()`; each node: color dot (group hue), title,
   roll-up count, 32 px mini progress bar (status-colored segments), needs-you dot; selecting sets board `group`.
   Implicit groups show in italic. Collapsible nodes, keyboard arrows.
 - `app/CommandPalette.tsx` — ⌘K. Result groups in order: Issues ("Recent issues" while the field is empty), Groups, Library, Glossary
-  (a term opens `/glossary?q=<term>`), Files (opens the file), Actions. Actions: new issue, new group, move open issue to…, open it as a
-  full page, "Edit goal.md of <open issue>", copy `wf context`, "Workflow · Board", "Workflow · Inbox", "Workdatabase · Library",
-  "Workdatabase · Glossary", "Workdatabase · Files", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
-  play the next live event.
+  (a term opens `/glossary?q=<term>`), Skills (a skill opens `/skills?skill=<name>`), Files (opens the file), Actions; the section that holds the best match
+  goes first, so Enter runs what you typed. Actions: **Add work…** (`n`, group path) and **Add one issue…** (issue path); with an issue open:
+  **Open <id> in Codex** (copies the command), **Do the next step of <id>** (a background run), move it to…, open it as a
+  full page, "Edit goal.md of <id>", copy `wf context`; then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"),
+  "Workdatabase · Library", "· Glossary", "· Files", "· Skills", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
+  play the next live event. **The Codex actions use the same code as the buttons**: `copyCodexCommand(issue)` and `useNextStep(issue)` from
+  `@/features/codex`, so a run started from the palette, the issue header or the card menu gives exactly one toast (when it ends) and the copy
+  has one wording. While a run goes the palette's action says "Codex is working on it" and is disabled.
 - `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from `SHORTCUTS` in `app/shortcuts.tsx` with `Kbd`; sections General, Go to,
-  Workflow · Board, Issue, Workdatabase · Files. Go to rows: "Workflow · Board" `g w`, "Workflow · Inbox" `g i`, "Workdatabase · Library"
-  `g l` or `g d`, "Workdatabase · Glossary" `g g`, "Workdatabase · Files" `g f`, "Kit" `g k`.
-- `app/NewIssueDialog.tsx` — `n`: group picker, slug (auto from title), title, template (default|bug|research|doc), size, and a
-  "Context from the Workdatabase" field (`ContextPicker`, see the context section) with a preview of what the agent will receive and
-  the file that will be created. Calls `useNewIssue()`; opens the new issue.
+  Workflow · Board, Issue, Workdatabase · Files. Go to rows: "Workflow · Board" `g w`, "Workdatabase · Library"
+  `g l` or `g d`, "Workdatabase · Glossary" `g g`, "Workdatabase · Files" `g f`, "Workdatabase · Skills" `g s`, "Kit" `g k`. General has `n` = Add work.
+  Issue: keys 1 to 8 switch the tab (Now, Goal, Criteria, Plan, Log, Git, CI, Files). No inbox shortcut exists.
+- **The legacy New issue and New group dialogs are gone** (`app/NewIssueDialog.tsx`, `NewGroupDialog.tsx`, `dialog-parts.tsx`, their Kit
+  entries and `newIssueOpen`, `newGroupOpen`, `openNewIssue`, `openNewGroup` in the shell store). Add work (`features/add-work`) replaces both;
+  `n` opens it. The "Context from the Workdatabase" picker of the old dialog lives on in the Add work flow's context step (a chip per match) and in the
+  New file dialog (`ContextPicker`); the Goal tab's "Add context" still adds context later.
 - `app/RouteStates.tsx` — `RouteError`: "This view failed to load", the message, **Try again** (`router.invalidate()` then the
   boundary's `reset()`; it does not reload the page, so the mock's in-memory edits survive), Copy details, Go to Workflow.
   `RouteNotFound`.
@@ -383,8 +457,8 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   library, no issues), **Load sample data** (the 26 sample issues in one commit; toast "Loaded 26 sample issues"), open
   Workdatabase · Files, jump to Kit. "Play next event" says "No live events apply here. Load sample data to play them." when
   no scripted event fits the workspace. Toggled by the `.` key too.
-- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g i` Inbox, `g d` Workdatabase (Library),
-  `g l` Library, `g g` Glossary, `g f` Files, `g k` Kit, `n`, `?`, `.`.
+- `app/shortcuts.tsx` — global hotkeys: ⌘K, ⌘B, `[`, `g w` Workflow (Board), `g d` Workdatabase (Library), `g l` Library, `g g` Glossary,
+  `g f` Files, `g s` Skills, `g k` Kit, `n` Add work, `?`, `.`. `g i` (inbox) no longer exists.
 
 ### board builder: `src/features/board/**`
 
@@ -392,8 +466,15 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 `Swimlane.tsx`, `IssueCard.tsx`, `dnd.ts`, `useBoardKeys.ts`, `filter.ts`.
 - Toolbar (44 px, the Board's one top bar): `ViewTabs view="workflow"` first, then the group breadcrumb (from `group` search)
   and the count summary (container queries: the summary needs 1280 px of board width; the breadcrumb shows its whole
-  chain from 1152 px and only the current scope below that, the full path in its tooltip), swimlanes toggle (child groups | none), author filter
-  (AuthorStack + menu), text filter (`/` focuses), "Show cancelled", count summary, "New issue" button.
+  chain from 1152 px and only the current scope below that, the full path in its tooltip). At the right, in this order: text filter
+  (`/` focuses), **Needs you** (`NeedsYouToggle`: a toggle with the count of the acting person's open requests across the workspace, accent
+  above zero and when on; on, the board shows only the issues that have one: `?needs=me`; it also tells you when the group on show has none
+  and the requests are elsewhere), author filter (AuthorStack + menu), swimlanes toggle (child groups | none), "Show cancelled", and the
+  primary **+ Add work** button (`data-wf="AddWorkButton"`, shortcut `n`; it opens Add work on the group on show as the starting answer, and still asks where).
+  The toolbar takes `needsYou={{ requests, issues }}` (the Kit passes it too). The old "New issue" button is gone.
+- Empty states: an empty workspace says "No work yet" with **Add work** (primary) and **Add one issue**; an empty group says
+  "No issues in <group> yet" with the same two buttons; the Needs you filter with nothing to show says "Nothing needs you" and, when
+  requests wait elsewhere, "N issues outside <group> need you" with **Show all groups**.
 - 6 columns (`BOARD_COLUMNS`), cancelled only with `show=cancelled` (when the column appears the board scrolls it into view: a link
   that opens with it jumps, the toggle glides; at 1440 px the columns before it are then partly off to the left, inside the board's own
   scroll container). Column width `var(--wf-col-w)`. Backlog and Done
@@ -410,22 +491,24 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   (`AuthorStack`), priority glyph (urgent: filled danger tile with "!"; high: three bars; others nothing), then the mono id. Priority sits
   here, not before the title, so every title shares one left edge. Then signal chips **only when present** (wrapping, never clipped):
   needs-you (accent, count), blocked (danger), stale / lease expired (amber). Selected (open in drawer) = accent hairline.
-  `useRecentlyChanged` → `wf-flash`.
+  `useRecentlyChanged` → `wf-flash`. **While Codex works on the issue** `CodexRunMarker` (`features/codex`) takes the group path's place in the id
+  row (the Codex tile, the task id, one word for the phase), so the card keeps its height.
   **Hover footer = an overlay.** `data-wf="IssueCardFooter"` is `absolute` on the card's bottom edge and grows from 0 with
   `grid-template-rows` (`0fr` to `1fr`), so the card never changes height and nothing below it moves while the pointer sweeps down a
-  column. It shows "3/8 tasks · 2 ready", the last-activity author and time, and the "…" menu (Move to…, Open in new page, Copy link).
+  column. It shows "3/8 tasks · 2 ready", the last-activity author and time, and the "…" menu (Move to…, Open in new page, Copy link, Copy id, and the
+  two Codex actions: **Open in Codex** (copies the command) and **Do next step**, disabled with "Codex is working on it" while a run goes).
   One card shows it at a time: the hovered one while the pointer was the last input, the focused one while the keyboard was; the board
   root carries `data-input="pointer|keyboard"` (set by `useBoardKeys`) for that. The footer covers the card's last row while open. Below
   768 px and on `(hover: none)` screens there is no hover, so the footer is a plain, always-open last row in the flow.
 - Keyboard: `j/k` move card focus, `h/l` move column, Enter opens drawer, `o` full page, `s` opens the status menu
-  of the focused card, `/` filter, `n` new issue (shell handles), Esc closes drawer.
+  of the focused card, `/` filter, `n` Add work (shell handles), Esc closes drawer.
 
 ### issue-frame builder: `src/features/issue/{index.ts, IssueDrawer.tsx, IssuePage.tsx, IssueView.tsx, IssueHeader.tsx, tabs/FilesTab.tsx, DocsList.tsx, DocView.tsx, LintPanel.tsx}`
 
 `index.ts` exports everything public of the issue feature: `IssueDrawer, IssuePage, IssueView, IssueHeader,
 StateSnapshot, NeedsYouList, CriteriaChecklist, CoverageStrip, PlanLanes, PlanList, TaskPill, ChangesTimeline,
-DecisionCards, LearningCards, DocsList, DocView, LintPanel`. (Write it immediately with the paths below even
-before the other files exist.)
+DecisionCards, LearningCards, DocsList, DocView, LintPanel` (the Criteria, Git and CI tabs are in `tabs/`; see "issue-delivery" below).
+The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `features/issue` imports it statically.
 - `IssueDrawer({ id })` — `docked` (≥1600): a right panel inside BoardLayout's flex row, width `usePrefs().drawerWidth`,
   draggable left edge (440–760). `overlay` (768–1599): a sheet over the board with `shadow-pop`, click-outside closes.
   Esc closes (`useCloseIssue`). Contains `IssueView variant="drawer"`.
@@ -433,37 +516,51 @@ before the other files exist.)
 - `IssueView({ id, variant })` — loads `useIssue(id)`; skeleton while loading; "Issue <id> not found" (with "Back to board") when
   the read is a 404, also when the issue was open and then vanished (Reset data, leaving the Kit, a deleted folder): a failed
   background refetch keeps the cached copy on screen, except a `NotFoundError`; header; then:
-  - drawer: `Tabs` `Now · Goal · Plan · Log · Files` (`useIssueTab`), each tab panel scrolls independently;
-    counts on tabs (needs-you on Now, criteria verified/total on Goal, tasks done/total on Plan, entries on Log,
-    files + lint on Files). Number keys 1–5 switch tabs.
-  - page: three independently scrolling columns `[Now + Goal] [Plan] [Log]`; Files and lint reachable from the header
-    (a "Files" button opening a Sheet with `FilesTab`). Below 768 px the page falls back to the tab layout.
+  - **drawer and narrow page (under 768 px): eight tabs**, `Now · Goal · Criteria · Plan · Log · Git · CI · Files` (`ISSUE_TABS`,
+    `useIssueTab`), each tab panel scrolling independently. Keys **1 to 8** switch them in that order. Eight labels do not always fit a 440 px drawer
+    or a phone, so the strip scrolls sideways there, with a fade on the side that has more, and keeps the active tab in view. Counts: needs-you
+    on Now (accent), criteria verified/total on Criteria, tasks done/total on Plan, entries on Log, commits on Git, the latest CI run's state (a dot)
+    on CI, files + lint on Files. Goal has no count: its criteria moved to their own tab.
+  - **page, by the width of the page region** (the nav rail counts as page; `useElementWidth` on the root): from 1080 px, **three independently
+    scrolling columns**: `[Now + Goal] | [Plan + Criteria] | [Log · Git · CI]`, the Plan column at least 480 px wide, the third column a row of
+    view titles (`ViewColumn`) that follows `?tab=` when it names one of its views; from 768 to 1079 px **two columns**,
+    `[Now + Goal] | [Plan · Criteria · Log · Git · CI]` (the same view row); under 768 px the tab layout above. Files and lint
+    are reachable from the header (a "Files" button opening a Sheet with `FilesTab`; a tab on the phone). A link to a task (`T-n` pill) asks for
+    the Plan tab: on the wide page the plan is already in its own column, so the view of the third column stays where it is.
 - `IssueHeader({ detail, variant })` — id (mono, copyable), title (16 px semibold), `StatusSelect`, priority, size,
   owner, coordinator lease (AuthorChip + "lease 34m left" or amber "lease expired"), labels, due, `LintBadge`,
-  buttons: Open in new page ↗ (`o`), Copy link, Copy `wf context` command, Close (drawer only).
+  buttons: Open in new page ↗ (`o`), Copy link, Copy `wf context` command, Close (drawer only). Under the property row sits
+  **`CodexActions`** (`features/codex`): **Open in Codex** and **Do next step** side by side (see "features/codex"), above the derived signals so the
+  run's strip stays put when a signal appears. **While a run goes, the Q005 signal ("current_state is behind") is held back** (`useRunActive`, here
+  and in the Now tab's meta line): Codex writes `current_state.md` last, so the log is ahead of it by design, and a row that came and went
+  mid-run pushed the tabs down about 40 px. The signal returns, if still true, 1.5 s after the run ends.
 - `tabs/FilesTab.tsx` `FilesTab({ detail })` — `DocsList` + `LintPanel`.
 - `DocsList({ docs, onOpen })`, `DocView({ doc })` (markdown via MarkdownProse; images inline; other files: size + open raw).
 - `LintPanel({ diagnostics })` — grouped by file, severity icon, rule id (mono), message, "line 12" jump link
   (copies `path:line`), fix hint, and "Edit at this line": `useEditAtLine()` calls `useFilesNav().edit(path, { line })`, so the editor opens with
   the caret and the scroll on that line (`EditIntent.line`). The Goal tab's F001 banner "Fix in editor" does the same.
 - Tab components from other builders, all with props `({ detail: IssueDetail, variant: "drawer" | "page" })`:
-  `tabs/NowTab.tsx → NowTab`, `tabs/GoalTab.tsx → GoalTab`, `tabs/PlanTab.tsx → PlanTab`, `tabs/LogTab.tsx → LogTab`.
+  `tabs/NowTab.tsx → NowTab`, `tabs/GoalTab.tsx → GoalTab`, `tabs/CriteriaTab.tsx → CriteriaTab`, `tabs/PlanTab.tsx → PlanTab`,
+  `tabs/LogTab.tsx → LogTab`, `tabs/GitTab.tsx → GitTab`, `tabs/CiTab.tsx → CiTab`, `tabs/FilesTab.tsx → FilesTab`.
+- `[[#SC-n]]` links (`RefLink`) go to the **Criteria** tab; `[[#T-n]]` to Plan, `[[#Q-…]]` to Now, `C-`/`D-`/`L-` to the matching Log view.
 
 ### issue-now-goal builder: `src/features/issue/{tabs/NowTab.tsx, tabs/GoalTab.tsx, StateSnapshot.tsx, NeedsYouList.tsx, CriteriaChecklist.tsx, CoverageStrip.tsx}`
+
+(The criteria and their coverage moved out of the Goal tab into the Criteria tab, plan D1; the components below are unchanged and now live there.)
 
 - `NowTab({ detail, variant })` — `StateSnapshot`; empty state when `state` is null (skill `write-current-state`).
 - `StateSnapshot({ state: CurrentState, detail: IssueDetail })` — summary line (14 px, the hero); "updated 12m ago by
   @claude-opus" with staleness tint (amber when older than `issue_hours` or `summary.signals.state_behind_changes`
-  → "behind 3 changes"); `NeedsYouList` with inline answer box; In flight with `TaskPill`s; Blocked (danger left
+  → "behind 3 changes", held back while a Codex run goes on the issue: `useRunActive`); `NeedsYouList` with inline answer box; In flight with `TaskPill`s; Blocked (danger left
   hairline); Next steps numbered, item 1 emphasized as "Next"; Done, Handoff notes, Failed attempts collapsed
   (Collapsible, with counts). Word count warning when >400 (Q008).
 - `NeedsYouList({ items: NeedsYouItem[], issueId })` — each: kind icon, question, from → to, urgency chip
   (blocking = accent), asked time, ref link, options as buttons (approve/reject) or a textarea for question/input;
   submit → `useAnswerRequest()`; answered items show "Answered by @shruti · waiting for `wf resolve`".
-- `GoalTab({ detail, variant })` — Context (MarkdownProse with diagrams), Success criteria (`CriteriaChecklist` +
-  `CoverageStrip`), Out of scope, Links, unknown frontmatter keys (F006) as faint key/value rows. When
+- `GoalTab({ detail, variant })` — Context (MarkdownProse with diagrams), Out of scope, Linked context (the `## Links` bullets, with "Add context"),
+  unknown frontmatter keys (F006) as faint key/value rows. **No success criteria here**: they are the Criteria tab. When
   `goal.frontmatter_ok` is false: show the F001 finding banner and the raw file in a mono block with the error line
-  highlighted (this is SC-2 in the dogfood issue).
+  highlighted (this is SC-2 in the dogfood issue). A goal with criteria but no context says "No context yet … The success criteria are in the Criteria tab."
 - `CriteriaChecklist({ criteria, issueId })` — header with `ProgressRing` (size 28, label) and "2 verified · 1 claimed
   · 5"; each row: criterion checkbox (open/claimed hatched/verified solid), `SC-n` mono, the EARS sentence with
   keywords in faint small caps (`ears.keywords` spans), chips: `verify` (mono command or "manual"), `evidence` (link),
@@ -471,6 +568,22 @@ before the other files exist.)
   shows scenario and verified_by.
 - `CoverageStrip({ criteria, tasks })` — one compact row per SC: which tasks satisfy it (TaskPills); uncovered
   criteria flagged (Q006 info).
+
+### issue-delivery builder: `src/features/issue/{tabs/CriteriaTab.tsx, tabs/GitTab.tsx, tabs/CiTab.tsx, delivery-ui.tsx}` (plan D1, D2)
+
+- `CriteriaTab({ detail, variant })` — how we know the issue is done: `CriteriaChecklist` (tick, claimed, verified, evidence) and below it
+  `CoverageStrip` (which tasks satisfy each criterion). With no `plan.md` it says so ("Small issues may skip the plan, so task coverage is not
+  tracked" for xs and s). When `goal.md` does not parse, it points at the Goal tab, which shows the finding. Key `3`.
+- `GitTab({ detail, variant })` — **Pull requests** and **Commits** of the issue from `useDelivery(id)`, newest first. `PullRequestRow`: state
+  (draft, open, merged, closed), title, number, branch, review state (pending, approved, changes requested) and checks (passed, failed, pending) in a fixed order.
+  `CommitRow`: short sha (copy), subject, author, time, branch, pull request, and a `T-n` pill that selects the task in Plan.
+  A commit that Codex just made is highlighted once (`useFreshKeys`). Empty state: "No commits mention wf-xxxxx yet", with the trailer
+  `Issue: wf-xxxxx` to copy (`TrailerCopy`) and the branch name `wf-xxxxx/…` that also finds the issue. The prototype has no links out (`url` is null). Key `6`.
+- `CiTab({ detail, variant })` — **pipeline runs** (`PipelineRow`), newest first, each a collapsible with its jobs: workflow, result
+  (`RunStateIcon`: green check, red cross, a turning arc while it runs, a dashed ring while it waits), duration, trigger, branch and sha; a failed run names
+  the failed job before it is opened. Empty state: "No CI runs for wf-xxxxx yet". A run that Codex starts appears without a reload. Key `7`.
+- `delivery-ui.tsx` — the shared bits: `RunStateIcon`, `CiDot` (the CI tab's count), `TrailerCopy`, `gitTitle`/`ciTitle` (tab tooltips),
+  `deliveryCounts`, `shortBranch`, `useFreshKeys`.
 
 ### issue-plan builder: `src/features/issue/{tabs/PlanTab.tsx, PlanLanes.tsx, PlanList.tsx, TaskPill.tsx, TaskDetail.tsx}`
 
@@ -527,9 +640,10 @@ before the other files exist.)
 - `DiagramDialog({ diagram, open, onOpenChange })` — fullscreen dialog, iframe without `embed`,
   `sandbox="allow-scripts allow-downloads"`, header with title, type, source location (`plan.md:40`), copy JSON.
 
-### library-inbox builder: `src/features/library/**`, `src/features/inbox/**`
+### library builder: `src/features/library/**`
 
-`library/index.ts` exports `LibraryView, LibraryItemView, GlossaryPage, GlossaryView, MarkdownDocument, PromoteDialog`. `inbox/index.ts` exports `InboxView`.
+`library/index.ts` exports `LibraryView, LibraryItemView, GlossaryPage, GlossaryView, MarkdownDocument, PromoteDialog`. (`features/inbox` is deleted:
+there is no `InboxView`; see "Needs you" under the board.)
 - `LibraryView` — Workdatabase · Library (the Glossary is its own page, `/glossary`, `GlossaryPage`): one 44 px top bar (`ViewTabs` first), then
   facets (kind, status, review overdue, tags), search (server `useSearch(q, "library")`, `/` focuses it) and the list of item rows (kind icon,
   title, "Use when…" description, status chip (draft = outline, reviewed = success, retired = faint strike), used by N, review overdue amber);
@@ -560,11 +674,6 @@ before the other files exist.)
   entry: gotcha/pattern/tip→pattern, decision→decision), slug (auto), preview of the draft item, dedupe suggestion
   ("Similar: lib-… — merge instead?" when the mock search finds a close title), Create draft → `usePromote()`;
   explains that a review request goes to the group owner.
-- `InboxView` — Workflow · Inbox, the needs-you inbox across the workspace: `ViewTabs` at the left of the top bar, a
-  Mine | All | Answered filter (segmented control) at the right; rows: urgency, kind icon,
-  question, issue title (opens the issue), from → to, asked time, options as inline buttons / answer box
-  (`useAnswerRequest`); blocking first; empty state "Nothing needs you". Notification opt-in banner for blocking
-  requests (uses `usePrefs().setNotifications` + `Notification.requestPermission`).
 
 ### workspace-files builder: `src/features/files/**` (+ View source in `features/issue/{tabs/FilesTab,DocsList,DocView}.tsx`)
 
@@ -614,6 +723,59 @@ There is no "Prototype" chip on the page (the top bar's one-line explanation has
 - Data: only `useWorkspaceFiles`, `useWorkspaceFile`, `useWriteWorkspaceFile`, `useDeleteWorkspaceFile` from `@/lib/api`.
   The editor never holds data of its own; what you save is read back through the same loader as a file saved on disk.
 
+### features/add-work: `src/features/add-work/**` (plan D6, + Add work)
+
+`index.ts` exports `AddWorkDialog`. The shell mounts it lazily and opens it through `openAddWork(start?)` (`@/app/shell-store`; `n`, the toolbar's **+ Add work**, the
+empty board's buttons and the palette). It replaces the New issue and New group dialogs. **One question per screen; buttons first, then
+multiple choice, then a dropdown; a field only for the one thing nothing else can capture.** Number keys pick an answer, Enter goes on, Backspace or ← and the dots go back, Esc asks to discard once
+something is typed or proposed (`isDirty`). Files: `flow.ts` (the flow as plain data: the steps of each path, what a screen needs, the names, the
+arguments of `useCreateWork`; no React), `useAddWorkFlow.ts` (the state and the keys), `AddWorkDialog.tsx` (the dialog, `DiscardDialog`), `AddWorkPanel.tsx` (the inside, shared with the Kit), `parts.tsx`
+(`ChoiceList`, `ChoiceButton`, `ToggleChip`, `ProgressDots`, `KeyCap`, `KeyHint`), `steps/*`.
+- **Group path** (`GROUP_STEPS`): What → Where → Outcome (the one typed line) → Name (three suggestions made from the outcome, or "Write my own") →
+  Size → Priority → Context → **Codex splits** (the last screen). **At most 8 clicks, the click that opens the dialog included, and one typed
+  line**: open (1), What (2), Where (3), type the outcome and press Enter (no click), Name (4), Size (5), Priority (6), Context "Skip" (7), then the button of the
+  split screen that adds the issues (8). `clicksToAdd` and `GROUP_CLICK_BUDGET` pin it in the tests. Choosing Planned instead of Backlog is one more click (or key `2`).
+- **The split screen is also the review.** While Codex splits (three visible steps, about 2 s, `SplitProgress`) it shows progress; then one `SplitCard` per
+  proposal (keep or drop, size, priority, the title editable on demand), **Start in: Backlog | Planned** (`StartIn`; keys `1` and `2`; Backlog until changed), and the primary button
+  **"Add N issues to <group>"** (Enter). There is no separate Review screen on the group path. A split that fails says so with "Try again"; "Split again" starts over.
+  The proposals stay while the outcome, name, size and context stay the same (`splitSignature`).
+- **Issue path** (`ISSUE_STEPS`, from "Add one issue…" or after picking "One issue"): What → Where → Title (typed) → Priority → Size → Status (Backlog or Planned) → Context → a short
+  Review ("Add issue to <group>"), the one place a lone issue is checked before it is written. 8 clicks as well.
+- **Where** is buttons (the top level and every group, "Inside wf / web") up to 8 places (`MAX_WHERE_BUTTONS`), a searchable list beyond. The place starts at the group the caller named,
+  then the group the board shows.
+- **Context** shows the library items and glossary terms that match what was typed as toggle chips (the most used ones when nothing matches); picks are linked under `## Links` of every created issue.
+- The result is one `useCreateWork` commit, a toast ("Added <group> with 4 issues", or "Added <title>" with **Open**), and the board opens on the new group with Backlog unfolded.
+
+### features/codex: `src/features/codex/**` (plan D3, D4, + Open in Codex and Do next step)
+
+`index.ts` exports `CodexActions, CodexRunMarker, OpenInCodex, OpenInCodexPanel, RunStatus, RunProgress, RunNotice, RunsPopover, RunsList, runLine, runWord,
+copyCodexCommand, OPEN_IN_CODEX_HINT, useCodexIssue, useCardRun, useNextStep, useRunActive`. The user asked for "a way to open the codex in a button form, and
+beside it a button that in the background does the next step".
+- `CodexActions({ issue })` — the issue header's pair of buttons. **Open in Codex** copies `codexCommand(issue).command` (a `codex "Work on wf-xxxxx … Read current_state.md first, then use the wf skills (doing-next-step)"` line;
+  the toast "Copied the Codex command" says to paste it at the repo root) and opens `OpenInCodexPanel`, which shows the exact prompt, so nobody pastes a command they have not seen.
+  With the local daemon the same button starts Codex itself (D3). **Do next step** starts a background run; while it goes the button's slot becomes `RunStatus` (the live phase
+  "Claiming T-3", "Logging the change", "Verifying: CI running", "Finishing T-3", a progress bar, Cancel), and a run with nothing to do says why on a line below with a way to the Plan tab (`RunNotice`).
+  `RunsPopover` lists the issue's recent runs. The result of a run is not shown in the strip: it is markdown in the issue (the task, a change entry) plus a commit and a CI run, in the Plan, Log, Git and CI tabs.
+- `CodexRunMarker({ run })` — the card's mark while a run goes (the Codex tile, the task id, one word for the phase), in the id row in place of the group path.
+- **One code path per action, so one wording and one toast whichever button started it.** `copyCodexCommand(issue)` is the copy (header, card menu, palette); `useNextStep(issue)` starts a run from a place with no strip
+  (card menu, palette); `useCodexIssue(issue)` is the header's. All three call `followRun`, which waits for the run to end and says so in **exactly one toast** ("Codex finished T-3 … Open log", or "Codex failed on T-3");
+  a cancel is the person's own act and has none. A run with nothing ready is explained at once (the header's `RunNotice`, a toast from the menu and the palette).
+- `useRunActive(issueId)` — true while a run goes on the issue and for 1.5 s after (the time the issue takes to be read again). The header's Q005 row and the Now tab's "behind" chip wait on it.
+- Run words are in `run-copy.ts` (`runLine`, `runWord`, `runProgress`, `activeRun`): the strip, the card marker, the runs list and the toasts all read a run through them.
+
+### features/skills: `src/features/skills/**` (plan D7, Workdatabase · Skills)
+
+`index.ts` exports `SkillsView, SkillItemView, SkillRow, SkillSource, InstallPanel, useSkillsNav, skillHref, validateSkillsSearch`. Goal 1 of the user: **distribute skills and plugins across the team**.
+- `SkillsView` (`/skills`, `g s`) — a 44 px top bar that starts with the Workdatabase tabs, then by page width (the rail counts): from 900 px the install panel and the list beside the open skill; under 900 px
+  and on a phone an open skill is a screen of its own. `?skill=<name>` opens one. Esc closes it.
+- `InstallPanel` — the commands to install the repository's plugins: for Claude Code one to add the marketplace (`/plugin marketplace add <repo>`) and one install per plugin
+  (`/plugin install workflow@workflow-marketplace`), and for Codex one (`scripts/install-skills.sh --codex`, which copies the skills to `.agents/skills/`), each with a copy button. They are built from the plugin's own manifests (`claudeInstallCommands`, `codexInstallCommands`), so they do not go stale.
+- `SkillRow` — name, description and the plugin; `SkillItemView` — one skill: its plugin, where it lives, `SkillSource` (the SKILL.md read from the file, rendered, with a Rendered | Source switch).
+- Data: `useSkills()` reads `plugins/*/skills/*/SKILL.md`, the plugin manifests and `.claude-plugin/marketplace.json` (see the data layer); a saved SKILL.md updates the page in the dev server.
+- **The headless skills** are `plugins/workflow/skills/*`: `using-wf`, `adding-work`, `planning-issues`, `doing-next-step`, `logging-work`, `checking-status`, `handing-off` and `writing-readable-bulk-text`.
+  They edit the same markdown files in the contract format (there is no `wf` CLI yet), so Codex or Claude can run the whole flow without the UI and the UI shows the result, and a UI edit is just a file for
+  Codex: that is the goal "the UI should work without Codex, and Codex should replicate the flow with a set of skills without the UI". `node scripts/wf-lint.mjs <workspace>` (`pnpm wf:lint`) checks a workspace.
+
 ### context builder: `src/features/context/**`
 
 Context from the Workdatabase: library items, glossary terms, files and decisions an agent should read with an issue. `index.ts` exports
@@ -627,13 +789,21 @@ queries as the Library, Glossary and Files views) and the link grammar (`links.t
 
 `/kit` is the component gallery (not a view): a left index and one section per element, so the user can review element by element and answer
 as "ElementName: change". `?el=<ComponentName>` opens the page at that element's section (for example `/kit?el=IssueCard`); `?view=side` shows
-light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name. Foundations shows the tokens live (surfaces,
+light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name, and `registry.ts` lists every file in index order.
+The groups (`GROUPS` in `kit-ui.tsx`) follow the product: Foundations, Shell, Workflow · Board, Issue · Header, Now, Goal, **Criteria**, Plan, Log, **Git**, **CI**, Files, Diagrams,
+Workdatabase, Shared, Primitives. There is no "Workflow · Inbox" group. The Add work entries (`entries/add-work.tsx`: `AddWorkDialog` screen by screen,
+`ChoiceList`, `ChoiceButton`, `ToggleChip`, `ProgressDots`, `SplitProgress`, `SplitCard`, `SplitStart`, `DiscardDialog`, `NeedsYouToggle`) sit under Shell and
+Workflow · Board; the Codex entries (`entries/codex.tsx`: `CodexActions`, `CodexRunStatus`, `CodexRunNotice`, `OpenInCodexPanel`, `CodexRunsList`, `CodexRunMarker`) under Issue · Header and
+Workflow · Board; the Skills entries (`entries/skills.tsx`) under Workdatabase; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
+`PipelineRow` and `RunStateIcon`. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
+`needsYou={{ requests, issues }}`, so the Needs you count shows (and a variant has the filter on). Foundations shows the tokens live (surfaces,
 accent and signals, readable signal text, scrim and the z scale, status colors, the hue scale). The "hover footer (forced open)" board variant
 forces the footer open with a selector on `IssueCardFooter`; the real footer is an overlay on the card's last row, and so is this one.
 The kit names real issues by id (`wf-3k9x2` and so on), and the shipped workspace has none, so `KitPage` holds the sample while the
 route is open: on mount it saves the user's working copy and loads the sample (`mockControls.holdSample()`), on unmount it puts the
 saved copy back exactly. The hold is counted in the store, so StrictMode and repeated visits cannot corrupt it. What an element
-writes in the kit (Edit, Create, Delete) goes to the sample copy and is gone when the kit closes. The user's saved prefs are not touched.
+writes in the kit (Edit, Create, Delete, a Codex run, an Add work) goes to the sample copy and is gone when the kit closes. The user's saved prefs are not touched.
+The gallery is a lazy chunk (`KitPage` imports `KitGallery` on demand).
 
 ## Mock world (the sample folder; others may rely on these ids)
 
@@ -664,6 +834,8 @@ ref D-7f3k2). ~10 changes over 2 days incl. a `failure` and a `verify` pass; dec
 "Push board updates over SSE" superseding an earlier "Poll the snapshot every 2 s"; 3 learnings (one promoted to
 `lib-4tz7c`, one candidate). Docs: `notes/research.md`, `evidence/sc2.png`. Diagrams `live-board-architecture`
 (goal.md) and `sse-delivery-flow` (plan.md). A couple of S/Q lint findings.
+
+Its delivery data (commits, pull requests, CI runs: `mock/fixtures/delivery-sample.json`, not markdown, see "Delivery") gives the Git and CI tabs something to show.
 
 About 20 more issues across all statuses and groups showing every signal at least once: needs-you blocking and fyi,
 blocked (with `blocked_by`), stale (amber), lease expired, done-but-criteria-unmet drift, in_progress without plan,

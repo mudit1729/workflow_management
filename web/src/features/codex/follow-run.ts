@@ -1,10 +1,10 @@
 // A run goes on after the person leaves the screen that started it: from the board's card menu
-// the strip in the issue header is not on screen at all. `followRun` waits for the run to end and
-// says so in a toast, unless a header for that issue is open (its strip already says it).
+// or the palette the strip in the issue header may not be on screen at all. `followRun` waits for
+// the run to end and says so in one toast, whichever button started the run. (The header's strip
+// shows the run while it goes; the toast is the one line that reaches the person wherever they are.)
 //
 // The mock stream and the polling of mounted `useCodexRuns` hooks carry the updates. `wf serve`
 // has no stream, so a run started there is announced while a hook polls it.
-import { useEffect } from "react";
 import { toast } from "sonner";
 import type { IssueId } from "@/gen/types";
 import { type CodexRun, connectCodexLive, qk, queryClient } from "@/lib/api";
@@ -13,21 +13,6 @@ import type { CodexIssue } from "./open-in-codex";
 
 /** Same shape as `useOpenIssue()` returns. */
 export type OpenIssue = (id: IssueId, opts?: { tab?: IssueTab }) => unknown;
-
-/** Issues whose header is on screen, with how many headers. */
-const watched = new Map<IssueId, number>();
-
-/** Mark an issue as watched while a component that shows its run is mounted. */
-export function useWatchedIssue(id: IssueId): void {
-  useEffect(() => {
-    watched.set(id, (watched.get(id) ?? 0) + 1);
-    return () => {
-      const n = (watched.get(id) ?? 1) - 1;
-      if (n <= 0) watched.delete(id);
-      else watched.set(id, n);
-    };
-  }, [id]);
-}
 
 const GIVE_UP_MS = 10 * 60_000;
 
@@ -41,7 +26,6 @@ function find(id: string, issue: IssueId): CodexRun | undefined {
 
 /** Say how the run ended. A cancel is the person's own act and needs no toast. */
 function announce(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue) {
-  if (watched.has(issue.id)) return;
   const task = run.task ?? "the task";
   if (run.status === "done") {
     toast(`Codex finished ${task}`, {

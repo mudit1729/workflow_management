@@ -15,16 +15,16 @@ Everything below is the README of the workspace as it was; read "this folder" as
 
 This folder is a real `wf` workspace (`wf_format = 1`): markdown files and one `workflow.toml`.
 **It is the only source of truth of the mock world.** The prototype has no other data. Boards, cards,
-signals, lint, the inbox and the library are all read from these files.
+signals, lint, the Needs you filter and the library are all read from these files.
 
-In the browser the workspace has two views. **Workflow** (Board, Inbox) is work in motion.
+In the browser the workspace has two views. **Workflow** (Board, with a Needs you filter for what waits on you) is work in motion.
 **Workdatabase** (Library, Glossary, Files) is everything stored. An issue is a folder of markdown
 files, as in the product. A text editor is enough:
 
 - Edit any file while `pnpm dev` runs and the board updates within a second. The mock watcher
   re-reads the files, finds what changed and fades the cards that moved.
 - In the browser, open **Workdatabase · Files** to edit, create or delete a file. The board, signals,
-  lint, inbox and library follow the text. This works in the static build too.
+  lint, the Needs you filter and the library follow the text. This works in the static build too.
 - Every action in the UI is a minimal text edit of these files. Ticking `SC-3` flips `[ ]` to `[x]`
   on that line of `goal.md` and changes nothing else.
 

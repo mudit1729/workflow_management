@@ -79,7 +79,11 @@ function CoverageStripBody() {
 function GoalTabBody() {
   return (
     <>
-      <V label="wf-3k9x2 · context with diagrams, criteria, coverage" width={560}>
+      <V
+        label="wf-3k9x2 · context with diagrams, out of scope, linked context"
+        note="The success criteria are in the Criteria tab."
+        width={560}
+      >
         <WithDetail id={ISSUE.rich}>{(d) => <GoalTab detail={d} variant="drawer" />}</WithDetail>
       </V>
       <V
@@ -112,14 +116,14 @@ function GoalTabBody() {
 
 export const issueGoalEntries: KitEntry[] = [
   entry(
-    "Issue · Goal",
+    "Issue · Criteria",
     "CriteriaChecklist",
     `${SRC}/CriteriaChecklist.tsx`,
     "Done is a claim you can check: each criterion shows its three states, the command or person that verifies it and the evidence, so 'claimed' never passes for 'verified'.",
     CriteriaChecklistBody,
   ),
   entry(
-    "Issue · Goal",
+    "Issue · Criteria",
     "CoverageStrip",
     `${SRC}/CoverageStrip.tsx`,
     "It shows which tasks satisfy which criterion and flags the ones nothing covers, so a plan cannot quietly skip a requirement.",
@@ -129,7 +133,7 @@ export const issueGoalEntries: KitEntry[] = [
     "Issue · Goal",
     "GoalTab",
     `${SRC}/tabs/GoalTab.tsx`,
-    "The goal explains why the issue exists and how we will know it is done; a file with broken frontmatter still shows, with the exact bad line, instead of vanishing.",
+    "The goal explains why the issue exists and what it leaves out; a file with broken frontmatter still shows, with the exact bad line, instead of vanishing.",
     GoalTabBody,
   ),
 ];
