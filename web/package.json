@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:mock": "vite --mode mock",
     "build": "vite build",
-    "build:static": "VITE_HASH_ROUTER=1 vite build --base ./ --outDir dist-static",
+    "build:static": "VITE_STATIC=1 VITE_HASH_ROUTER=1 vite build --base ./ --outDir dist-static",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check src mock",
