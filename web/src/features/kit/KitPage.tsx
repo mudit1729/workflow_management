@@ -1,7 +1,13 @@
 // The /kit route. The gallery and everything it imports load only when the route opens,
 // so the main bundle carries just this wrapper.
-import { lazy, Suspense } from "react";
+//
+// The kit shows real issues by id (wf-3k9x2 and so on), and the shipped workspace has none. So
+// while the route is open it holds the sample world: the user's working copy is saved, the sample
+// is loaded, and leaving the kit puts the saved copy back exactly. The hold is counted in the
+// mock store, so a second mount (StrictMode, a quick re-entry) cannot corrupt the saved copy.
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui";
+import { isRealApi, loadMock } from "@/lib/api/mock-bridge";
 
 const KitGallery = lazy(() => import("./KitGallery"));
 
@@ -30,10 +36,32 @@ function KitFallback() {
   );
 }
 
+/** True once the sample is loaded for the kit (at once on a build that talks to wf serve). */
+function useSampleWhileOpen(): boolean {
+  const [ready, setReady] = useState(isRealApi);
+  useEffect(() => {
+    if (isRealApi) return;
+    let cancelled = false;
+    let release: (() => void) | undefined;
+    loadMock()
+      .then((mock) => {
+        // The page may be gone by the time the mock server module has loaded.
+        if (cancelled) return;
+        release = mock.mockControls.holdSample();
+        setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+      release?.();
+    };
+  }, []);
+  return ready;
+}
+
 export function KitPage() {
-  return (
-    <Suspense fallback={<KitFallback />}>
-      <KitGallery />
-    </Suspense>
-  );
+  const ready = useSampleWhileOpen();
+  return <Suspense fallback={<KitFallback />}>{ready ? <KitGallery /> : <KitFallback />}</Suspense>;
 }

@@ -78,6 +78,16 @@ export function splitFrontmatter(text: string): SplitMarkdown {
   return { entries, body: lines.slice(close + 1).join("\n"), lineOffset: close + 1 };
 }
 
+/**
+ * The `[[…]]` targets a frontmatter key lists, as written in the file (`source:` of a library item).
+ * The server drops one that no longer resolves; the file still names it.
+ */
+export function frontmatterRefs(text: string, key: string): string[] {
+  const entry = splitFrontmatter(text).entries?.find((e) => e.key === key);
+  if (!entry) return [];
+  return [...entry.value.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1] ?? "").filter(Boolean);
+}
+
 const OPEN = /^( {0,3})(`{3,}|~{3,})[ \t]*archify\b(.*)$/;
 
 /**

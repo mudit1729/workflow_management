@@ -1,5 +1,5 @@
 // Kit entries for the markdown-grounded library: the document viewer, the source-line tag and the
-// Glossary page. The documents are real files of the mock workspace; edit one in Workdatabase · Files
+// Glossary page. The documents are real files of the sample world (web/mock/sample); edit one in Workdatabase · Files
 // and the page here changes.
 import type { ReactNode } from "react";
 import { toast } from "sonner";

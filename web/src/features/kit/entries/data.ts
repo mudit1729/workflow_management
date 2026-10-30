@@ -1,4 +1,5 @@
-// Ids of the mock world that the variants pick: the markdown files under web/mock/workspace/.
+// Ids of the sample world that the variants pick: the markdown files under web/mock/sample/
+// (the kit holds the sample while it is open; the shipped workspace has no issues).
 // Variants read the live objects through the data hooks and override fields where a state does
 // not exist in the files.
 

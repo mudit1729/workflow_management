@@ -37,7 +37,7 @@ import { useApproveLibrary, useIssueMap, useLibraryItem, useWorkspaceFile } from
 import { cn } from "@/lib/cn";
 import { STATUS_LABEL } from "@/lib/status";
 import { MarkdownDocument, Properties, Property } from "./MarkdownDocument";
-import { splitFrontmatter } from "./markdown";
+import { frontmatterRefs, splitFrontmatter } from "./markdown";
 import { formatDate, InlineCode, LibraryStatusChip, sortSections } from "./meta";
 
 /** The item as the page it renders to, or as the text it is written in. */
@@ -216,7 +216,10 @@ function ItemBody({
               />
             )}
 
-            <Sources sources={detail.source} />
+            <Sources
+              sources={detail.source}
+              written={text ? frontmatterRefs(text, "source") : []}
+            />
             <UsedBy backlinks={detail.backlinks} />
             {findings.length > 0 && <Findings findings={findings} />}
           </div>
@@ -650,31 +653,46 @@ function Panel({
   );
 }
 
-function Sources({ sources }: { sources: Ref[] }) {
+function Sources({ sources, written }: { sources: Ref[]; written: string[] }) {
+  // The server drops a source that no longer resolves. The file still names it: show it as a
+  // dangling reference instead of claiming that no source was recorded.
+  const unresolved = written.filter((t) => !sources.some((ref) => ref.target === t));
   return (
     <Panel name="LibrarySources" title="Sources" aside="Where this came from">
-      {sources.length === 0 ? (
+      {sources.length === 0 && unresolved.length === 0 ? (
         <p className="px-3 py-2.5 text-fg-faint text-sm">
           No source recorded. Promote a learning or decision to give it one.
         </p>
       ) : (
         <ul className="divide-y divide-border">
           {sources.map((ref) => (
-            <li key={ref.target} className="flex min-w-0 items-baseline gap-2 px-3 py-2 text-base">
-              <Link2
-                aria-hidden
-                size={14}
-                strokeWidth={1.75}
-                className="shrink-0 translate-y-[2px] text-fg-faint"
-              />
-              <span className="min-w-0 text-fg-muted">
-                Promoted from <RefLink target={ref.target} />
-              </span>
-            </li>
+            <SourceRow key={ref.target}>
+              <RefLink target={ref.target} />
+            </SourceRow>
+          ))}
+          {unresolved.map((target) => (
+            <SourceRow key={target}>
+              <RefLink target={target} />
+              <span className="ml-2 text-fg-faint text-sm">Not in this workspace</span>
+            </SourceRow>
           ))}
         </ul>
       )}
     </Panel>
+  );
+}
+
+function SourceRow({ children }: { children: ReactNode }) {
+  return (
+    <li className="flex min-w-0 items-baseline gap-2 px-3 py-2 text-base">
+      <Link2
+        aria-hidden
+        size={14}
+        strokeWidth={1.75}
+        className="shrink-0 translate-y-[2px] text-fg-faint"
+      />
+      <span className="min-w-0 text-fg-muted">Promoted from {children}</span>
+    </li>
   );
 }
 

@@ -17,8 +17,8 @@ import { ContextPicker, ContextPreview } from "@/features/context";
 import { type ContextItem, toLink } from "@/features/context/types";
 import type { GroupId, Size } from "@/gen/types";
 import { useGroupTree, useIssueMap, useNewIssue, useSnapshot } from "@/lib/api";
+import { revealBacklog } from "@/lib/board-folds";
 import { useBoardSearch, useOpenIssue, useOpenIssueId } from "@/lib/nav";
-import { usePrefs } from "@/lib/prefs";
 import {
   Field,
   flattenGroupOptions,
@@ -104,12 +104,6 @@ export function NewIssueDialog() {
       </DialogContent>
     </Dialog>
   );
-}
-
-/** A new issue starts in Backlog, which the board folds by default: unfold it so the card shows. */
-function revealBacklog() {
-  const { foldedColumns, toggleColumnFold } = usePrefs.getState();
-  if (foldedColumns.includes("backlog")) toggleColumnFold("backlog");
 }
 
 function useDefaultGroup(options: GroupOption[]): GroupId | undefined {

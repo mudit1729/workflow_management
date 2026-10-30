@@ -16,7 +16,8 @@ import { ISSUE } from "./data";
 
 const SRC = "src/features/files";
 
-// Files the variants open. They are real files of the mock workspace (web/mock/workspace).
+// Files the variants open. They are real files of the sample world (web/mock/sample), which the
+// kit holds while it is open (see KitPage.tsx).
 const GOAL = "issues/wf/web/live-board-updates/goal.md";
 const CHANGES = "issues/wf/web/live-board-updates/changes.md";
 const BAD_YAML = "issues/wf/web/tab-title-count/goal.md";
@@ -25,7 +26,7 @@ const CONFIG = "workflow.toml";
 const EDITABLE = "issues/wf/skills/promote-learnings/goal.md";
 
 const WRITES =
-  "Edit, Create and Delete write to the mock workspace; Reset data in the Prototype panel restores the files.";
+  "Edit, Create and Delete write to the sample copy the kit holds; Reset data in the Prototype panel restores it, and leaving the kit puts your own workspace back.";
 
 // ---------------------------------------------------------------- WorkspaceView
 
@@ -265,7 +266,7 @@ function NewFileDialogBody() {
   return (
     <V
       label="open"
-      note="Create writes to the mock workspace: a new issue is a new card, a change entry opens the editor."
+      note="Create writes to the sample copy the kit holds: a new issue is a new card, a change entry opens the editor."
     >
       <Sandbox quiet>
         <Row>

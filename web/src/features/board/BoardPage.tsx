@@ -1,8 +1,8 @@
 // /w: the board. Builds one view model from the snapshot and the URL search
 // (group, swim, author, q, show) and hands it to the toolbar and the board.
-import { FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
+import { FolderPlus, FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { openNewIssue } from "@/app/shell-store";
+import { openNewGroup, openNewIssue } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
 import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
@@ -66,6 +66,8 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch) {
   return {
     chain: missing ? [root] : chain,
     missing,
+    /** Issues in the whole workspace: zero means a clean slate, whatever the scope or filters. */
+    total: data.issues.length,
     selected,
     scoped,
     visible,
@@ -140,7 +142,8 @@ export function BoardPage() {
     />
   );
 
-  const newIssue = () => openNewIssue(model.chain.length > 1 ? model.selected.id : undefined);
+  const scopeGroup = model.chain.length > 1 ? model.selected.id : undefined;
+  const newIssue = () => openNewIssue(scopeGroup);
 
   let body: ReactNode;
   if (model.missing) {
@@ -154,6 +157,28 @@ export function BoardPage() {
             <Button variant="secondary" size="sm" onClick={() => setSearch({ group: undefined })}>
               Show all issues
             </Button>
+          }
+        />
+      </Centered>
+    );
+  } else if (model.total === 0) {
+    // A clean slate: no issue anywhere. Say so once, at board level, and offer the two ways in.
+    body = (
+      <Centered>
+        <EmptyState
+          title="No work yet"
+          hint="Add a group or an issue to start."
+          action={
+            <div className="flex items-center gap-2">
+              <Button variant="primary" size="sm" onClick={newIssue}>
+                <Plus size={14} strokeWidth={1.75} />
+                New issue
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => openNewGroup(scopeGroup)}>
+                <FolderPlus size={14} strokeWidth={1.75} />
+                New group
+              </Button>
+            </div>
           }
         />
       </Centered>

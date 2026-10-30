@@ -13,7 +13,7 @@ import {
   TabsTrigger,
 } from "@/components/ui";
 import type { IssueDetail, IssueId, LintCounts } from "@/gen/types";
-import { useIssue, useIssueSummary, useSnapshot } from "@/lib/api";
+import { NotFoundError, useIssue, useIssueSummary, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useHotkey, useMediaQuery } from "@/lib/hooks";
 import { ISSUE_TABS, type IssueTab, useCloseIssue, useGo, useIssueTab } from "@/lib/nav";
@@ -39,8 +39,11 @@ export function IssueView({ id, variant }: IssueViewProps) {
   const query = useIssue(id);
   const detail = query.data;
 
-  // Data wins over a failed background refetch: keep showing what we have.
-  if (!detail) {
+  // Data wins over a failed background refetch: keep showing what we have. Except a 404: the
+  // issue is gone (its folder was deleted, or Reset data / the Kit put another workspace back),
+  // so the copy we still hold must not stay on screen.
+  const gone = query.error instanceof NotFoundError;
+  if (!detail || gone) {
     if (query.isPending) return <IssueSkeleton variant={variant} />;
     return (
       <IssueUnavailable

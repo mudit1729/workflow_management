@@ -1,5 +1,5 @@
 // Context from the Workdatabase: the picker in the New issue dialog, what the agent gets, and the
-// links as the Goal tab shows them. The sample items are read from the mock workspace by id, so
+// links as the Goal tab shows them. The sample items are read from the sample world (web/mock/sample) by id, so
 // the previews show and size the real library items, terms, files and decisions.
 import { type ReactNode, useMemo, useState } from "react";
 import { openNewIssueWithContext } from "@/app/NewIssueDialog";

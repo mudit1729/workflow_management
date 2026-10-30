@@ -1,4 +1,4 @@
-import { Archive, BookOpen, FileSearch } from "lucide-react";
+import { Archive, BookOpen, FileSearch, FolderPlus, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -374,6 +374,26 @@ function EmptyStateBody() {
               <Button variant="secondary" size="sm">
                 Clear filters
               </Button>
+            }
+          />
+        </div>
+      </V>
+      <V label="board · no work yet" width={420}>
+        <div className="rounded-md border border-border">
+          <EmptyState
+            title="No work yet"
+            hint="Add a group or an issue to start."
+            action={
+              <div className="flex items-center gap-2">
+                <Button variant="primary" size="sm">
+                  <Plus size={14} strokeWidth={1.75} />
+                  New issue
+                </Button>
+                <Button variant="secondary" size="sm">
+                  <FolderPlus size={14} strokeWidth={1.75} />
+                  New group
+                </Button>
+              </div>
             }
           />
         </div>

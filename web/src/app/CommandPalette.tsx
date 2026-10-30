@@ -58,7 +58,7 @@ import { useGo, useOpenIssue, useOpenIssueId } from "@/lib/nav";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { copyText } from "./clipboard";
-import { withMockControls } from "./mock-controls";
+import { playNextEvent, withMockControls } from "./mock-controls";
 import { useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
@@ -668,7 +668,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       icon: <Play {...ICON} />,
       hint: "Prototype",
       keywords: ["live", "sse", "mock", "prototype", "event"],
-      run: () => withMockControls((c) => c.playNextEvent()),
+      run: () => withMockControls((c) => playNextEvent(c)),
     },
   );
 

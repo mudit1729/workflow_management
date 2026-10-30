@@ -12,6 +12,7 @@ import { ContextPicker } from "@/features/context";
 import { type ContextItem, toLink } from "@/features/context/types";
 import type { GroupNode } from "@/gen/types";
 import { useMe, useSnapshot, useWorkspaceFiles, useWriteWorkspaceFile } from "@/lib/api";
+import { revealBacklog } from "@/lib/board-folds";
 import { cn } from "@/lib/cn";
 import type { EditIntent } from "./intent";
 import { NativeSelect } from "./NativeSelect";
@@ -226,6 +227,8 @@ function NewFileForm({
       }
       const res = await write({ path, text });
       if (!res) return; // the hook explained the failure
+      // A new issue starts in Backlog, which the board folds by default: unfold it so the card shows.
+      if (id) revealBacklog();
       savedToast({
         verb: "Created",
         path,

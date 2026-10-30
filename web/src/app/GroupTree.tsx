@@ -408,6 +408,8 @@ function MiniBar({ rollup }: { rollup: GroupRollup }) {
     (p) => p.n > 0,
   );
   const total = parts.reduce((sum, p) => sum + p.n, 0);
+  // A group without issues has no progress to show: keep the column, draw no bar.
+  if (rollup.issues === 0) return <span aria-hidden className="h-[3px] w-[32px] shrink-0" />;
   const summary =
     total === 0
       ? "No open or finished issues"

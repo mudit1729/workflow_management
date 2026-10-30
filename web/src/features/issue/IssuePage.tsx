@@ -3,7 +3,7 @@ import { ArrowLeft, PanelRight } from "lucide-react";
 import { CopyButton, GroupPath } from "@/components/common";
 import { Button, IconButton } from "@/components/ui";
 import type { IssueId } from "@/gen/types";
-import { useIssue } from "@/lib/api";
+import { NotFoundError, useIssue } from "@/lib/api";
 import { useLayoutMode } from "@/lib/hooks";
 import { useGo, useOpenIssue } from "@/lib/nav";
 import { IssueView } from "./IssueView";
@@ -11,11 +11,12 @@ import { IssueView } from "./IssueView";
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 export function IssuePage({ id }: { id: IssueId }) {
-  const { data } = useIssue(id);
+  const { data, error } = useIssue(id);
   const go = useGo();
   const openIssue = useOpenIssue();
   const mobile = useLayoutMode() === "mobile";
-  const groupPath = data?.summary.group_path ?? [];
+  // An issue that is gone (a 404 on refetch) has no group path to show, whatever copy is still cached.
+  const groupPath = error instanceof NotFoundError ? [] : (data?.summary.group_path ?? []);
 
   return (
     <div data-wf="IssuePage" className="flex h-full min-h-0 min-w-0 flex-col bg-bg">
