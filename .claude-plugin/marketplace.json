@@ -1,0 +1,14 @@
+{
+  "name": "workflow-marketplace",
+  "owner": { "name": "wf team" },
+  "description": "Skills that run the wf issue workflow from Claude Code or Codex, without the dashboard",
+  "plugins": [
+    {
+      "name": "workflow",
+      "source": "./plugins/workflow",
+      "description": "Add work, plan issues, do the next step, log, hand off and check status. Edits the markdown files that the dashboard reads.",
+      "category": "productivity",
+      "tags": ["workflow", "issues", "handoff"]
+    }
+  ]
+}

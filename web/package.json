@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check src mock",
     "format": "biome format --write src mock",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "wf:lint": "node scripts/wf-lint.mjs"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",

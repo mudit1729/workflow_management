@@ -1,0 +1,8 @@
+{
+  "name": "workflow",
+  "version": "0.1.0",
+  "description": "Run the wf issue workflow from the terminal. Add work, plan issues, do the next step, log changes, hand off and check status by editing the same markdown files the dashboard reads.",
+  "author": { "name": "wf team" },
+  "license": "MIT",
+  "keywords": ["workflow", "issues", "markdown", "handoff", "codex", "agent-skills"]
+}

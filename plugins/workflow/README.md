@@ -1,0 +1,74 @@
+# workflow plugin
+
+Skills that run the whole wf issue flow from Claude Code or Codex, without the dashboard. A wf workspace is a folder of markdown files: an issue is a folder with a `goal.md`, and the plan, the current state and the three logs sit beside it. These skills read and edit those files in the contract format (`docs/plan/contract.md` sections 1.2 to 1.7). Because the dashboard reads the same files, a change made by a skill shows on the board within a second, and a change made in the dashboard is just a file for the next skill run.
+
+## The skills
+
+| Skill | Does | Dashboard twin |
+|---|---|---|
+| `using-wf` | Finds the workspace, lists the formats (`references/format.md`), routes to the other skills | |
+| `adding-work` (orchestrator) | Splits an outcome into 3 to 6 issues and writes `_group.md` and `goal.md` files | **+ Add work** |
+| `planning-issues` | Writes `plan.md` with phases and tasks and moves the issue to `planned` | Plan tab |
+| `doing-next-step` | Claims the next ready task, does it, verifies it, logs it, updates `current_state.md`, commits with the trailer `Issue: <id>` | **Do next step**, **Open in Codex** |
+| `logging-work` | Appends a change, a decision or a learning with a fresh anchor id | Log tab |
+| `handing-off` (orchestrator) | Refreshes `current_state.md`, prints one context bundle within the token budget | context bundle |
+| `checking-status` | Prints status counts, needs-you requests, stale leases, ready tasks, commits, PRs and CI runs | Board, Git and CI tabs |
+| `writing-readable-bulk-text` | Writes titles and one-line entries that scan well in a list | |
+
+Helper scripts (plain bash and awk): `skills/using-wf/scripts/wf-env.sh` (workspace, time, ids, issue lookup) and `skills/checking-status/scripts/wf-status.sh` (the report).
+
+## Install for Claude Code
+
+As a plugin, from this repository's own marketplace:
+
+```
+/plugin marketplace add <path to this clone, or owner/repo on GitHub>
+/plugin install workflow@workflow-marketplace
+/reload-plugins
+```
+
+The skills then appear as `/workflow:using-wf`, `/workflow:adding-work` and so on. To share the plugin with the team, run the same two commands with `--scope project` from the shell (`claude plugin marketplace add ... --scope project`), which writes the committed `.claude/settings.json`. `scripts/install-skills.sh --claude-plugin` prints the commands with this clone's paths.
+
+Without the plugin system, copy the skills: `scripts/install-skills.sh --claude [target]` (default `.claude/skills`, or `~/.claude/skills` for all projects).
+
+## Install for Codex
+
+```
+scripts/install-skills.sh --codex                  # copies into <repo>/.agents/skills
+scripts/install-skills.sh --codex ~/.agents/skills # or for every project of this user
+scripts/install-skills.sh --print-agents-md >> AGENTS.md
+```
+
+Codex reads `.agents/skills` from the working folder up to the repository root, and `AGENTS.md` tells it to use them. Only the frontmatter keys `name` and `description` are used, so the skills run unchanged in both tools. Install the skills together: they point at each other with relative paths (`../using-wf/references/format.md`). Run the script again after a plugin update.
+
+## Use
+
+Say what you want, in plain words:
+
+- "Add work: let people see agent changes on the board without a reload" (`adding-work`)
+- "Plan wf-3k9x2" (`planning-issues`)
+- `codex exec "Work on wf-3k9x2 (issues/wf/web/live-board-updates). Read current_state.md first; use the wf skills."` (`doing-next-step`; this is what **Open in Codex** copies)
+- "Hand wf-3k9x2 to Mudit" (`handing-off`)
+- "What needs me?" (`checking-status`)
+
+Environment: `WF_ROOT` names the workspace when you are outside it (in this repo it defaults to `web/mock/workspace`). `WF_AUTHOR` is your handle without `@` (Codex: `codex`).
+
+## How the dashboard and the skills share state
+
+- The markdown files are the only state. There is no database, no daemon call and no lock file between the two sides.
+- Every skill write is a minimal edit of the lines it must change: one checkbox, one key, one appended entry. `current_state.md` is the only file that is overwritten whole.
+- In `pnpm -C web dev`, a file saved under `web/mock/workspace` reaches the board through hot reload. A person who ticks a criterion in the dashboard flips one `[ ]` in `goal.md`; the next `doing-next-step` run reads it.
+- Leases (`claimed_by`, `lease_until`) keep both sides from working on one task. Commits, pull requests and CI are never stored: they are derived from the trailer `Issue: <id>`, from branches named `<id>/...` and from GitHub.
+
+## Check your changes
+
+- `pnpm -s -C web wf:lint <workspace>` prints `file:line rule severity message` and exits 1 on any error. It is the stand-in for the future `wf lint`.
+- `node plugins/workflow/scripts/check-skills.mjs` checks the house rules for every `SKILL.md`: only `name` and `description` in the frontmatter, a description of at most 1024 characters that starts with "Use when" and names what to avoid, fewer than 300 lines.
+- `claude plugin validate plugins/workflow --strict` checks the plugin manifest.
+
+## Notes
+
+- `adding-work` and `handing-off` are orchestrators. The marker lives in their text, not in a frontmatter key such as `disable-model-invocation`, because Codex reads only `name` and `description` and a Claude-only key would also stop Claude from picking the skill up on its own.
+- There is no `wf` CLI yet. The skills edit files directly. `using-wf` lists the `wf` command that replaces each step once the binary is on the `PATH`.
+- Hooks (session start, stop) are not part of this plugin yet.
+- The skill `writing-readable-bulk-text` is adapted from "Five Principles for Generating Readable AI Text in Bulk" by Shreya Shankar.
