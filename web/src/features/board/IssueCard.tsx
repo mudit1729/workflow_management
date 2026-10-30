@@ -36,7 +36,7 @@ import { useRecentlyChanged } from "@/lib/live";
 import { hrefFor, useOpenIssue } from "@/lib/nav";
 import { STATUS_LABEL, statusColor } from "@/lib/status";
 import { useDraggableCard } from "./dnd";
-import { ALL_LANE, relativeGroupPath } from "./filter";
+import { relativeGroupPath } from "./filter";
 import { IssueCardMenu, type IssueCardMenuView } from "./IssueCardMenu";
 import { BoardCardContext } from "./useBoardKeys";
 
@@ -47,8 +47,6 @@ export interface IssueCardProps {
   /** Defaults to opening the drawer (or the full page below 768 px). */
   onOpen?: (issue: IssueSummary) => void;
   dragDisabled?: boolean;
-  /** Swimlane id; drops are allowed only inside the same lane. */
-  lane?: string;
   className?: string;
 }
 
@@ -65,7 +63,6 @@ export function IssueCard({
   selected,
   onOpen,
   dragDisabled,
-  lane = ALL_LANE,
   className,
 }: IssueCardProps) {
   const board = useContext(BoardCardContext);
@@ -81,7 +78,6 @@ export function IssueCard({
 
   const dragging = useDraggableCard(rootRef, {
     issue,
-    lane,
     disabled: dragDisabled || board == null,
     preview: () => <IssueCardPreview issue={issue} />,
   });

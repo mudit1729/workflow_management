@@ -9,8 +9,8 @@ import { IconButton, Tooltip } from "@/components/ui";
 import type { IssueStatus, IssueSummary } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { STATUS_LABEL } from "@/lib/status";
-import { useCardAutoScroll, useCellDropTarget } from "./dnd";
-import { ALL_LANE, landingIndex } from "./filter";
+import { useCardAutoScroll, useColumnDropTarget } from "./dnd";
+import { landingIndex } from "./filter";
 import { IssueCard } from "./IssueCard";
 import { BoardCardContext } from "./useBoardKeys";
 
@@ -20,7 +20,6 @@ export const VIRTUALIZE_ABOVE = 40;
 export interface KanbanColumnProps {
   status: IssueStatus;
   issues: IssueSummary[];
-  lane?: string;
   /** Shows the fold button (Backlog and Done). */
   onFold?: () => void;
   dragDisabled?: boolean;
@@ -33,14 +32,13 @@ export interface KanbanColumnProps {
 export function KanbanColumn({
   status,
   issues,
-  lane = ALL_LANE,
   onFold,
   dragDisabled,
   fill,
   hideHeader,
 }: KanbanColumnProps) {
   const ref = useRef<HTMLElement>(null);
-  const over = useCellDropTarget(ref, status, lane);
+  const over = useColumnDropTarget(ref, status);
   const scrollRef = useRef<HTMLDivElement>(null);
   useCardAutoScroll(scrollRef, !dragDisabled);
   const landing = over ? landingIndex(issues, over.priority) : -1;
@@ -67,13 +65,12 @@ export function KanbanColumn({
         ) : issues.length > VIRTUALIZE_ABOVE ? (
           <VirtualCards
             issues={issues}
-            lane={lane}
             landing={landing}
             dragDisabled={dragDisabled}
             scrollRef={scrollRef}
           />
         ) : (
-          <CardStack issues={issues} lane={lane} landing={landing} dragDisabled={dragDisabled} />
+          <CardStack issues={issues} landing={landing} dragDisabled={dragDisabled} />
         )}
       </div>
     </section>
@@ -86,19 +83,14 @@ export function ColumnHeader({
   status,
   count,
   onFold,
-  className,
 }: {
   status: IssueStatus;
   count: number;
   onFold?: () => void;
-  className?: string;
 }) {
   const label = STATUS_LABEL[status];
   return (
-    <header
-      data-wf="ColumnHeader"
-      className={cn("group/head flex h-9 shrink-0 items-center gap-2 px-2", className)}
-    >
+    <header data-wf="ColumnHeader" className="group/head flex h-9 shrink-0 items-center gap-2 px-2">
       <StatusIcon status={status} size={14} />
       <h2 className="min-w-0 truncate font-medium text-base text-fg">{label}</h2>
       <span className="text-fg-faint text-sm tabular">{count}</span>
@@ -131,7 +123,7 @@ export function FoldedColumn({
   onUnfold: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
-  const over = useCellDropTarget(ref, status, ALL_LANE);
+  const over = useColumnDropTarget(ref, status);
   const label = STATUS_LABEL[status];
   return (
     <Tooltip content={`Unfold ${label}`} side="right">
@@ -172,12 +164,10 @@ export function DropLine() {
 
 export function CardStack({
   issues,
-  lane,
   landing,
   dragDisabled,
 }: {
   issues: IssueSummary[];
-  lane: string;
   landing: number;
   dragDisabled?: boolean;
 }) {
@@ -186,7 +176,7 @@ export function CardStack({
       {issues.map((issue, i) => (
         <div key={issue.id} className="relative">
           {landing === i && <DropLine />}
-          <IssueCard issue={issue} lane={lane} dragDisabled={dragDisabled} />
+          <IssueCard issue={issue} dragDisabled={dragDisabled} />
         </div>
       ))}
       {landing === issues.length && (
@@ -200,13 +190,11 @@ export function CardStack({
 
 function VirtualCards({
   issues,
-  lane,
   landing,
   dragDisabled,
   scrollRef,
 }: {
   issues: IssueSummary[];
-  lane: string;
   landing: number;
   dragDisabled?: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -241,7 +229,7 @@ function VirtualCards({
             style={{ transform: `translateY(${v.start}px)` }}
           >
             {landing === v.index && <DropLine />}
-            <IssueCard issue={issue} lane={lane} dragDisabled={dragDisabled} />
+            <IssueCard issue={issue} dragDisabled={dragDisabled} />
           </div>
         );
       })}
@@ -255,15 +243,7 @@ function VirtualCards({
 }
 
 /** The body of an empty column: a quiet dashed area that doubles as the drop zone. */
-export function EmptyDropArea({
-  status,
-  active,
-  className,
-}: {
-  status: IssueStatus;
-  active: boolean;
-  className?: string;
-}) {
+export function EmptyDropArea({ status, active }: { status: IssueStatus; active: boolean }) {
   return (
     <div
       data-wf="EmptyDropArea"
@@ -271,7 +251,6 @@ export function EmptyDropArea({
         "flex h-16 items-center justify-center rounded-md border border-dashed text-sm",
         "transition-colors duration-150 ease-wf",
         active ? "border-accent text-accent" : "border-border-strong text-fg-faint",
-        className,
       )}
     >
       {active ? `Move to ${STATUS_LABEL[status]}` : "No issues"}

@@ -1,5 +1,5 @@
 // /w: the board. Builds one view model from the snapshot and the URL search
-// (group, swim, author, q, show) and hands it to the toolbar and the board.
+// (group, author, q, show, needs) and hands it to the toolbar and the board.
 import { BellOff, FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { openAddWork } from "@/app/shell-store";
@@ -14,14 +14,12 @@ import {
   applyFilter,
   basePathOf,
   boardColumns,
-  buildLanes,
   filterFromSearch,
   groupChain,
   hasActiveFilter,
   issueAuthors,
   type NeedsYou,
   needsYou,
-  singleLane,
   summarize,
 } from "./filter";
 import { BoardSkeleton, KanbanBoard } from "./KanbanBoard";
@@ -48,13 +46,6 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch, mine: NeedsYou
   const needsAnywhere = data.issues.filter(
     (i: IssueSummary) => needs.has(i.id) && (filter.showCancelled || i.status !== "cancelled"),
   ).length;
-
-  const canSwim = selected.children.length > 0;
-  const swim: "child" | "none" = canSwim ? (search.swim ?? "child") : "none";
-  const lanes =
-    swim === "child"
-      ? buildLanes(selected, visible, { hideEmpty: filtered })
-      : [singleLane(visible)];
 
   // Author options: everyone known, plus any handle already in the filter.
   const handles = new Set(data.authors.map((a) => a.handle));
@@ -83,9 +74,6 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch, mine: NeedsYou
     cancelledCount,
     needsHere,
     needsElsewhere: Math.max(0, needsAnywhere - needsHere),
-    canSwim,
-    swim,
-    lanes,
     columns: boardColumns(filter.showCancelled),
     basePath: basePathOf(chain),
     // Counted as the toolbar's "Needs you" toggle counts: open requests for the acting person.
@@ -100,14 +88,14 @@ export function BoardPage() {
   const [search, setSearch] = useBoardSearch();
   const inbox = useInbox();
   const data = snapshot.data;
-  const { group, swim, author, q, show, needs } = search;
+  const { group, author, q, show, needs } = search;
 
   // Open requests for the acting person: the toolbar's count and the "Needs you" filter.
   const mine: NeedsYou = useMemo(() => needsYou(inbox.all, me), [inbox.all, me]);
 
   const model = useMemo(
-    () => (data ? buildModel(data, { group, swim, author, q, show, needs }, mine) : null),
-    [data, group, swim, author, q, show, needs, mine],
+    () => (data ? buildModel(data, { group, author, q, show, needs }, mine) : null),
+    [data, group, author, q, show, needs, mine],
   );
 
   if (snapshot.isError && !data) {
@@ -149,8 +137,6 @@ export function BoardPage() {
       filtered={model.filtered}
       authors={model.authors}
       me={me}
-      canSwim={model.canSwim}
-      swim={model.swim}
       cancelledCount={model.cancelledCount}
       needsYou={{ requests: mine.requests, issues: mine.issues.size }}
     />
@@ -288,13 +274,7 @@ export function BoardPage() {
     );
   } else {
     body = (
-      <KanbanBoard
-        columns={model.columns}
-        lanes={model.lanes}
-        swimlanes={model.swim === "child"}
-        basePath={model.basePath}
-        mine={mine}
-      />
+      <KanbanBoard columns={model.columns} issues={model.visible} basePath={model.basePath} />
     );
   }
 
