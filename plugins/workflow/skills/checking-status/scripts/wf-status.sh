@@ -11,6 +11,9 @@
 # Options: --no-git (skip git and gh), --root DIR (the workspace; else WF_ROOT, else the
 # nearest workflow.toml above the current folder), --repo DIR (the repository whose commits,
 # pull requests and CI to report; else WF_REPO, else the workspace's own repository).
+# WF_NOW=<RFC 3339 time> judges leases, staleness and ready tasks at that instant instead of the
+# real clock (see wf-env.sh). The files of web/mock/sample were written at 2026-10-22T16:27+05:30;
+# the dashboard moves them to the real clock, so use that time to get the dashboard's answers.
 # Plain bash and awk, no other dependency. Exit 0, or 1 when the workspace or issue is missing.
 set -euo pipefail
 
@@ -43,7 +46,7 @@ if [ -n "$ISSUE_ARG" ]; then
   ONLY="$(WF_ROOT="$ROOT" "$ENV_SH" issue "$ISSUE_ARG")"
 fi
 NOW_TS="$(WF_ROOT="$ROOT" "$ENV_SH" now)"
-NOW_EPOCH="$(date +%s)"
+NOW_EPOCH="$(WF_ROOT="$ROOT" "$ENV_SH" now-epoch)"
 
 FILES="$(find "$ISSUES_DIR" -type f \( -name goal.md -o -name plan.md -o -name current_state.md -o -name changes.md \) \
   -not -path '*/node_modules/*' -not -path '*/.git/*' | sort)"
@@ -280,7 +283,7 @@ END {
       rk = d SUBSEP j; blocking = (R_urg[rk] == "blocking")
       if ((pass == 1) != blocking) continue
       nn++
-      NL[nn] = sprintf("  %-8s %s %s  %s -> %s  %s%s", (R_urg[rk] == "" ? "fyi" : R_urg[rk]), G_id[d], R_id[rk], R_from[rk], R_to[rk], R_q[rk], (R_done[rk] ? "  [answered: run wf resolve / remove the item and log it]" : ""))
+      NL[nn] = sprintf("  %-8s %s %s  %s -> %s  %s%s", (R_urg[rk] == "" ? "fyi" : R_urg[rk]), G_id[d], R_id[rk], R_from[rk], R_to[rk], R_q[rk], (R_done[rk] ? "  [answered: remove the item and log the answer with logging-work]" : ""))
     }
   }
   printf "Needs you (%d)\n", nn + 0

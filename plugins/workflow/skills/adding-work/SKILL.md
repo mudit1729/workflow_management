@@ -14,7 +14,7 @@ Read `../using-wf/SKILL.md` section 1 (find the workspace, your author handle) a
 1. **Read the workspace.** `../using-wf/scripts/wf-env.sh root` (outside the workspace folder, set `WF_ROOT` first, or the script falls back to the prototype workspace). List the groups: `find <root>/<issues_dir> -name _group.md` and read each `title`, `goal`, `owner`. A folder under `<issues_dir>` that holds issues but has no `_group.md` is an implicit group (for example `docs`): list the folders too, `find <root>/<issues_dir> -maxdepth 2 -type d`, and do not reuse its slug. Read `glossary.md` for the words to use.
 2. **Collect the request.** Ask for what is missing, one question at a time, and offer 2 to 4 numbered choices before free text. Skip every question the request already answers.
    - **Outcome** (one sentence; the only answer you may need to type): what is true when the work is done.
-   - **Where**: an existing group (offer the titles), or a new group under a parent.
+   - **Where**: an existing group (offer the titles), or a new group under a parent or at the top level of `<issues_dir>`.
    - **Size** of the whole: xs, s, m, l (default m). **Priority**: urgent, high, medium, low, none (default medium).
    - **Context** (optional): library items, glossary terms or files worth linking under `## Links`.
    - **One issue or a group of work?** One issue skips the split (go to step 5 with one entry).
@@ -32,7 +32,7 @@ Read `../using-wf/SKILL.md` section 1 (find the workspace, your author handle) a
 
    Do not write any file before the answer. If nobody can answer, continue.
 5. **Write the files.** Use `../using-wf/scripts/wf-env.sh` for ids and the time.
-   - New group: `id group`, folder `<issues_dir>/<parent path>/<slug>/`, file `_group.md` (`format.md` section 5): `color` the lowest unused 1 to 8 among siblings, `order` the highest sibling `order` plus 1, `owner` the requester, `goal` one line.
+   - New group: `id group`, folder `<issues_dir>/<parent path>/<slug>/` (no parent path at the top level), file `_group.md` (`format.md` section 5): `title` the name as the requester wrote it, `slug` its kebab-case form; `color` the lowest unused 1 to 8 among siblings, `order` the highest sibling `order` plus 1, `owner` the requester, `goal` one line.
    - Each issue: `id issue`, folder `<group folder>/<slug>/`, file `goal.md` (`format.md` section 4). `status: backlog`, `created: <now>`, `owner` the requester or the group owner, `labels` from the request. `## Context` holds the why in 1 or 2 short paragraphs. Add `## Out of scope` and `## Links` only when you have content.
    - Create new files only. Do not touch other issues and do not create `plan.md`, `current_state.md` or the logs.
 6. **Check.** `pnpm -s -C web wf:lint <root>`. Fix findings in the files you wrote (max 3 rounds). The board shows the new cards at once.

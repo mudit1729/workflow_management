@@ -9,7 +9,7 @@ Skills that run the whole wf issue flow from Claude Code or Codex, without the d
 | `using-wf` | Finds the workspace, lists the formats (`references/format.md`), routes to the other skills | |
 | `adding-work` (orchestrator) | Splits an outcome into 3 to 6 issues and writes `_group.md` and `goal.md` files | **+ Add work** |
 | `planning-issues` | Writes `plan.md` with phases and tasks and moves the issue to `planned` | Plan tab |
-| `doing-next-step` | Claims the next ready task, does it, verifies it, logs it, updates `current_state.md`, commits with the trailer `Issue: <id>` | **Do next step**, **Open in Codex** |
+| `doing-next-step` | Plans the issue first when it has no plan, then claims the next ready task, does it, verifies it, logs it, updates `current_state.md`, commits with the trailer `Issue: <id>` | **Do next step**, **Open in Codex** |
 | `logging-work` | Appends a change, a decision or a learning with a fresh anchor id | Log tab |
 | `handing-off` (orchestrator) | Refreshes `current_state.md`, prints one context bundle within the token budget | context bundle |
 | `checking-status` | Prints status counts, needs-you requests, stale leases, ready tasks, commits, PRs and CI runs | Board, Git and CI tabs |
@@ -47,11 +47,15 @@ Say what you want, in plain words:
 
 - "Add work: let people see agent changes on the board without a reload" (`adding-work`)
 - "Plan wf-3k9x2" (`planning-issues`)
-- `codex exec "Work on wf-3k9x2 (issues/wf/web/live-board-updates). Read current_state.md first; use the wf skills."` (`doing-next-step`; this is what **Open in Codex** copies)
+- `codex 'Work on wf-3k9x2 "Push board updates over SSE" in issues/wf/web/live-board-updates. Read current_state.md first, then use the wf skills (doing-next-step).'` (`doing-next-step`; this is what **Open in Codex** copies, the resume prompt of `format.md` section 15; put `exec` after `codex` for a headless run)
 - "Hand wf-3k9x2 to Mudit" (`handing-off`)
 - "What needs me?" (`checking-status`)
 
-Environment: `WF_ROOT` names the workspace when you are outside it (in this repo it defaults to `web/mock/workspace`). `WF_AUTHOR` is your handle without `@` (Codex: `codex`).
+Environment: `WF_ROOT` names the workspace when you are outside it (in this repo it defaults to `web/mock/workspace`). `WF_AUTHOR` is your handle without `@` (Codex: `codex`). `WF_NOW` (an RFC 3339 time such as `2026-10-22T16:27+05:30`) makes that instant "now" for `wf-env.sh now|later` and `wf-status.sh`; unset, the real clock is used.
+
+### The sample world and its clock
+
+The dashboard moves the 26-issue sample (`web/mock/sample`) to the real clock when it loads it, so the board always reads "lease 35m left" and "updated 25m ago". The files on disk keep the times they were written at (`2026-10-22T16:27+05:30`), so a skill that reads them today sees expired leases and stale work. To get the dashboard's answers from the files, set that time: `WF_NOW=2026-10-22T16:27+05:30 plugins/workflow/skills/checking-status/scripts/wf-status.sh --root web/mock/sample --no-git wf-3k9x2` reports the `@claude-opus` lease as live with 35 minutes left, T-4 as the ready task and nothing as stale, exactly like the board. Run evals on a copy of the sample, never on `web/mock/sample` itself, and keep `WF_NOW` set for every command of the eval.
 
 ## How the dashboard and the skills share state
 

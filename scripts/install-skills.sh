@@ -118,7 +118,7 @@ Work in this repo is tracked as markdown in a wf workspace (`workflow.toml`; the
 
 - Start with the `using-wf` skill. It finds the workspace and lists the other skills.
 - To add work or one issue, use `adding-work`. To plan an issue, use `planning-issues`.
-- To continue an issue ("Work on wf-3k9x2", "do the next step"), use `doing-next-step`. Read the issue's `current_state.md` first.
+- To continue an issue ("Work on wf-3k9x2", "do the next step"), use `doing-next-step`. Read the issue's `current_state.md` first. An issue without a plan is planned first, in the same run.
 - To record a change, a decision or a learning, use `logging-work`. To hand an issue over, use `handing-off`. For status, requests, pull requests and CI, use `checking-status`.
 - Edit the markdown with minimal changes in the contract format. Never rewrite a file or an old log entry.
 - End every commit for an issue with the trailer line `Issue: <issue id>`.

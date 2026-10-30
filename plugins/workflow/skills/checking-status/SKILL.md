@@ -22,7 +22,7 @@ A read-only report. `scripts/wf-status.sh` (relative to this file) reads the mar
    | Needs you | open requests, blocking first; `[answered]` marks one a human answered that nobody resolved | `## Needs you` of `current_state.md` |
    | Leases expired | a `claimed_by` whose `lease_until` is in the past, for a task or a coordinator | `plan.md`, `goal.md` |
    | Stale | an `in_progress` task with no change entry or lease renewal within `task_hours`; an `in_progress` issue with no change or state update within `issue_hours` | `changes.md`, `current_state.md` |
-   | Ready tasks | `todo`, dependencies `done`, no live lease, `owns` free of live leases | `plan.md` |
+   | Ready tasks | `todo` in a `planned` or `in_progress` issue, dependencies `done`, no live lease, `owns` free of live leases | `plan.md` |
    | Git, pull requests and CI | commits that mention the id (`git log --grep`), PRs (`gh pr list --search`), CI runs of those commits or of a branch named after the id (`gh run list`) | git, gh |
 
 3. **Handle missing sources.** The script names every source it skips (no git repository, no `gh`, not signed in, no network) and keeps going. Repeat that reason in your answer. Never guess a PR or CI result.

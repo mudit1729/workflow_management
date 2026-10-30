@@ -158,7 +158,7 @@ Stream `delta` events from the index broadcast. Send `snapshot` on connect.
 - Task heading `### T-n: <imperative title>`. Meta keys, in this order: `status` (todo, in_progress, blocked, review, done, cancelled; default todo), `lane` (default main), `depends_on` (`T-n` or `wf-xxxxx#T-n`), `owns` (globs), `satisfies` (`SC-n`), `assignee` (`@h` or `role:<name>`), `claimed_by`, `lease_until`, `verify`.
 - After the meta list: a blank line, an optional self-contained brief, then step checkboxes `- [ ] Imperative step of at most 20 words.`
 - Tasks before the first `## Phase N: <name>` belong to "Unphased". Keep a plan under 200 lines and a phase under 11 tasks (Q014).
-- **Ready** means: `status: todo`; every `depends_on` task is `done`; no live lease on it (`lease_until` in the future); its `owns` globs do not overlap the `owns` of any live lease in the workspace. Overlap is a prefix match on the text before the first `*`, `?`, `[` or `{`.
+- **Ready** means: the issue is `planned` or `in_progress` (a `backlog` issue has no ready task); the task has `status: todo`; every `depends_on` task is `done`; no live lease on it (`lease_until` in the future); its `owns` globs do not overlap the `owns` of any live lease in the workspace. Overlap is a prefix match on the text before the first `*`, `?`, `[` or `{`.
 - **Stale** means: `in_progress` with no change entry for the task and no lease renewal within `task_hours`.
 - Run `../../checking-status/scripts/wf-status.sh --ready [issue]` instead of working this out by hand.
 
@@ -208,7 +208,8 @@ session: cc-7d2e
 - `summary` is one present-tense line of at most 120 characters, in double quotes. `phase`, `library_refs`, `session` are optional.
 - Sections in exactly this order; omit an empty one: `Done`, `In flight`, `Blocked`, `Needs you`, `Failed attempts`, `Handoff notes`, `Next steps`.
 - `Done` holds pointers only. `Failed attempts` is one line each with the error signature. `Next steps` is numbered and item 1 is the one next action. At most 400 words in total (Q008).
-- **Needs-you cycle.** Ask: add the item above (`kind`: question, approval or input; `urgency`: blocking or fyi). A human answers by ticking `[x]` and filling `answer:`. Resolve: remove the item from `Needs you` and append a change entry with `kind: answer` whose body is `**Q:** <question>` then `**A:** <answer> (@person)`.
+- **Needs-you cycle.** Ask: add the item above (`kind`: question, approval or input; `urgency`: blocking or fyi). A human answers by ticking `[x]` and filling `answer:`. The dashboard also writes `answered_by: @person` and `answered_at: <time>` under `answer:`; an agent that records an answer on someone's behalf writes the same two keys (both optional). Resolve: remove the item from `Needs you` and append a change entry with `kind: answer` whose body is `**Q:** <question>` then `**A:** <answer> (@person)`.
+- Request keys, in order: `from`, `to`, `kind`, `urgency`, `asked`, `options`, `ref`, `answer`, `answered_by`, `answered_at`.
 
 ## 8. The three logs (append at the bottom)
 
@@ -358,3 +359,15 @@ library = 3
 - In this repo: `pnpm -s -C web wf:lint <workspace>` (prints `file:line rule severity message`, exits 1 on any error). With the real CLI: `wf lint`.
 - Fix every finding in the files you touched, at most 3 rounds. Findings in files you did not touch are not yours; mention them.
 - The dashboard needs nothing else: a saved file reaches the board within a second.
+
+## 15. The resume prompt
+
+One sentence tells an agent to pick an issue up. It is defined here and nowhere else; the **Open in Codex** button, the last line of the `handing-off` bundle and the plugin README copy it verbatim.
+
+```
+Work on <id> "<title>" in <issue path>. Read current_state.md first, then use the wf skills (doing-next-step).
+```
+
+- `<issue path>` is the issue folder relative to the workspace, for example `issues/wf/web/live-board-updates`.
+- Interactive Codex: `codex '<prompt>'`. This is what the button copies and what the bundle's `To resume:` line prints. Wrap the prompt in single quotes; a single quote inside the title is written `'\''`.
+- Headless run: `codex exec '<prompt>'`. Use it in scripts and evals, not in the button.

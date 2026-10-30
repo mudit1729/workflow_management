@@ -29,7 +29,7 @@ A plan turns the criteria of `goal.md` into tasks that one agent can finish in o
 8. **Leave a trail.** Append a change entry with `logging-work` (`kind: docs`, `plan.md` under `files`, title "Wrote the plan with N tasks in M lanes"). If `current_state.md` is missing, create it with `summary` "Planned: N tasks in M lanes; <the ready ids> ready." (for example "T-1 and T-2 are ready.", ids from `wf-status.sh --ready`), `phase` the first phase, and `Next steps` 1 "Claim T-1 and start the first step."; if it exists, change only `summary`, `updated_at`, `updated_by` and `Next steps`.
 9. **Check.** `pnpm -s -C web wf:lint <root>`; fix findings in the files you touched (max 3 rounds). Then run `../checking-status/scripts/wf-status.sh --ready <id>` to confirm the first tasks are ready. Report the task count, the lanes and the ready tasks.
 
-xs or s issues with one obvious step may skip the plan: say so, leave the issue in `backlog`, and let `doing-next-step` work from the criteria.
+An xs or s issue with one obvious step may skip the plan when a person only asks to look at it. `doing-next-step` plans every issue that has no `plan.md` as the first step of its run (a one-task plan is fine), so the lease and the log entry always name a task.
 
 ## Example
 
