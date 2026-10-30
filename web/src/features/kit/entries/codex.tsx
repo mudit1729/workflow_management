@@ -76,12 +76,33 @@ const RUNNING: { label: string; run: CodexRun }[] = [
   { label: "claim", run: fixture("running", "claim") },
   { label: "log", run: fixture("running", "log") },
   { label: "verify", run: fixture("running", "verify") },
+  {
+    label: "claim, on an issue without a plan",
+    run: fixture("running", "claim", {
+      plans: true,
+      task: "T-1",
+      phases: [
+        { id: "claim", label: "Plan the issue, claim T-1", state: "running" },
+        { id: "log", label: "Log the change", state: "pending" },
+        { id: "verify", label: "Run CI", state: "pending" },
+        { id: "done", label: "Finish T-1", state: "pending" },
+      ],
+    }),
+  },
 ];
 
 const NOTHING = [
-  fixture("nothing_ready", undefined, { reason: "No ready task. Plan the issue first." }),
   fixture("nothing_ready", undefined, { reason: "No ready task. Wait for the tasks in flight." }),
   fixture("nothing_ready", undefined, { reason: "Every task is done." }),
+  fixture("nothing_ready", undefined, { reason: "Waiting on Q-4m2pz: Which stream format?" }),
+  fixture("nothing_ready", undefined, {
+    reason: "The issue has no criteria to plan from. Add one to goal.md first.",
+  }),
+  fixture("nothing_ready", undefined, { reason: "Waiting on wf-3k9x2: it is not done." }),
+  fixture("nothing_ready", undefined, {
+    reason:
+      "@cursor-bot holds the lease on this issue and has not planned it. Ask them to plan it.",
+  }),
 ];
 
 const HISTORY: CodexRun[] = [
@@ -107,7 +128,7 @@ const HISTORY: CodexRun[] = [
   fixture("nothing_ready", undefined, {
     id: "run-h5",
     finished_at: ago(2 * 86400),
-    reason: "No ready task. Plan the issue first.",
+    reason: "Waiting on Q-4m2pz: Which stream format?",
   }),
 ];
 
@@ -137,10 +158,16 @@ function CodexActionsBody() {
         <Framed id={ISSUE.rich} width={528} />
       </V>
       <V
-        label="live · wf-h2tb7 (no plan: nothing ready)"
-        note="Click Do next step: the reason shows on its own line, with a way to the Plan tab."
+        label="live · wf-h2tb7 (another author holds the lease)"
+        note="Click Do next step: the reason shows on its own line, without a button, because the header already names the lease."
       >
         <Framed id={ISSUE.noPlan} width={528} />
+      </V>
+      <V
+        label="live · wf-e6kc1 (no plan: Codex plans first)"
+        note="Click Do next step: the strip says Planning, claiming T-1, then follows the run. plan.md and the first change entry appear."
+      >
+        <Framed id="wf-e6kc1" width={528} />
       </V>
       <V label="drawer at its narrowest (440 px)" width={408}>
         <Framed id={ISSUE.rich} width={408} />
@@ -168,6 +195,9 @@ function RunStatusBody() {
       <V label="done" note="Stays for six seconds, with a way to the Log." width={360}>
         <RunStatus run={fixture("done", "done")} onOpenLog={() => undefined} />
       </V>
+      <V label="done · the task waits for a hand check" width={360}>
+        <RunStatus run={fixture("done", "done", { review: true })} onOpenLog={() => undefined} />
+      </V>
       <V label="cancelled" width={360}>
         <RunStatus
           run={fixture("cancelled", "verify", { reason: "Stopped before the task finished." })}
@@ -182,20 +212,20 @@ function RunNoticeBody() {
     <>
       {NOTHING.map((run) => (
         <V key={run.reason} label={`nothing ready · ${run.reason}`} width={480}>
-          <RunNotice run={run} onOpenPlan={() => undefined} onDismiss={() => undefined} />
+          <RunNotice run={run} onOpen={() => undefined} onDismiss={() => undefined} />
         </V>
       ))}
       <V label="failed" width={480}>
         <RunNotice
           run={fixture("failed", "log", { reason: "T-4 changed while Codex worked on it." })}
-          onOpenPlan={() => undefined}
+          onOpen={() => undefined}
           onDismiss={() => undefined}
         />
       </V>
       <V label="failed · phone (358 px), the sentence wraps" width={358}>
         <RunNotice
           run={fixture("failed", "log", { reason: "T-4 changed while Codex worked on it." })}
-          onOpenPlan={() => undefined}
+          onOpen={() => undefined}
           onDismiss={() => undefined}
         />
       </V>

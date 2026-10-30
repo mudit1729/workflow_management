@@ -3,10 +3,13 @@
 //  - Open in Codex copies the command and shows the prompt (see OpenInCodex).
 //  - Do next step starts a background run. While it runs, the button's slot shows the live phase,
 //    a progress pulse and Cancel; a run with nothing to do says why on a line below, with a way to
-//    the Plan tab. The result of a run is not shown here: it is markdown in the issue (the task, a
-//    change entry), a commit and a CI run, which the Plan, Log, Git and CI tabs show.
+//    the tab that answers it. When the run ends the slot says how ("Done: T-4", Open log) for a
+//    few seconds, and that is the one announcement: the end-of-run toast stays quiet while this
+//    strip is on screen (see follow-run.ts). What the run did is markdown in the issue (the plan,
+//    the task, a change entry), a commit and a CI run, which the Plan, Log, Git and CI tabs show.
+//  - `children` are more buttons for the same row, such as the header's Copy context.
 import { Play } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useIssueTab } from "@/lib/nav";
@@ -18,22 +21,31 @@ import { useCodexIssue } from "./use-codex";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
+/**
+ * What the button does right now. An issue without a plan has no task to claim, so its next step
+ * is the plan (`planning-issues`, as `doing-next-step` step 3 says); otherwise it is the next
+ * ready task.
+ */
 function nextStepHint(issue: CodexIssue): string {
+  const tasks = issue.progress?.tasks;
+  if (tasks?.total === 0)
+    return "This issue has no plan yet. Codex writes plan.md from the criteria first, then claims T-1, logs the change, runs CI and finishes it.";
   const base =
     "Codex does the next ready task in the background: it claims the task, logs the change, runs CI and finishes it.";
-  const ready = issue.progress?.tasks.ready;
-  if (ready === undefined) return base;
-  return ready === 0
+  if (tasks === undefined) return base;
+  return tasks.ready === 0
     ? `${base} No task is ready right now.`
-    : `${base} ${ready} ${ready === 1 ? "task is" : "tasks are"} ready.`;
+    : `${base} ${tasks.ready} ${tasks.ready === 1 ? "task is" : "tasks are"} ready.`;
 }
 
 export interface CodexActionsProps {
   issue: CodexIssue;
+  /** More buttons for the same row, after the strip. */
+  children?: ReactNode;
   className?: string;
 }
 
-export function CodexActions({ issue, className }: CodexActionsProps) {
+export function CodexActions({ issue, children, className }: CodexActionsProps) {
   const { runs, active, outcome, starting, start, cancel, dismiss } = useCodexIssue(issue);
   const { setTab } = useIssueTab();
 
@@ -82,7 +94,7 @@ export function CodexActions({ issue, className }: CodexActionsProps) {
       onClickCapture={(e) => {
         byKey.current = e.detail === 0;
       }}
-      className={cn("@container flex min-w-0 flex-col gap-1.5", className)}
+      className={cn("group/codex @container flex min-w-0 flex-col gap-1.5", className)}
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <OpenInCodex issue={issue} compact={slot !== undefined} />
@@ -107,13 +119,14 @@ export function CodexActions({ issue, className }: CodexActionsProps) {
             </Button>
           </Tooltip>
         )}
+        {children}
         <RunsPopover runs={runs} onOpenTab={openTab} yield={slot !== undefined} />
       </div>
       {notice && (
         <RunNotice
           run={notice}
-          onOpenPlan={() => {
-            openTab("plan");
+          onOpen={(tab) => {
+            openTab(tab);
             dismiss();
           }}
           onDismiss={dismiss}

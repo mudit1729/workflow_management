@@ -18,7 +18,7 @@ export interface OpenInCodexPanelProps {
   copied?: boolean;
 }
 
-/** The prompt, the command, two Copy buttons and a line on what the daemon changes. */
+/** The prompt, the command, two Copy buttons and a line on what a local daemon would change. */
 export function OpenInCodexPanel({ issue, copied }: OpenInCodexPanelProps) {
   const { prompt, command } = codexCommand(issue);
   return (
@@ -64,8 +64,8 @@ export function OpenInCodexPanel({ issue, copied }: OpenInCodexPanelProps) {
       </div>
 
       <p className="text-fg-faint text-xs leading-snug">
-        With the local wf daemon, this button starts Codex directly. The wf skills in Codex read
-        current_state.md and do the rest.
+        Codex reads current_state.md first and does the rest with the wf skills. Later, a local wf
+        daemon will start Codex from this button.
       </p>
     </div>
   );
@@ -105,27 +105,41 @@ export interface OpenInCodexProps {
 export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<boolean | undefined>();
+  // The tooltip is controlled for its whole life (a boolean from the first render): flipping
+  // `disabled` made it switch between uncontrolled and controlled, which Radix warns about.
+  const [hint, setHint] = useState(false);
 
   const onClick = () => {
     // A click that closes the popover is not a second copy.
     if (open) return;
     setCopied(undefined);
-    void copyCodexCommand(issue).then(setCopied);
+    // The popover's line says "Command copied" (or that the clipboard was blocked): no toast.
+    void copyCodexCommand(issue, { toast: false }).then(setCopied);
   };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip content={OPEN_IN_CODEX_HINT} disabled={open}>
+      <Tooltip content={OPEN_IN_CODEX_HINT} open={hint && !open} onOpenChange={setHint}>
         <PopoverTrigger asChild>
           <Button
             data-wf="OpenInCodexButton"
             variant="secondary"
             onClick={onClick}
             aria-label={compact ? "Open in Codex" : undefined}
-            className={cn(compact && "@max-[440px]:size-7 @max-[440px]:px-0", className)}
+            className={cn(
+              compact &&
+                "@max-[440px]:size-7 @max-[440px]:px-0 group-data-[busy]/codex:@max-[640px]:size-7 group-data-[busy]/codex:@max-[640px]:px-0",
+              className,
+            )}
           >
             <Terminal {...ICON} />
-            <span className={cn(compact && "@max-[440px]:hidden")}>Open in Codex</span>
+            <span
+              className={cn(
+                compact && "@max-[440px]:hidden group-data-[busy]/codex:@max-[640px]:hidden",
+              )}
+            >
+              Open in Codex
+            </span>
           </Button>
         </PopoverTrigger>
       </Tooltip>

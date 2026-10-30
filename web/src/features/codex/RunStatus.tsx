@@ -6,7 +6,8 @@ import { AuthorChip } from "@/components/common";
 import { Button, IconButton } from "@/components/ui";
 import type { CodexRun } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { runLine, runProgress } from "./run-copy";
+import type { IssueTab } from "@/lib/nav";
+import { reasonAction, runLine, runProgress } from "./run-copy";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -82,7 +83,9 @@ export function RunStatus({ run, onCancel, onOpenLog, className }: RunStatusProp
       )}
     >
       <Lead run={run} />
-      <span className="min-w-0 truncate text-fg">{runLine(run)}</span>
+      <span title={runLine(run)} className="min-w-0 truncate text-fg">
+        {runLine(run)}
+      </span>
       {running && <RunProgress run={run} />}
       {running && onCancel && (
         <Button variant="ghost" size="sm" onClick={onCancel} className="shrink-0 text-fg-muted">
@@ -102,7 +105,12 @@ export function RunStatus({ run, onCancel, onOpenLog, className }: RunStatusProp
 
 export interface RunNoticeProps {
   run: CodexRun;
-  /** Open the Plan tab. */
+  /**
+   * Go to the tab that answers the reason (the Now tab for a request, the goal for an issue
+   * without criteria, the plan otherwise); a reason with nowhere to go gets no button.
+   */
+  onOpen?: (tab: IssueTab) => void;
+  /** Always open the Plan tab. Kept for callers that predate `onOpen`; `onOpen` wins. */
   onOpenPlan?: () => void;
   onDismiss?: () => void;
   className?: string;
@@ -112,9 +120,17 @@ export interface RunNoticeProps {
  * A run that did no work and says why: nothing was ready, or the task changed under it. A line of
  * its own under the buttons, because the reason is a sentence and wraps on a phone.
  */
-export function RunNotice({ run, onOpenPlan, onDismiss, className }: RunNoticeProps) {
+export function RunNotice({ run, onOpen, onOpenPlan, onDismiss, className }: RunNoticeProps) {
   const failed = run.status === "failed";
   const text = run.reason ?? (failed ? "The run stopped." : "No ready task.");
+  // A failed run points at the plan (the task it held); a run that did no work, at its answer.
+  const where = onOpen
+    ? failed
+      ? { label: "Open plan", tab: "plan" as const }
+      : reasonAction(run)
+    : onOpenPlan
+      ? { label: "Open plan", tab: "plan" as const }
+      : undefined;
   return (
     <div
       data-wf="CodexRunNotice"
@@ -134,9 +150,14 @@ export function RunNotice({ run, onOpenPlan, onDismiss, className }: RunNoticePr
       <span className="min-w-0 flex-1 py-px text-fg leading-snug">
         {failed ? `Failed: ${text}` : text}
       </span>
-      {onOpenPlan && (
-        <Button variant="ghost" size="sm" onClick={onOpenPlan} className="-my-0.5 shrink-0">
-          Open plan
+      {where && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => (onOpen ? onOpen(where.tab) : onOpenPlan?.())}
+          className="-my-0.5 shrink-0"
+        >
+          {where.label}
           <ArrowUpRight {...ICON} className="text-fg-faint" />
         </Button>
       )}

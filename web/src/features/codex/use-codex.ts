@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type CodexRun, useCodexRuns, useStartCodexRun } from "@/lib/api";
 import { useOpenIssue } from "@/lib/nav";
-import { followRun, type OpenIssue } from "./follow-run";
+import { followRun, holdStrip, type OpenIssue } from "./follow-run";
 import type { CodexIssue } from "./open-in-codex";
-import { activeRun } from "./run-copy";
+import { activeRun, reasonAction } from "./run-copy";
 
 /** How long the end of a run stays on screen (ms). A reason the person must read stays longer. */
 const SHOW_DONE_MS = 6000;
@@ -60,6 +60,9 @@ export function useCodexIssue(issue: CodexIssue): CodexIssueState {
   const [outcome, setOutcome] = useState<CodexRun | undefined>();
 
   const active = useActiveRun(runs, setOutcome);
+
+  // While this strip is on screen it says how a run ended, so the end of a run needs no toast.
+  useEffect(() => holdStrip(issue.id), [issue.id]);
 
   // The end of a run does not stay for ever: a result is a moment, a reason is a message.
   useEffect(() => {
@@ -145,19 +148,26 @@ export interface NextStep {
   busy: boolean;
   /** Start the next step; a run with nothing to do is explained in a toast. */
   start: () => Promise<CodexRun | undefined>;
+  /** Stop the run that goes on the issue. Does nothing when none does; a cancel gives no toast. */
+  cancel: () => Promise<void>;
 }
 
 /**
  * "Do next step" from a place that has no strip (the card menu, the palette). Starting is the whole
  * answer: the card shows the run, one toast says when it ends (the same toast whichever button
- * started the run), and a run with nothing to do says why at once. Without an issue (the palette
- * with nothing open) it is idle and `start` does nothing.
+ * started the run, unless the issue's own strip is on screen and says it), and a run with nothing
+ * to do says why at once. While a run goes, `cancel` stops it from the same place. Without an
+ * issue (the palette with nothing open) it is idle and `start` and `cancel` do nothing.
  */
 export function useNextStep(issue: CodexIssue | undefined): NextStep {
   const runs = useCodexRuns();
-  const { start } = useStartCodexRun();
+  const { start, cancel } = useStartCodexRun();
   const openIssue = useOpenIssue();
-  const busy = !!issue && runs.some((r) => r.issue === issue.id && r.status === "running");
+  const going = issue
+    ? runs.find((r) => r.issue === issue.id && r.status === "running")
+    : undefined;
+  const busy = going !== undefined;
+  const goingId = going?.id;
 
   const begin = useCallback(async () => {
     if (!issue) return undefined;
@@ -168,12 +178,19 @@ export function useNextStep(issue: CodexIssue | undefined): NextStep {
     return run;
   }, [start, issue, openIssue]);
 
-  return { busy, start: begin };
+  const stop = useCallback(async () => {
+    if (goingId) await cancel(goingId);
+  }, [goingId, cancel]);
+
+  return { busy, start: begin, cancel: stop };
 }
 
 function explainNothingReady(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue) {
+  const where = reasonAction(run);
   toast(run.reason ?? "No ready task.", {
     description: `${issue.id} · ${issue.title}`,
-    action: { label: "Open plan", onClick: () => void openIssue(issue.id, { tab: "plan" }) },
+    action: where
+      ? { label: where.label, onClick: () => void openIssue(issue.id, { tab: where.tab }) }
+      : undefined,
   });
 }
