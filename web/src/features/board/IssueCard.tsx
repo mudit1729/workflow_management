@@ -36,7 +36,7 @@ import { useRecentlyChanged } from "@/lib/live";
 import { hrefFor, useOpenIssue } from "@/lib/nav";
 import { STATUS_LABEL, statusColor } from "@/lib/status";
 import { useDraggableCard } from "./dnd";
-import { ALL_LANE, relativeGroupPath } from "./filter";
+import { relativeGroupPath } from "./filter";
 import { IssueCardMenu, type IssueCardMenuView } from "./IssueCardMenu";
 import { BoardCardContext } from "./useBoardKeys";
 
@@ -47,8 +47,6 @@ export interface IssueCardProps {
   /** Defaults to opening the drawer (or the full page below 768 px). */
   onOpen?: (issue: IssueSummary) => void;
   dragDisabled?: boolean;
-  /** Swimlane id; drops are allowed only inside the same lane. */
-  lane?: string;
   className?: string;
 }
 
@@ -60,18 +58,11 @@ const FOOTER_IN_FLOW = [
   "[@media(hover:none)]:static [@media(hover:none)]:mt-2 [@media(hover:none)]:grid-rows-[1fr]",
 ].join(" ");
 
-export function IssueCard({
-  issue,
-  selected,
-  onOpen,
-  dragDisabled,
-  lane = ALL_LANE,
-  className,
-}: IssueCardProps) {
+export function IssueCard({ issue, selected, onOpen, dragDisabled, className }: IssueCardProps) {
   const board = useContext(BoardCardContext);
   const openIssue = useOpenIssue();
   const flash = useRecentlyChanged(issue.id);
-  // Codex at work on this issue: its mark takes the group path's place in the id row.
+  // An agent at work on this issue: its mark takes the group path's place in the id row.
   const codexRun = useCardRun(issue.id);
   const rootRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ open: boolean; view: IssueCardMenuView }>({
@@ -81,7 +72,6 @@ export function IssueCard({
 
   const dragging = useDraggableCard(rootRef, {
     issue,
-    lane,
     disabled: dragDisabled || board == null,
     preview: () => <IssueCardPreview issue={issue} />,
   });
@@ -219,16 +209,18 @@ export function IssueCard({
             {blockedBy.more > 0 && <span className="tabular"> +{blockedBy.more}</span>}
           </span>
         )}
-        {/* Quiet marks sit left of the id: a lint dot, who holds the lease, the priority. */}
+        {/* Quiet marks sit left of the id: a lint dot, who holds the lease, the priority. While a
+            run marker shows, the lint dot and the lease avatars step aside: the marker's tile
+            already names who is working, and its phase word keeps the room whichever agent runs. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {lintDot && (
+          {lintDot && !codexRun && (
             <LintBadge
               counts={issue.lint}
               variant="dot"
               className="size-3 bg-clip-content p-[3px]"
             />
           )}
-          {holders.length > 0 && <AuthorStack handles={holders} max={3} size="xs" />}
+          {holders.length > 0 && !codexRun && <AuthorStack handles={holders} max={3} size="xs" />}
           <PriorityGlyph priority={issue.priority} />
           <span className="font-mono tabular">{issue.id}</span>
         </span>

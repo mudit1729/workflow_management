@@ -25,13 +25,27 @@ describe("search validators", () => {
   });
 
   it("still normalizes the other board params", () => {
-    expect(validateBoardSearch({ author: "@codex", swim: "sideways", show: "cancelled" })).toEqual({
+    expect(validateBoardSearch({ author: "@codex", show: "sideways" })).toEqual({
       group: undefined,
-      swim: undefined,
       author: "codex",
       q: undefined,
-      show: "cancelled",
+      show: undefined,
+      needs: undefined,
     });
+  });
+
+  it("drops ?swim= from an old link without an error", () => {
+    for (const swim of ["child", "none", "sideways"]) {
+      const search = validateBoardSearch({ group: "g-web", swim, needs: "me" });
+      expect(search).toEqual({
+        group: "g-web",
+        author: undefined,
+        q: undefined,
+        show: undefined,
+        needs: "me",
+      });
+      expect("swim" in search).toBe(false);
+    }
   });
 
   it("keeps the files path exactly as typed", () => {

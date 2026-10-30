@@ -4,7 +4,6 @@ import {
   applyFilter,
   filterFromSearch,
   hasActiveFilter,
-  laneSummary,
   needsYou,
   openRequestsFor,
   summarize,
@@ -185,18 +184,5 @@ describe("summarize", () => {
     const shown = applyFilter(list, filterFromSearch({ needs: "me" }), mine.issues);
     expect(shown.map((i) => i.id)).toEqual(["a"]);
     expect(summarize(shown, mine).needsYou).toBe(mine.requests);
-  });
-});
-
-describe("laneSummary", () => {
-  const list = [
-    issue("a", { signals: { ...issue("x").signals, needs_you: 1 } }),
-    issue("b", { signals: { ...issue("x").signals, needs_you: 1 } }),
-  ];
-
-  it("counts the issues that need someone, or the issues that need the acting person", () => {
-    expect(laneSummary(list)).toBe("2 issues · 2 need you");
-    const mine = needsYou([request("a", "shruti")], "shruti");
-    expect(laneSummary(list, mine)).toBe("2 issues · 1 needs you");
   });
 });

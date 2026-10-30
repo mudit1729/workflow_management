@@ -6,7 +6,7 @@ import type { IssueId, IssueStatus } from "@/gen/types";
 import { useHotkey } from "@/lib/hooks";
 import { useCloseIssue, useOpenIssue, useOpenIssueId } from "@/lib/nav";
 
-/** One navigable column: its cards top to bottom (across expanded lanes). */
+/** One navigable column: its cards top to bottom. */
 export interface NavColumn {
   status: IssueStatus;
   ids: IssueId[];
@@ -40,9 +40,8 @@ export interface BoardCardApi {
 export const BoardCardContext = createContext<BoardCardApi | null>(null);
 
 const CARD_SELECTOR = '[data-wf="IssueCard"]';
-/** The rail a folded column leaves behind: the column's own, or its header cell in swimlanes. */
-const RAIL_SELECTOR = (status: IssueStatus) =>
-  `[data-wf="FoldedColumn"][data-status="${status}"], [data-wf="FoldedHeader"][data-status="${status}"]`;
+/** The rail a folded column leaves behind. */
+const RAIL_SELECTOR = (status: IssueStatus) => `[data-wf="FoldedColumn"][data-status="${status}"]`;
 
 /** The last kind of input: the card footer and the focus ring follow it, so one card is open. */
 export type BoardInput = "keyboard" | "pointer";

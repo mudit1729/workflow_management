@@ -1,7 +1,7 @@
 // The 44 px board toolbar, the one top bar of the Board. Left: the Workflow view tabs, then the
 // scope breadcrumb and a faint count summary. Right: text filter, "Needs you", author filter,
-// swimlanes, cancelled, and Add work.
-import { CircleX, MessageCircleQuestionMark, Plus, Rows3, UsersRound, X } from "lucide-react";
+// cancelled, and Add work.
+import { CircleX, MessageCircleQuestionMark, Plus, UsersRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { openAddWork } from "@/app/shell-store";
 import { AuthorChip, AuthorStack, ViewTabs } from "@/components/common";
@@ -15,7 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   SearchInput,
-  Segmented,
   Skeleton,
   Tooltip,
 } from "@/components/ui";
@@ -40,9 +39,6 @@ export interface BoardToolbarProps {
   filtered: boolean;
   authors: AuthorOption[];
   me: string;
-  /** The selected group has child groups, so swimlanes are possible. */
-  canSwim: boolean;
-  swim: "child" | "none";
   cancelledCount: number;
   /** Open requests for the acting person across the workspace, and the issues they sit in. */
   needsYou?: { requests: number; issues: number };
@@ -58,8 +54,6 @@ export function BoardToolbar({
   filtered,
   authors,
   me,
-  canSwim,
-  swim,
   cancelledCount,
   needsYou = NO_REQUESTS,
 }: BoardToolbarProps) {
@@ -141,13 +135,6 @@ export function BoardToolbar({
           selected={selectedAuthors}
           me={me}
           onChange={(handles) => setSearch({ author: formatAuthorParam(handles) })}
-        />
-
-        <SwimlaneToggle
-          canSwim={canSwim}
-          value={swim}
-          groupTitle={chain.length > 1 ? selected?.title : undefined}
-          onChange={(v) => setSearch({ swim: v === "child" ? undefined : v })}
         />
 
         <Tooltip content={showCancelled ? "Hide cancelled issues" : "Show cancelled issues"}>
@@ -443,47 +430,6 @@ function AuthorFilter({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-// ---------------------------------------------------------------- swimlanes
-
-function SwimlaneToggle({
-  canSwim,
-  value,
-  groupTitle,
-  onChange,
-}: {
-  canSwim: boolean;
-  value: "child" | "none";
-  groupTitle?: string;
-  onChange: (v: "child" | "none") => void;
-}) {
-  const tip = canSwim
-    ? "Split the board into one band per child group"
-    : groupTitle
-      ? `${groupTitle} has no subgroups, so there is nothing to split by`
-      : "There are no groups to split by";
-
-  return (
-    <div data-wf="SwimlaneToggle" className="hidden items-center gap-2 @2xl/board:flex">
-      <span className="hidden text-fg-faint text-sm @5xl/board:inline">Swimlanes</span>
-      <Tooltip content={tip}>
-        <span className={cn("inline-flex", !canSwim && "cursor-not-allowed")}>
-          <Segmented<"child" | "none">
-            size="sm"
-            aria-label="Swimlanes"
-            disabled={!canSwim}
-            value={canSwim ? value : "none"}
-            onChange={onChange}
-            options={[
-              { value: "child", label: "Groups", icon: <Rows3 {...ICON} /> },
-              { value: "none", label: "None" },
-            ]}
-          />
-        </span>
-      </Tooltip>
-    </div>
   );
 }
 

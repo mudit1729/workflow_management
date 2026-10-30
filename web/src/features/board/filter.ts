@@ -1,7 +1,6 @@
-// Board filtering, ordering and lane building. Pure functions over the snapshot,
-// so the board, the keyboard model and the toolbar summary agree on one view.
+// Board filtering and ordering. Pure functions over the snapshot, so the board,
+// the keyboard model and the toolbar summary agree on one view.
 import type { GroupNode, IssueStatus, IssueSummary, NeedsYouItem, Priority } from "@/gen/types";
-import { issuesInGroup } from "@/lib/api";
 import { parseTs } from "@/lib/format";
 import type { BoardSearch } from "@/lib/nav";
 import { BOARD_COLUMNS, STATUS_ORDER } from "@/lib/status";
@@ -219,80 +218,4 @@ export function relativeGroupPath(path: string[], base: string[]): string[] {
   if (base.length === 0 || base.length > path.length) return path;
   for (let i = 0; i < base.length; i++) if (path[i] !== base[i]) return path;
   return path.slice(base.length);
-}
-
-// ---------------------------------------------------------------- lanes
-
-export const DIRECT_LANE = "__direct";
-export const ALL_LANE = "__all";
-
-export interface BoardLane {
-  id: string; // group id, DIRECT_LANE or ALL_LANE
-  title: string;
-  group?: GroupNode;
-  issues: IssueSummary[];
-  byStatus: Record<IssueStatus, IssueSummary[]>;
-}
-
-export function singleLane(issues: IssueSummary[]): BoardLane {
-  return { id: ALL_LANE, title: "All issues", issues, byStatus: bucketByStatus(issues) };
-}
-
-/**
- * One lane per direct child group, plus "No subgroup" for issues filed directly
- * in the selected group (only when it has any). Empty child lanes are dropped
- * while a filter is active, so a filtered board stays short.
- */
-export function buildLanes(
-  selected: GroupNode,
-  issues: IssueSummary[],
-  opts: { hideEmpty: boolean },
-): BoardLane[] {
-  const lanes: BoardLane[] = [];
-  const children = [...selected.children].sort(
-    (a, b) => a.order - b.order || a.title.localeCompare(b.title),
-  );
-  for (const child of children) {
-    const own = issuesInGroup(child, issues);
-    if (own.length === 0 && opts.hideEmpty) continue;
-    lanes.push({
-      id: child.id,
-      title: child.title,
-      group: child,
-      issues: own,
-      byStatus: bucketByStatus(own),
-    });
-  }
-  const direct = issues.filter((i) => i.group === selected.id);
-  if (direct.length > 0) {
-    lanes.push({
-      id: DIRECT_LANE,
-      title: "No subgroup",
-      issues: direct,
-      byStatus: bucketByStatus(direct),
-    });
-  }
-  return lanes;
-}
-
-/**
- * "8 issues · 3 in progress · 1 blocked · 2 need you" for a collapsed lane. Pass `mine` so the
- * last part counts the issues with a request for the acting person, as the "Needs you" filter
- * does; without it, the issues with an open request addressed to anyone.
- */
-export function laneSummary(issues: IssueSummary[], mine?: NeedsYou): string {
-  if (issues.length === 0) return "No issues";
-  const parts = [`${issues.length} issue${issues.length === 1 ? "" : "s"}`];
-  const count = (s: IssueStatus) => issues.filter((i) => i.status === s).length;
-  const inProgress = count("in_progress");
-  const blocked = count("blocked");
-  const review = count("review");
-  const needsYou = issues.filter((i) =>
-    mine ? mine.issues.has(i.id) : i.signals.needs_you > 0,
-  ).length;
-  if (inProgress) parts.push(`${inProgress} in progress`);
-  if (review) parts.push(`${review} in review`);
-  if (blocked) parts.push(`${blocked} blocked`);
-  if (needsYou) parts.push(`${needsYou} need${needsYou === 1 ? "s" : ""} you`);
-  return parts.join(" · ");
 }

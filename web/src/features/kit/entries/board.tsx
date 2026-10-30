@@ -1,22 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
-import {
-  BoardPage,
-  IssueCard,
-  IssueCardMenu,
-  IssueCardPreview,
-  MiniStatusBar,
-} from "@/features/board";
+import { BoardPage, IssueCard, IssueCardMenu, IssueCardPreview } from "@/features/board";
 import { BoardToolbar, BoardToolbarSkeleton } from "@/features/board/BoardToolbar";
 import {
-  type BoardLane,
-  buildLanes,
   compareCards,
   groupChain,
   issueAuthors,
-  laneSummary,
   needsYou,
-  singleLane,
   summarize,
 } from "@/features/board/filter";
 import { BoardSkeleton, KanbanBoard } from "@/features/board/KanbanBoard";
@@ -27,7 +17,6 @@ import {
   FoldedColumn,
   KanbanColumn,
 } from "@/features/board/KanbanColumn";
-import { Swimlane } from "@/features/board/Swimlane";
 import type { GroupNode, IssueStatus, IssueSummary, WorkspaceSnapshot } from "@/gen/types";
 import { issuesInGroup, useInbox } from "@/lib/api";
 import { BOARD_COLUMNS } from "@/lib/status";
@@ -229,7 +218,6 @@ function ToolbarDemo({
   group,
   filtered,
   needs,
-  swim,
 }: {
   label: string;
   note?: string;
@@ -238,7 +226,6 @@ function ToolbarDemo({
   filtered?: boolean;
   /** The Needs you filter is on (`?needs=me`). */
   needs?: boolean;
-  swim: "child" | "none";
 }) {
   const inbox = useInbox();
   return (
@@ -270,8 +257,6 @@ function ToolbarDemo({
                   filtered={Boolean(filtered || needs)}
                   authors={authors}
                   me={snap.config.author}
-                  canSwim={chain[chain.length - 1].children.length > 0}
-                  swim={swim}
                   cancelledCount={scope.length - open.length}
                   needsYou={{ requests: mine.requests, issues: mine.issues.size }}
                 />
@@ -287,137 +272,17 @@ function ToolbarDemo({
 function BoardToolbarBody() {
   return (
     <>
-      <ToolbarDemo label="all issues, swimlanes by group" width={1040} swim="child" />
-      <ToolbarDemo
-        label="inside wf / core (no subgroups)"
-        width={1040}
-        group="g-core1"
-        swim="none"
-      />
-      <ToolbarDemo label="filtered view" width={1040} filtered swim="child" />
+      <ToolbarDemo label="all issues" width={1040} />
+      <ToolbarDemo label="inside wf / core" width={1040} group="g-core1" />
+      <ToolbarDemo label="filtered view" width={1040} filtered />
       <ToolbarDemo
         label="Needs you on (?needs=me)"
         note="A toggle with the count of open requests. On, the board shows only the issues that wait on you."
         width={1040}
         needs
-        swim="child"
       />
-      <ToolbarDemo label="narrow board (container query)" width={560} group="g-web01" swim="none" />
+      <ToolbarDemo label="narrow board (container query)" width={560} group="g-web01" />
     </>
-  );
-}
-
-// ---------------------------------------------------------------- Swimlane
-
-function lanesOf(snap: WorkspaceSnapshot): BoardLane[] {
-  const wf = snap.groups.children.find((g) => g.id === "g-wf001") ?? snap.groups;
-  return buildLanes(wf, issuesInGroup(wf, snap.issues), { hideEmpty: false });
-}
-
-function SwimlaneDemo({
-  lane,
-  folded,
-  startCollapsed,
-}: {
-  lane: BoardLane;
-  folded: IssueStatus[];
-  startCollapsed?: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(Boolean(startCollapsed));
-  const [open, setOpen] = useState<IssueStatus[]>([]);
-  return (
-    <div className="bg-subtle">
-      <Swimlane
-        lane={lane}
-        columns={BOARD_COLUMNS}
-        isFolded={(s) => folded.includes(s) && !open.includes(s)}
-        onUnfold={(s) => setOpen((o) => [...o, s])}
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
-        active={null}
-      />
-    </div>
-  );
-}
-
-function SwimlaneBody() {
-  return (
-    <WithSnapshot>
-      {(snap) => {
-        const lanes = lanesOf(snap);
-        const web = lanes.find((l) => l.title === "web") ?? lanes[0];
-        const core = lanes.find((l) => l.title === "core") ?? lanes[0];
-        const direct = lanes.find((l) => l.id === "__direct");
-        const empty: BoardLane = { ...singleLane([]), id: "g-empty", title: "design" };
-        return (
-          <>
-            <V
-              label="expanded, backlog and done folded"
-              fill
-              className="overflow-x-auto rounded-md border border-border"
-            >
-              <SwimlaneDemo lane={web} folded={["backlog", "done"]} />
-            </V>
-            <V
-              label="expanded, nothing folded"
-              fill
-              className="overflow-x-auto rounded-md border border-border"
-            >
-              <SwimlaneDemo lane={core} folded={[]} />
-            </V>
-            <V
-              label="collapsed"
-              note={laneSummary(core.issues)}
-              fill
-              className="rounded-md border border-border"
-            >
-              <SwimlaneDemo lane={core} folded={["backlog", "done"]} startCollapsed />
-            </V>
-            {direct && (
-              <V
-                label="“No subgroup” lane"
-                fill
-                className="overflow-x-auto rounded-md border border-border"
-              >
-                <SwimlaneDemo lane={direct} folded={["backlog", "done"]} />
-              </V>
-            )}
-            <V label="empty lane" fill className="rounded-md border border-border">
-              <SwimlaneDemo lane={empty} folded={[]} />
-            </V>
-          </>
-        );
-      }}
-    </WithSnapshot>
-  );
-}
-
-// ---------------------------------------------------------------- MiniStatusBar
-
-function MiniStatusBarBody() {
-  return (
-    <WithSnapshot>
-      {(snap) => {
-        const lanes = lanesOf(snap);
-        const pick = (title: string) => lanes.find((l) => l.title === title)?.issues ?? [];
-        return (
-          <>
-            <V label="whole workspace · 32 px">
-              <MiniStatusBar issues={snap.issues} />
-            </V>
-            <V label="web">
-              <MiniStatusBar issues={pick("web")} />
-            </V>
-            <V label="core">
-              <MiniStatusBar issues={pick("core")} />
-            </V>
-            <V label="only cancelled">
-              <MiniStatusBar issues={snap.issues.filter((i) => i.status === "cancelled")} />
-            </V>
-          </>
-        );
-      }}
-    </WithSnapshot>
   );
 }
 
@@ -427,8 +292,8 @@ function KanbanBoardBody() {
   return (
     <>
       <V
-        label="columns, one lane"
-        note="Live: j k h l move between cards while this board is mounted."
+        label="columns"
+        note="Live: j k h l move between cards while this board is mounted. Drag a card to any column."
         fill
         height={520}
       >
@@ -437,8 +302,7 @@ function KanbanBoardBody() {
             <div className="relative min-h-0 flex-1 bg-subtle">
               <KanbanBoard
                 columns={BOARD_COLUMNS}
-                lanes={[singleLane(snap.issues.filter((i) => i.status !== "cancelled"))]}
-                swimlanes={false}
+                issues={snap.issues.filter((i) => i.status !== "cancelled")}
                 basePath={[]}
               />
             </div>
@@ -462,7 +326,7 @@ function KanbanBoardBody() {
 function BoardPageBody() {
   return (
     <V
-      label="toolbar + swimlanes, as /w"
+      label="toolbar + columns, as /w"
       note="Filters and group changes stay in the kit's private router."
       fill
       height={560}
@@ -510,23 +374,9 @@ export const boardEntries: KitEntry[] = [
   ),
   entry(
     "Workflow · Board",
-    "Swimlane",
-    `${SRC}/Swimlane.tsx`,
-    "Bands per child group let a coordinator see every lane of work in one board while the rule that cards never cross lanes keeps ownership clear.",
-    SwimlaneBody,
-  ),
-  entry(
-    "Workflow · Board",
-    "MiniStatusBar",
-    `${SRC}/Swimlane.tsx`,
-    "A 32 px segmented bar answers 'how far along is this group' without opening it, and keeps the colors tied to status.",
-    MiniStatusBarBody,
-  ),
-  entry(
-    "Workflow · Board",
     "KanbanBoard",
     `${SRC}/KanbanBoard.tsx`,
-    "The board region joins columns, swimlanes, drag and the keyboard model, so the whole workspace is one scannable surface.",
+    "The board region joins the status columns, drag and the keyboard model, so the whole workspace is one scannable surface.",
     KanbanBoardBody,
   ),
   entry(

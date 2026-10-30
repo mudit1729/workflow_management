@@ -1,27 +1,17 @@
-// The board region. Three layouts over one model:
+// The board region. Two layouts over one model:
 // - columns: horizontal scroller of status columns, each body scrolls on its own
-// - swimlanes: sticky column titles, one band per child group; the board scrolls both ways
 // - mobile (<768 px): one column at a time with a status switcher
-import {
-  type ReactNode,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StatusIcon } from "@/components/common";
 import { Segmented, Skeleton } from "@/components/ui";
-import type { IssueStatus } from "@/gen/types";
+import type { IssueStatus, IssueSummary } from "@/gen/types";
 import { useMoveIssue } from "@/lib/api";
 import { useLayoutMode } from "@/lib/hooks";
 import { usePrefs } from "@/lib/prefs";
 import { FOLDABLE_COLUMNS, STATUS_LABEL } from "@/lib/status";
 import { useBoardDnd, useCardAutoScroll } from "./dnd";
-import { type BoardLane, bucketByStatus, type NeedsYou } from "./filter";
-import { ColumnHeader, FoldedColumn, KanbanColumn } from "./KanbanColumn";
-import { FoldedHeader, Swimlane } from "./Swimlane";
+import { bucketByStatus } from "./filter";
+import { FoldedColumn, KanbanColumn } from "./KanbanColumn";
 import {
   type BoardCardApi,
   BoardCardContext,
@@ -32,44 +22,37 @@ import {
 
 export interface KanbanBoardProps {
   columns: IssueStatus[];
-  /** One lane without swimlanes; one per child group (plus "No subgroup") with them. */
-  lanes: BoardLane[];
-  swimlanes: boolean;
+  /** The issues in view; the board sorts them into the columns. */
+  issues: IssueSummary[];
   /** Titles of the selected group below the root, for relative card paths. */
   basePath: string[];
-  /** The acting person's open requests, so a lane's "N need you" agrees with the toggle. */
-  mine?: NeedsYou;
 }
 
-export function KanbanBoard({ columns, lanes, swimlanes, basePath, mine }: KanbanBoardProps) {
+export function KanbanBoard({ columns, issues, basePath }: KanbanBoardProps) {
   const mobile = useLayoutMode() === "mobile";
   const foldedColumns = usePrefs((s) => s.foldedColumns);
   const toggleColumnFold = usePrefs((s) => s.toggleColumnFold);
   const { move } = useMoveIssue();
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
 
   const isFolded = useCallback(
     (s: IssueStatus) => FOLDABLE_COLUMNS.includes(s) && foldedColumns.includes(s),
     [foldedColumns],
   );
 
-  const byId = useMemo(() => {
-    const map = new Map<string, BoardLane["issues"][number]>();
-    for (const lane of lanes) for (const issue of lane.issues) map.set(issue.id, issue);
-    return map;
-  }, [lanes]);
+  const buckets = useMemo(() => bucketByStatus(issues), [issues]);
 
-  const navColumns = useMemo<NavColumn[]>(() => {
-    const open = lanes.filter((l) => !collapsed.has(l.id));
-    return columns
-      .filter((s) => !isFolded(s))
-      .map((s) => ({ status: s, ids: open.flatMap((l) => l.byStatus[s].map((i) => i.id)) }));
-  }, [columns, lanes, collapsed, isFolded]);
+  const navColumns = useMemo<NavColumn[]>(
+    () =>
+      columns
+        .filter((s) => !isFolded(s))
+        .map((s) => ({ status: s, ids: buckets[s].map((i) => i.id) })),
+    [columns, buckets, isFolded],
+  );
 
   const keys = useBoardKeys(navColumns, !mobile);
 
-  const active = useBoardDnd((id, to) => {
-    const issue = byId.get(id);
+  useBoardDnd((id, to) => {
+    const issue = issues.find((i) => i.id === id);
     if (!issue) return;
     move(issue, to);
     // A card dropped on a folded rail vanishes: let the rail answer (focus, one pulse).
@@ -98,48 +81,21 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath, mine }: Kanba
     ],
   );
 
-  const toggleLane = useCallback((id: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const count = (s: IssueStatus) => lanes.reduce((n, l) => n + l.byStatus[s].length, 0);
-
-  let body: ReactNode;
-  if (mobile) {
-    body = <MobileBoard columns={columns} lanes={lanes} />;
-  } else if (swimlanes) {
-    body = (
-      <SwimlaneBoard
-        columns={columns}
-        lanes={lanes}
-        isFolded={isFolded}
-        onToggleFold={toggleColumnFold}
-        count={count}
-        collapsed={collapsed}
-        onToggleLane={toggleLane}
-        active={active}
-        input={keys.input}
-        mine={mine}
-      />
-    );
-  } else {
-    body = (
-      <ColumnsBoard
-        columns={columns}
-        lane={lanes[0]}
-        isFolded={isFolded}
-        onToggleFold={toggleColumnFold}
-        input={keys.input}
-      />
-    );
-  }
-
-  return <BoardCardContext value={api}>{body}</BoardCardContext>;
+  return (
+    <BoardCardContext value={api}>
+      {mobile ? (
+        <MobileBoard columns={columns} buckets={buckets} />
+      ) : (
+        <ColumnsBoard
+          columns={columns}
+          buckets={buckets}
+          isFolded={isFolded}
+          onToggleFold={toggleColumnFold}
+          input={keys.input}
+        />
+      )}
+    </BoardCardContext>
+  );
 }
 
 // ---------------------------------------------------------------- columns
@@ -166,13 +122,13 @@ function useRevealCancelled(scrollRef: RefObject<HTMLDivElement | null>, shown: 
 
 function ColumnsBoard({
   columns,
-  lane,
+  buckets,
   isFolded,
   onToggleFold,
   input,
 }: {
   columns: IssueStatus[];
-  lane: BoardLane;
+  buckets: Record<IssueStatus, IssueSummary[]>;
   isFolded: (s: IssueStatus) => boolean;
   onToggleFold: (s: IssueStatus) => void;
   input?: BoardInput;
@@ -194,15 +150,14 @@ function ColumnsBoard({
             <FoldedColumn
               key={s}
               status={s}
-              count={lane.byStatus[s].length}
+              count={buckets[s].length}
               onUnfold={() => onToggleFold(s)}
             />
           ) : (
             <KanbanColumn
               key={s}
               status={s}
-              issues={lane.byStatus[s]}
-              lane={lane.id}
+              issues={buckets[s]}
               onFold={FOLDABLE_COLUMNS.includes(s) ? () => onToggleFold(s) : undefined}
             />
           ),
@@ -212,82 +167,17 @@ function ColumnsBoard({
   );
 }
 
-// ---------------------------------------------------------------- swimlanes
-
-function SwimlaneBoard({
-  columns,
-  lanes,
-  isFolded,
-  onToggleFold,
-  count,
-  collapsed,
-  onToggleLane,
-  active,
-  input,
-  mine,
-}: {
-  columns: IssueStatus[];
-  lanes: BoardLane[];
-  isFolded: (s: IssueStatus) => boolean;
-  onToggleFold: (s: IssueStatus) => void;
-  count: (s: IssueStatus) => number;
-  collapsed: ReadonlySet<string>;
-  onToggleLane: (id: string) => void;
-  active: ReturnType<typeof useBoardDnd>;
-  input?: BoardInput;
-  mine?: NeedsYou;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useCardAutoScroll(scrollRef);
-  useRevealCancelled(scrollRef, columns.includes("cancelled"));
-  return (
-    <div
-      ref={scrollRef}
-      data-wf="KanbanBoard"
-      data-layout="swimlanes"
-      data-input={input}
-      className="h-full min-h-0 min-w-0 overflow-auto"
-    >
-      <div className="flex w-max min-w-full flex-col pb-6">
-        <div className="sticky top-0 z-20 flex gap-2 border-border border-b bg-subtle px-3 pt-1">
-          {columns.map((s) =>
-            isFolded(s) ? (
-              <FoldedHeader key={s} status={s} count={count(s)} onUnfold={() => onToggleFold(s)} />
-            ) : (
-              <ColumnHeader
-                key={s}
-                status={s}
-                count={count(s)}
-                onFold={FOLDABLE_COLUMNS.includes(s) ? () => onToggleFold(s) : undefined}
-                className="w-[var(--wf-col-w)]"
-              />
-            ),
-          )}
-        </div>
-        {lanes.map((lane) => (
-          <Swimlane
-            key={lane.id}
-            lane={lane}
-            columns={columns}
-            isFolded={isFolded}
-            onUnfold={onToggleFold}
-            collapsed={collapsed.has(lane.id)}
-            onToggle={() => onToggleLane(lane.id)}
-            active={active}
-            mine={mine}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- mobile
 
 const MOBILE_START: IssueStatus[] = ["in_progress", "review", "blocked", "planned", "backlog"];
 
-function MobileBoard({ columns, lanes }: { columns: IssueStatus[]; lanes: BoardLane[] }) {
-  const buckets = useMemo(() => bucketByStatus(lanes.flatMap((l) => l.issues)), [lanes]);
+function MobileBoard({
+  columns,
+  buckets,
+}: {
+  columns: IssueStatus[];
+  buckets: Record<IssueStatus, IssueSummary[]>;
+}) {
   const [picked, setPicked] = useState<IssueStatus | null>(null);
   const fallback = MOBILE_START.find((s) => buckets[s].length > 0) ?? columns[0];
   const status = picked && columns.includes(picked) ? picked : fallback;
