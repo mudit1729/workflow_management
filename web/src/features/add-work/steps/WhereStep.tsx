@@ -86,20 +86,31 @@ export function WhereStep({ flow }: { flow: AddWorkFlow }) {
 
   return (
     <Screen flow={flow} title={title} hint={hint}>
-      <ChoiceList<GroupId>
-        label={title}
-        value={draft.where}
-        dense
-        onPick={(where) => flow.patch({ where })}
-        onGo={(where) => flow.advance({ where })}
-        options={places.map((o) => ({
-          value: o.id,
-          label: o.label,
-          hint: o.sub,
-          lead: <GroupMark node={o.node} root={o.root} />,
-        }))}
-      />
-      <KeyHint>Press 1 to {places.length} to pick, Enter to continue.</KeyHint>
+      {/* A long list scrolls inside the screen, so the question stays in view. The padding and
+          the matching negative margin keep the focus rings of the buttons inside the clip. */}
+      <div
+        data-wf="WhereChoices"
+        className="-m-1 max-h-[min(22rem,48dvh)] min-h-0 overflow-y-auto overscroll-contain p-1"
+      >
+        <ChoiceList<GroupId>
+          label={title}
+          value={draft.where}
+          dense
+          onPick={(where) => flow.patch({ where })}
+          onGo={(where) => flow.advance({ where })}
+          options={places.map((o) => ({
+            value: o.id,
+            label: o.label,
+            hint: o.sub,
+            lead: <GroupMark node={o.node} root={o.root} />,
+          }))}
+        />
+      </div>
+      <KeyHint>
+        {places.length > 9
+          ? "Press 1 to 9 to pick one of the first nine, or use the arrow keys. Enter continues."
+          : `Press 1 to ${places.length} to pick, Enter to continue.`}
+      </KeyHint>
     </Screen>
   );
 }

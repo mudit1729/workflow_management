@@ -85,7 +85,7 @@ function ArchifyCardBody() {
       <V label="invalid · errors with JSON paths, source, Copy for agent" width={560}>
         <ArchifyCard diagram={invalid} />
       </V>
-      <V label="unavailable · source and the wf doctor hint" width={560}>
+      <V label="unavailable · source and the hint to render it" width={560}>
         <ArchifyCard diagram={{ ...base, status: "unavailable" }} />
       </V>
     </>

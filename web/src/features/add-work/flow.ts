@@ -4,7 +4,13 @@
 import type { ContextItem } from "@/features/context/types";
 import { toLink } from "@/features/context/types";
 import type { GroupId, GroupNode, Priority, Size } from "@/gen/types";
-import type { Proposal, WorkGroup, WorkIssueInput } from "@/lib/api";
+import {
+  type Proposal,
+  type SPLIT_STEPS,
+  suggestGroupNames,
+  type WorkGroup,
+  type WorkIssueInput,
+} from "@/lib/api";
 
 export type WorkKind = "group" | "issue";
 export type WorkStatus = "backlog" | "planned";
@@ -114,6 +120,17 @@ export interface SplitDraft {
   rows: SplitRow[];
 }
 
+/**
+ * What Codex drafted for a lone issue: the criterion (one EARS sentence, measurable) and the
+ * reason the issue exists, which becomes its `## Context`. The person may edit the criterion on
+ * the review screen. Valid while `signature` matches the answers it was drafted from.
+ */
+export interface IssueDraft {
+  signature: string;
+  criterion: string;
+  why: string;
+}
+
 /** Everything the person has answered so far. */
 export interface Draft {
   kind?: WorkKind;
@@ -132,6 +149,8 @@ export interface Draft {
   status: WorkStatus;
   context: ContextItem[];
   split?: SplitDraft;
+  /** The single issue's criterion and context, drafted on its review screen. */
+  issue?: IssueDraft;
 }
 
 export const DEFAULT_SIZE: Size = "m";
@@ -239,8 +258,82 @@ export function splitSignature(draft: Draft): string {
   ]);
 }
 
+/**
+ * Codex's proposals for the answers as they stand, or undefined while they are missing or were
+ * made for answers the person has since changed (they went back and edited one). Everything that
+ * reads the rows (the button, the count, what is written) goes through this, so stale proposals
+ * can never be added.
+ */
+export function currentSplit(draft: Draft): SplitDraft | undefined {
+  return draft.split?.signature === splitSignature(draft) ? draft.split : undefined;
+}
+
 export function keptRows(draft: Draft): SplitRow[] {
-  return draft.split?.rows.filter((r) => r.keep) ?? [];
+  return currentSplit(draft)?.rows.filter((r) => r.keep) ?? [];
+}
+
+// ---------------------------------------------------------------- the lone issue's draft
+
+/** What Codex reads to draft a lone issue: the title and the linked context, not the size. */
+export function issueSignature(draft: Draft): string {
+  return JSON.stringify([draft.title.trim(), draft.context.map((c) => `${c.kind}:${c.target}`)]);
+}
+
+/** The lone issue's draft, or undefined while it is missing or stale (see `currentSplit`). */
+export function currentIssue(draft: Draft): IssueDraft | undefined {
+  return draft.issue?.signature === issueSignature(draft) ? draft.issue : undefined;
+}
+
+type OneLinePerStep<T extends readonly unknown[]> = { readonly [K in keyof T]: string };
+
+/**
+ * The progress lines of the draft, one per step of the split Codex runs underneath (the type
+ * keeps the two lists the same length).
+ */
+export const ISSUE_DRAFT_STEPS: OneLinePerStep<typeof SPLIT_STEPS> = [
+  "Reading the issue",
+  "Reading linked context",
+  "Drafting the criterion",
+];
+
+const firstWord = (text: string) =>
+  text
+    .trim()
+    .split(/\s+/)[0]
+    ?.toLowerCase()
+    .replace(/[^a-z-]/g, "") ?? "";
+
+/**
+ * The proposal that says what the person's title says. Codex splits the title the way it splits a
+ * group, and a lone issue is one slot of that split: the one that opens with the same verb ("Fix
+ * the … problem" for "Fix flaky login test"), else the second, the slot that carries the work
+ * ("Build the core of …"). The first is usually groundwork (a spec, a question), not the issue.
+ */
+export function pickIssueSlot(title: string, proposals: readonly Proposal[]): Proposal | undefined {
+  const verb = firstWord(title);
+  return (
+    (verb ? proposals.find((p) => firstWord(p.title) === verb) : undefined) ??
+    proposals[1] ??
+    proposals[0]
+  );
+}
+
+/** The draft a lone issue starts from: one proposal's criterion and reason. */
+export function draftIssue(
+  signature: string,
+  title: string,
+  proposals: readonly Proposal[],
+): IssueDraft | undefined {
+  const slot = pickIssueSlot(title, proposals);
+  return slot ? { signature, criterion: slot.criterion, why: slot.why } : undefined;
+}
+
+/**
+ * `## Context` of a lone issue: why it exists (Codex's line) and where it sits. Never a
+ * placeholder: a person who opens the file reads a real sentence.
+ */
+export function issueContext(why: string, place: string | undefined): string {
+  return place ? `${why}\n\nIt belongs to ${place}.` : why;
 }
 
 // ---------------------------------------------------------------- where
@@ -304,8 +397,12 @@ export function whereOptions(root: GroupNode, kind: WorkKind): WhereOption[] {
   return out;
 }
 
-/** More places than this and the question becomes a searchable list. */
-export const MAX_WHERE_BUTTONS = 8;
+/**
+ * More places than this and the question becomes a searchable list. Adding a group adds a place,
+ * so a workspace at the limit would make its next "Where?" worse: the limit leaves room, and the
+ * buttons scroll. The number keys reach the first nine; the rest are one click or arrow keys.
+ */
+export const MAX_WHERE_BUTTONS = 12;
 
 /** The first candidate that names a place in `options`. */
 export function pickWhere(
@@ -331,26 +428,6 @@ const VERBS = new Set(
   ).split(" "),
 );
 
-const PARTICLES = new Set(
-  "up down out on off in into over to with for from about back away".split(" "),
-);
-const PREPOSITIONS = new Set(
-  "with over from in on for to of by via at into across between through under".split(" "),
-);
-const DETERMINERS = new Set(
-  "the a an our your its their this that all every each any some".split(" "),
-);
-const DANGLING = new Set("a an and at by for from in into of on or the to with".split(" "));
-/** Words that end a phrase without being its subject ("onboarding smoother"). */
-const COMPARATIVES = new Set(
-  "better faster smoother easier clearer simpler quicker safer cleaner cheaper".split(" "),
-);
-const ADJECTIVES = new Set(
-  "new single simple basic quick better faster improved custom automatic live real full".split(" "),
-);
-
-const MAX_NAME = 32;
-
 /** True when a title opens with a verb the board's scan can use ("Fix …", "Add …"). */
 export function startsWithVerb(title: string): boolean {
   const first =
@@ -362,86 +439,13 @@ export function startsWithVerb(title: string): boolean {
   return VERBS.has(first);
 }
 
-function upperFirst(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** Drop the small words a cut leaves at the end ("board updates over"). */
-function trimEnd(tokens: string[]): string[] {
-  const out = [...tokens];
-  while (out.length > 1 && DANGLING.has((out.at(-1) ?? "").toLowerCase())) out.pop();
-  return out;
-}
-
-const LEAD_IN =
-  /^(?:(?:we|i)\s+(?:want|need|would like)\s+to\s+|so\s+that\s+|(?:let|allow|enable|help)\s+(?:(?:people|users|everyone|anyone|someone|teams?|the team|them|us|you)\s+)?(?:to\s+)?|to\s+)/i;
-
-const CLAUSE =
-  /\s+(?:so that|so|because|when|while|which|that|if|without|instead of)\s+|[,;:]|\s[—–-]\s/i;
-
-/** The noun phrase an outcome is about: "Push board updates over SSE so …" → "board updates over SSE". */
-export function subjectPhrase(outcome: string): string[] {
-  let text = outcome
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[.!?]+$/, "");
-  text = text.replace(LEAD_IN, "");
-  const cut = text.split(CLAUSE)[0] ?? text;
-  let tokens = cut.split(" ").filter(Boolean);
-  while (tokens.length > 1 && DETERMINERS.has(tokens[0].toLowerCase())) tokens = tokens.slice(1);
-  if (tokens.length > 1 && VERBS.has(tokens[0].toLowerCase())) {
-    tokens = tokens.slice(1);
-    if (tokens.length > 1 && PARTICLES.has(tokens[0].toLowerCase())) tokens = tokens.slice(1);
-  }
-  while (
-    tokens.length > 1 &&
-    (PREPOSITIONS.has(tokens[0].toLowerCase()) || DETERMINERS.has(tokens[0].toLowerCase()))
-  )
-    tokens = tokens.slice(1);
-  return tokens;
-}
-
 /**
- * Up to three group names for an outcome, nouns and not verbs: the subject, the subject with
- * what it is about, and the thing it is about. `taken` names are skipped (a sibling group).
+ * Up to three group names for an outcome, nouns and not verbs ("Board speed", "Handoff bundle"):
+ * the same reading the split titles are built around (`@/lib/api` names). `taken` names are
+ * skipped (a sibling group).
  */
 export function suggestNames(outcome: string, taken: readonly string[] = []): string[] {
-  const phrase = subjectPhrase(outcome);
-  if (phrase.length === 0 || !phrase[0]) return [];
-  const used = new Set(taken.map((t) => t.trim().toLowerCase()));
-
-  // A comparative ends the subject: "Workdatabase easier to browse" is about the Workdatabase.
-  const compare = phrase.findIndex((t, i) => i > 0 && COMPARATIVES.has(t.toLowerCase()));
-  if (compare > 0) phrase.length = compare;
-  const preposition = phrase.findIndex((t, i) => i > 0 && PREPOSITIONS.has(t.toLowerCase()));
-  let core = phrase.slice(0, preposition > 0 ? Math.min(preposition, 3) : 3);
-  while (core.length > 1 && COMPARATIVES.has((core.at(-1) ?? "").toLowerCase())) core.pop();
-  core = trimEnd(core);
-
-  const long = trimEnd(phrase.slice(0, 5));
-  let object: string[] = [];
-  if (preposition > 0) {
-    object = phrase.slice(preposition + 1, preposition + 5);
-    while (object.length > 1 && DETERMINERS.has(object[0].toLowerCase())) object = object.slice(1);
-    object = trimEnd(object.slice(0, 3));
-  }
-  const head = [...core].reverse().find((t) => !ADJECTIVES.has(t.toLowerCase()) && t.length >= 4);
-
-  const out: string[] = [];
-  for (const candidate of [core, long, object, head ? [head] : []]) {
-    const name = upperFirst(candidate.join(" ").replace(/[,;:.]+$/, ""));
-    const key = name.toLowerCase();
-    if (
-      !name ||
-      name.length > MAX_NAME ||
-      used.has(key) ||
-      out.some((o) => o.toLowerCase() === key)
-    )
-      continue;
-    out.push(name);
-    if (out.length === 3) break;
-  }
-  return out;
+  return suggestGroupNames(outcome, taken);
 }
 
 /** The folder name a group title becomes: lowercase words joined by hyphens. */
@@ -498,7 +502,7 @@ export function canContinue(draft: Draft, step: StepId, parent: GroupNode | unde
     case "split":
       return keptRows(draft).length > 0;
     case "review":
-      return !titleProblem(draft.title);
+      return !titleProblem(draft.title) && !!currentIssue(draft)?.criterion.trim();
     default:
       return true;
   }
@@ -506,14 +510,21 @@ export function canContinue(draft: Draft, step: StepId, parent: GroupNode | unde
 
 // ---------------------------------------------------------------- what is created
 
-const ISSUE_CRITERION =
-  "When the work is complete, the system shall behave as the context describes.";
-
-/** The arguments of `useCreateWork` for the draft. */
-export function createArgs(draft: Draft): { group: WorkGroup; issues: WorkIssueInput[] } | null {
+/**
+ * The arguments of `useCreateWork` for the draft, or null while there is nothing to write: no
+ * place, no kept issue, or proposals made for answers the person has since changed.
+ * `place` names the group of a lone issue ("wf / auth"), for its `## Context`; undefined at the top level.
+ */
+export function createArgs(
+  draft: Draft,
+  place?: string,
+): { group: WorkGroup; issues: WorkIssueInput[] } | null {
   if (!draft.where) return null;
   const links = draft.context.map(toLink);
   if (draft.kind === "issue") {
+    const issue = currentIssue(draft);
+    const criterion = issue?.criterion.replace(/\s+/g, " ").trim();
+    if (!issue || !criterion) return null;
     return {
       group: draft.where,
       issues: [
@@ -522,22 +533,26 @@ export function createArgs(draft: Draft): { group: WorkGroup; issues: WorkIssueI
           priority: draft.priority,
           size: draft.size,
           status: draft.status,
-          criteria: [ISSUE_CRITERION],
+          criteria: [criterion],
+          context: issueContext(issue.why, place),
           ...(links.length > 0 ? { links } : {}),
         },
       ],
     };
   }
   const outcome = draft.outcome.trim();
+  const rows = keptRows(draft);
+  if (rows.length === 0) return null;
   return {
-    group: { parent: draft.where, title: draft.name.trim() },
-    issues: keptRows(draft).map((r) => ({
+    // The outcome is the group's goal line (`_group.md`, adding-work step 5).
+    group: { parent: draft.where, title: draft.name.trim(), goal: outcome },
+    issues: rows.map((r) => ({
       title: r.title.trim(),
       priority: r.priority,
       size: r.size,
       status: draft.status,
       criteria: [r.criterion],
-      context: `${r.why}\n\nGroup outcome: ${outcome}`,
+      context: r.why,
       ...(links.length > 0 ? { links } : {}),
     })),
   };

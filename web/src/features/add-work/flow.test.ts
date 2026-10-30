@@ -4,14 +4,22 @@ import {
   canContinue,
   clicksToAdd,
   createArgs,
+  currentIssue,
+  currentSplit,
+  type Draft,
+  draftIssue,
   emptyDraft,
   GROUP_CLICK_BUDGET,
   GROUP_TYPED_LINES,
+  ISSUE_DRAFT_STEPS,
   isDirty,
+  issueContext,
+  issueSignature,
   keptRows,
   MAX_WHERE_BUTTONS,
   nameProblem,
   outcomeProblem,
+  pickIssueSlot,
   pickWhere,
   priorityFor,
   rowsFrom,
@@ -20,7 +28,6 @@ import {
   splitSignature,
   startsWithVerb,
   stepsFor,
-  subjectPhrase,
   suggestNames,
   titleProblem,
   typedLines,
@@ -128,34 +135,36 @@ describe("suggestNames", () => {
   it("names the subject, not the verb", () => {
     expect(suggestNames("Push board updates over SSE so the board stays live")).toEqual([
       "Board updates",
-      "Board updates over SSE",
       "SSE",
+      "Board updates improvements",
     ]);
   });
 
   it("drops a lead-in and the opening verb", () => {
-    expect(subjectPhrase("Let people sign in with single sign-on")).toEqual(["single", "sign-on"]);
     expect(suggestNames("Let people sign in with single sign-on")[0]).toBe("Single sign-on");
   });
 
-  it("returns names of at most 32 characters, three at most, without duplicates", () => {
-    const names = suggestNames(
+  it("always offers three names for a sentence with a noun, each at most 32 characters", () => {
+    for (const outcome of [
       "Add keyboard shortcuts to every dialog of the whole web application",
-    );
-    expect(names.length).toBeGreaterThan(0);
-    expect(names.length).toBeLessThanOrEqual(3);
-    expect(new Set(names.map((n) => n.toLowerCase())).size).toBe(names.length);
-    for (const n of names) expect(n.length).toBeLessThanOrEqual(32);
+      "Make onboarding smoother for new teams",
+      "Support OAuth2 login",
+    ]) {
+      const names = suggestNames(outcome);
+      expect(names).toHaveLength(3);
+      expect(new Set(names.map((n) => n.toLowerCase())).size).toBe(3);
+      for (const n of names) expect(n.length).toBeLessThanOrEqual(32);
+    }
   });
 
   it("skips names a sibling group already uses", () => {
     const names = suggestNames("Push board updates over SSE", ["board updates"]);
     expect(names).not.toContain("Board updates");
-    expect(names[0]).toBe("Board updates over SSE");
+    expect(names).toHaveLength(3);
   });
 
-  it("cuts a trailing comparative", () => {
-    expect(suggestNames("Make onboarding smoother for new teams")[0]).toBe("Onboarding");
+  it("turns a quality into its noun", () => {
+    expect(suggestNames("Make onboarding smoother for new teams")[0]).toBe("Onboarding smoothness");
   });
 
   it("keeps acronyms and digits as typed", () => {
@@ -202,9 +211,16 @@ describe("whereOptions", () => {
     expect(options[0].sub).toBe("Not in a group");
   });
 
-  it("stays buttons up to eight places", () => {
-    expect(MAX_WHERE_BUTTONS).toBe(8);
+  it("stays buttons up to twelve places", () => {
+    expect(MAX_WHERE_BUTTONS).toBe(12);
     expect(whereOptions(TREE, "group").length).toBeLessThanOrEqual(MAX_WHERE_BUTTONS);
+  });
+
+  it("leaves room to add groups: the sample's eight and the shipped workspace's seven places still ask with buttons after one more group", () => {
+    // Adding work makes a group, so a workspace that sits at the limit would turn the next
+    // "Where?" into a search box. The sample has 8 places (root + 7), the shipped workspace 7.
+    expect(8 + 1).toBeLessThanOrEqual(MAX_WHERE_BUTTONS);
+    expect(MAX_WHERE_BUTTONS).toBeGreaterThan(9);
   });
 
   it("picks the first candidate that is a real place", () => {
@@ -271,11 +287,45 @@ describe("validation", () => {
     );
     const withRows = (keep: boolean[]) => ({
       ...base,
-      split: { signature: "x", rows: rows.map((r, i) => ({ ...r, keep: keep[i] })) },
+      split: {
+        signature: splitSignature(base),
+        rows: rows.map((r, i) => ({ ...r, keep: keep[i] })),
+      },
     });
     expect(canContinue(withRows([true, true]), "split", wf)).toBe(true);
     expect(canContinue(withRows([false, true]), "split", wf)).toBe(true);
     expect(canContinue(withRows([false, false]), "split", wf)).toBe(false);
+  });
+
+  it("does not let the split screen add proposals made for other answers", () => {
+    // Back to Size, a new answer, Enter through Priority and Context: the loader is on show, and
+    // the old four proposals must not be what the button adds.
+    const wf = TREE.children[0];
+    const base = emptyDraft({
+      kind: "group",
+      where: "g-wf",
+      name: "Sign-in",
+      outcome: "Let people sign in",
+    });
+    const rows = rowsFrom(
+      [{ key: "p1", title: "Define it", size: "s", priority: "high", criterion: "A", why: "W" }],
+      base.priority,
+    );
+    const made = { ...base, split: { signature: splitSignature(base), rows } };
+    expect(canContinue(made, "split", wf)).toBe(true);
+    for (const change of [
+      { size: "l" },
+      { outcome: "Let people sign in with a link" },
+      { name: "Login" },
+    ] as Partial<Draft>[]) {
+      const stale = { ...made, ...change };
+      expect(currentSplit(stale)).toBeUndefined();
+      expect(keptRows(stale)).toEqual([]);
+      expect(canContinue(stale, "split", wf)).toBe(false);
+      expect(createArgs(stale)).toBeNull();
+    }
+    // The answers on screens the split does not read leave the proposals alone.
+    expect(canContinue({ ...made, status: "planned" }, "split", wf)).toBe(true);
   });
 });
 
@@ -320,7 +370,7 @@ describe("the split", () => {
     expect(splitSignature({ ...base, outcome: "Let people sign in again" })).not.toBe(same);
     expect(splitSignature({ ...base, name: "Login" })).not.toBe(same);
     expect(splitSignature({ ...base, size: "l" })).not.toBe(same);
-    // The draft's priority and status do not change what Codex reads.
+    // The draft's priority and status do not change what Codex read.
     expect(splitSignature({ ...base, priority: "low", status: "planned" })).toBe(same);
   });
 });
@@ -330,15 +380,17 @@ describe("where the issues start", () => {
     [{ key: "p1", title: "Define it", size: "s", priority: "high", criterion: "A", why: "W" }],
     "high",
   );
-  const draft = (status?: "backlog" | "planned") =>
-    emptyDraft({
-      kind: "group",
-      where: "g-wf",
-      outcome: "Let people sign in",
-      name: "Sign-in",
-      split: { signature: "x", rows },
-      ...(status ? { status } : {}),
-    });
+  const answers = emptyDraft({
+    kind: "group",
+    where: "g-wf",
+    outcome: "Let people sign in",
+    name: "Sign-in",
+  });
+  const draft = (status?: "backlog" | "planned") => ({
+    ...answers,
+    split: { signature: splitSignature(answers), rows },
+    ...(status ? { status } : {}),
+  });
 
   it("offers Backlog first and Planned second, the keys 1 and 2", () => {
     expect(STATUSES.map((s) => s.value)).toEqual(["backlog", "planned"]);
@@ -378,16 +430,21 @@ describe("createArgs", () => {
       "medium",
     );
     rows[1].keep = false;
-    const draft = emptyDraft({
+    const answers = emptyDraft({
       kind: "group",
       where: "g-wf",
       outcome: "Let people sign in",
       name: " Sign-in ",
       status: "planned",
-      split: { signature: "x", rows },
     });
+    const draft = { ...answers, split: { signature: splitSignature(answers), rows } };
     const args = createArgs(draft);
-    expect(args?.group).toEqual({ parent: "g-wf", title: "Sign-in" });
+    // The outcome is the group's goal line (_group.md, adding-work step 5).
+    expect(args?.group).toEqual({
+      parent: "g-wf",
+      title: "Sign-in",
+      goal: "Let people sign in",
+    });
     expect(args?.issues).toHaveLength(1);
     expect(args?.issues[0]).toMatchObject({
       title: "Define the sign-in contract",
@@ -396,32 +453,85 @@ describe("createArgs", () => {
       size: "s",
       criteria: ["The contract shall list each call."],
     });
-    expect(args?.issues[0].context).toBe(
-      "Settle the contract first.\n\nGroup outcome: Let people sign in",
-    );
+    // The outcome lives in _group.md; the issue's context is its own reason.
+    expect(args?.issues[0].context).toBe("Settle the contract first.");
     expect(keptRows(draft)).toHaveLength(1);
   });
 
-  it("builds one issue in an existing group", () => {
-    const args = createArgs(
-      emptyDraft({
-        kind: "issue",
-        where: "g-web",
-        title: " Fix tab-title count ",
-        priority: "high",
-        size: "xs",
-      }),
-    );
-    expect(args?.group).toBe("g-web");
-    expect(args?.issues).toHaveLength(1);
-    expect(args?.issues[0]).toMatchObject({
-      title: "Fix tab-title count",
+  describe("one issue", () => {
+    const answers = emptyDraft({
+      kind: "issue",
+      where: "g-web",
+      title: " Fix tab-title count ",
       priority: "high",
       size: "xs",
-      status: "backlog",
     });
-    expect(args?.issues[0].criteria).toHaveLength(1);
-    expect(args?.issues[0].links).toBeUndefined();
+    const drafted = {
+      ...answers,
+      issue: {
+        signature: issueSignature(answers),
+        criterion: "When the failing step runs, the tab-title count problem shall not occur.",
+        why: "Less changed code means less new risk, so make the smallest change.",
+      },
+    };
+
+    it("builds one issue in an existing group with Codex's criterion and a real context", () => {
+      const args = createArgs(drafted, "wf / web");
+      expect(args?.group).toBe("g-web");
+      expect(args?.issues).toHaveLength(1);
+      expect(args?.issues[0]).toMatchObject({
+        title: "Fix tab-title count",
+        priority: "high",
+        size: "xs",
+        status: "backlog",
+        criteria: ["When the failing step runs, the tab-title count problem shall not occur."],
+        context:
+          "Less changed code means less new risk, so make the smallest change.\n\nIt belongs to wf / web.",
+      });
+      expect(args?.issues[0].links).toBeUndefined();
+    });
+
+    it("writes no placeholder: no skill that does not exist, no circular criterion", () => {
+      const issue = createArgs(drafted)?.issues[0];
+      expect(issue?.context).not.toMatch(/write-goal|skill|TODO|Write this section/i);
+      expect(issue?.criteria[0]).not.toMatch(/as the context describes/);
+    });
+
+    it("waits for the draft, and refuses one made for another title", () => {
+      expect(createArgs(answers)).toBeNull();
+      expect(canContinue(answers, "review", undefined)).toBe(false);
+      expect(canContinue(drafted, "review", undefined)).toBe(true);
+      const renamed = { ...drafted, title: "Fix the watcher" };
+      expect(currentIssue(renamed)).toBeUndefined();
+      expect(createArgs(renamed)).toBeNull();
+      expect(canContinue(renamed, "review", undefined)).toBe(false);
+      // Size, priority and status are not read by the draft.
+      expect(currentIssue({ ...drafted, size: "l", priority: "low", status: "planned" })).toBe(
+        drafted.issue,
+      );
+    });
+
+    it("refuses an empty criterion", () => {
+      const emptied = { ...drafted, issue: { ...drafted.issue, criterion: "  " } };
+      expect(canContinue(emptied, "review", undefined)).toBe(false);
+      expect(createArgs(emptied)).toBeNull();
+    });
+
+    it("keeps the person's edit of the criterion, on one line", () => {
+      const edited = {
+        ...drafted,
+        issue: { ...drafted.issue, criterion: "  The count shall   match the open issues.\n" },
+      };
+      expect(createArgs(edited)?.issues[0].criteria).toEqual([
+        "The count shall match the open issues.",
+      ]);
+    });
+
+    it("names no group at the top level", () => {
+      expect(createArgs(drafted)?.issues[0].context).toBe(
+        "Less changed code means less new risk, so make the smallest change.",
+      );
+    });
   });
 
   it("links the context to every issue", () => {
@@ -431,16 +541,103 @@ describe("createArgs", () => {
       label: "Rescan subtrees",
       title: "Rescan subtrees",
     };
-    const args = createArgs(
-      emptyDraft({ kind: "issue", where: "g-web", title: "Fix the watcher", context: [item] }),
-    );
+    const answers = emptyDraft({
+      kind: "issue",
+      where: "g-web",
+      title: "Fix the watcher",
+      context: [item],
+    });
+    const args = createArgs({
+      ...answers,
+      issue: { signature: issueSignature(answers), criterion: "A shall B.", why: "W." },
+    });
     expect(args?.issues[0].links).toEqual([
       { kind: "library", target: "lib-4tz7c", label: "Rescan subtrees" },
     ]);
   });
 
   it("needs a place", () => {
-    expect(createArgs(emptyDraft({ kind: "issue", title: "Fix it" }))).toBeNull();
+    const answers = emptyDraft({ kind: "issue", title: "Fix it" });
+    const issue = { signature: issueSignature(answers), criterion: "A shall B.", why: "W." };
+    expect(createArgs({ ...answers, issue })).toBeNull();
+  });
+});
+
+describe("a lone issue's draft", () => {
+  const proposals = [
+    {
+      key: "p1",
+      title: "Reproduce the tab-title count problem",
+      size: "xs",
+      priority: "high",
+      criterion:
+        "A test for the tab-title count problem shall fail before the fix and pass after it.",
+      why: "Failures that no test pins come back, so reproduce this one first.",
+    },
+    {
+      key: "p2",
+      title: "Find the cause of the tab-title count problem",
+      size: "s",
+      priority: "high",
+      criterion: "The change entry shall name the cause of the tab-title count problem.",
+      why: "Fixes that skip the root cause hide the problem, so name the cause.",
+    },
+    {
+      key: "p3",
+      title: "Fix the tab-title count problem",
+      size: "s",
+      priority: "medium",
+      criterion: "When the failing step runs, the tab-title count problem shall not occur.",
+      why: "Less changed code means less new risk, so make the smallest change.",
+    },
+  ] as const;
+
+  it("takes the slot that opens with the verb of the title", () => {
+    expect(pickIssueSlot("Fix tab-title count", proposals)?.key).toBe("p3");
+    expect(pickIssueSlot("  find the leak", proposals)?.key).toBe("p2");
+  });
+
+  it("takes the slot that carries the work when no slot shares the verb, never a blank", () => {
+    expect(pickIssueSlot("Add weekly reports", proposals)?.key).toBe("p2");
+    expect(pickIssueSlot("", proposals)?.key).toBe("p2");
+    expect(pickIssueSlot("Add it", proposals.slice(0, 1))?.key).toBe("p1");
+    expect(pickIssueSlot("Add it", [])).toBeUndefined();
+  });
+
+  it("keeps the slot's criterion and reason, stamped with what it was drafted from", () => {
+    const answers = emptyDraft({ kind: "issue", title: "Fix tab-title count" });
+    const issue = draftIssue(issueSignature(answers), answers.title, proposals);
+    expect(issue).toEqual({
+      signature: issueSignature(answers),
+      criterion: "When the failing step runs, the tab-title count problem shall not occur.",
+      why: "Less changed code means less new risk, so make the smallest change.",
+    });
+    expect(currentIssue({ ...answers, issue })).toBe(issue);
+  });
+
+  it("reads the title and the linked context, nothing else", () => {
+    const base = emptyDraft({ kind: "issue", title: "Fix tab-title count" });
+    const same = issueSignature(base);
+    expect(issueSignature({ ...base, title: " Fix tab-title count " })).toBe(same);
+    expect(issueSignature({ ...base, title: "Fix the count" })).not.toBe(same);
+    expect(
+      issueSignature({
+        ...base,
+        context: [{ kind: "library", target: "lib-1", label: "L", title: "L" }],
+      }),
+    ).not.toBe(same);
+    expect(issueSignature({ ...base, priority: "low", size: "l", status: "planned" })).toBe(same);
+  });
+
+  it("writes a real context from Codex's reason and the group", () => {
+    expect(issueContext("It is the cause.", "wf / web")).toBe(
+      "It is the cause.\n\nIt belongs to wf / web.",
+    );
+    expect(issueContext("It is the cause.", undefined)).toBe("It is the cause.");
+  });
+
+  it("has a progress line for every step Codex goes through", () => {
+    expect(ISSUE_DRAFT_STEPS).toHaveLength(3);
   });
 });
 

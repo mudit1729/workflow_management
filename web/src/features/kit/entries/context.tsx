@@ -227,7 +227,7 @@ function ContextPreviewBody() {
       </V>
       <V
         label="over budget · 400 tokens"
-        note="Amber. The last items are left out first, the way wf context drops them."
+        note="Amber. The last items are left out first, the way the handoff context drops them."
         width={560}
       >
         <WithSamples>{(s) => <ContextPreview items={s.all} budget={400} />}</WithSamples>
@@ -304,7 +304,7 @@ export const contextEntries: KitEntry[] = [
     "Workdatabase",
     "ContextPreview",
     `${SRC}/ContextPreview.tsx`,
-    "Shows what the agent receives with wf context and what it costs, so nobody finds out after the fact that the budget cut their pick.",
+    "Shows what the agent receives in the handoff context and what it costs, so nobody finds out after the fact that the budget cut their pick.",
     ContextPreviewBody,
   ),
   entry(

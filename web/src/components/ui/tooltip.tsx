@@ -1,6 +1,6 @@
 // Inverted tooltip: fg-colored surface with bg-colored text, 12 px, 300 ms delay.
 import { Tooltip as TooltipPrimitive } from "radix-ui";
-import type { ComponentProps, ReactElement, ReactNode } from "react";
+import { type ComponentProps, type ReactElement, type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Kbd } from "./kbd";
 
@@ -49,13 +49,19 @@ export function Tooltip({
   className,
   children,
 }: TooltipProps) {
+  // Controlled for its whole life: Radix warns when `open` flips between undefined and a value,
+  // and `disabled` or `open` can change while the tooltip is mounted.
+  const [inner, setInner] = useState(false);
   const empty = content == null || content === "" || content === false;
   if (empty && !shortcut) return children;
   return (
     <TooltipPrimitive.Root
       delayDuration={delayDuration}
-      open={disabled ? false : open}
-      onOpenChange={onOpenChange}
+      open={disabled ? false : (open ?? inner)}
+      onOpenChange={(next) => {
+        if (!disabled) setInner(next);
+        onOpenChange?.(next);
+      }}
     >
       {/* Hover opens the tooltip; keyboard focus does not. Radix's tooltip would also take the
           first Esc (hiding itself), so a focused icon button inside a dialog or drawer needed

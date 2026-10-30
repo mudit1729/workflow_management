@@ -1,11 +1,11 @@
-// "What the agent gets": the picked items in the order `wf context` hands them over, a token
+// "What the agent gets": the picked items in the order the handoff context lists them, a token
 // estimate for each (about four characters to a token) and the total against the workspace
 // budget. Amber when the items do not all fit: the last ones are left out first.
 import { useQueries } from "@tanstack/react-query";
 import { ChevronRight, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { CopyButton } from "@/components/common";
-import { Chip, Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui";
+import { Button, Chip, Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui";
+import { copyContextWithToast } from "@/features/issue/handoff";
 import type { LibraryItemDetail } from "@/gen/types";
 import { api, qk, useWorkspaceFile } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -114,7 +114,6 @@ export function ContextPreview({
   );
   const over = total > budget;
   const injected = rows.filter((r) => r.injected).length;
-  const command = `wf context ${issueId ?? "<id>"}`;
   const pct = Math.min(100, Math.round((total / Math.max(1, budget)) * 100));
 
   return (
@@ -197,11 +196,17 @@ export function ContextPreview({
             </>
           )}
           <p className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-fg-faint text-xs">
-            <span>The agent gets this with</span>
-            <code className="rounded-sm bg-muted px-1 py-px font-mono text-fg-muted">
-              {command}
-            </code>
-            {issueId && <CopyButton text={command} label="Copy command" />}
+            <span>The agent gets this in the handoff context.</span>
+            {issueId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-1.5 text-xs"
+                onClick={() => void copyContextWithToast(issueId)}
+              >
+                Copy context
+              </Button>
+            )}
           </p>
         </div>
       </CollapsibleContent>

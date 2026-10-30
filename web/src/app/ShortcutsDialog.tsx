@@ -1,12 +1,15 @@
 // "?" — every keyboard shortcut (contract §6), in two columns.
 import { Fragment } from "react";
 import { Dialog, DialogContent, Kbd } from "@/components/ui";
+import { useReturnFocus } from "./return-focus";
 import { useShell } from "./shell-store";
 import { SHORTCUTS, type ShortcutDef, type ShortcutSection } from "./shortcuts";
 
 export function ShortcutsDialog() {
   const open = useShell((s) => s.shortcutsOpen);
   const setOpen = useShell((s) => s.setShortcutsOpen);
+  // No trigger opens this dialog (a key, or a palette row): focus goes back to what had it.
+  const focus = useReturnFocus("shortcutsOpen");
 
   // Two balanced columns: General + Go to, then Board + Issue.
   const columns: ShortcutSection[][] = [SHORTCUTS.slice(0, 2), SHORTCUTS.slice(2)];
@@ -17,6 +20,7 @@ export function ShortcutsDialog() {
         size="lg"
         title="Keyboard shortcuts"
         description="Single keys work anywhere outside a text field."
+        onCloseAutoFocus={focus.onCloseAutoFocus}
       >
         <div data-wf="ShortcutsDialog" className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
           {columns.map((sections, i) => (

@@ -1,14 +1,18 @@
 // How a team gets the skills: the commands for Claude Code (add the marketplace, install the
-// plugin) and for Codex (copy the skills into .agents/skills), each with a copy button. The
-// commands come from the repository's own files (marketplace.json, plugin.json), so they never
-// go stale.
+// plugin; once for you, once for everyone on the repository) and for Codex (copy the skills into
+// .agents/skills, tell Codex to use them), each with a copy button. The plugin and marketplace
+// names come from the repository's own files (marketplace.json, plugin.json), so they never go
+// stale; the repository is the team's (`SKILLS_REPO`).
 import { FileText } from "lucide-react";
+import type { ReactNode } from "react";
 import { CopyButton } from "@/components/common";
 import { Skeleton } from "@/components/ui";
 import {
-  claudeInstallCommands,
+  claudeInstallGroups,
   codexInstallCommands,
   type InstallCommand,
+  type InstallGroup,
+  SKILLS_REPO,
   type SkillsCatalog,
 } from "@/lib/api";
 
@@ -19,7 +23,7 @@ export interface InstallPanelProps {
 }
 
 export function InstallPanel({ catalog, loading = false }: InstallPanelProps) {
-  const claude = claudeInstallCommands(catalog);
+  const claude = claudeInstallGroups(catalog);
   const codex = codexInstallCommands();
 
   return (
@@ -28,18 +32,35 @@ export function InstallPanel({ catalog, loading = false }: InstallPanelProps) {
       aria-labelledby="skills-install"
       className="rounded-lg border border-border bg-bg"
     >
-      <header className="px-4 pt-3 pb-1">
+      <header className="flex flex-col gap-0.5 px-4 pt-3 pb-1">
         <h2 id="skills-install" className="font-semibold text-base text-fg">
           Install for your team
         </h2>
+        <p className="text-fg-muted text-sm">
+          The team&apos;s repository is{" "}
+          <code className="code-inline rounded-sm bg-muted px-1 py-px text-fg">{SKILLS_REPO}</code>.
+          Install for yourself, or once for everyone who opens it.
+        </p>
       </header>
       <div className="flex flex-col gap-4 px-4 pt-2 pb-3">
         {claude.length > 0 ? (
-          <CommandGroup title="Claude Code" hint="Run in a session" commands={claude} />
+          <Tool title="Claude Code">
+            {claude.map((group) => (
+              <CommandGroup key={group.title} group={group} />
+            ))}
+          </Tool>
         ) : (
           loading && <CommandsSkeleton />
         )}
-        <CommandGroup title="Codex" hint="In a clone of this repository" commands={codex} />
+        <Tool title="Codex">
+          <CommandGroup
+            group={{
+              title: "In a clone of this repository",
+              hint: "Commit .agents/skills and AGENTS.md and everyone has them",
+              commands: codex,
+            }}
+          />
+        </Tool>
       </div>
       <p className="flex items-center gap-2 border-border border-t px-4 py-2 text-fg-muted text-sm">
         <FileText aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
@@ -70,23 +91,26 @@ function CommandsSkeleton() {
   );
 }
 
-function CommandGroup({
-  title,
-  hint,
-  commands,
-}: {
-  title: string;
-  hint: string;
-  commands: InstallCommand[];
-}) {
+/** One tool (Claude Code, Codex) and the groups of commands for it. */
+function Tool({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div data-wf="InstallTool" className="flex flex-col gap-3">
+      <h3 className="font-semibold text-fg text-sm">{title}</h3>
+      <div className="flex flex-col gap-3 border-border border-l pl-3">{children}</div>
+    </div>
+  );
+}
+
+function CommandGroup({ group }: { group: InstallGroup }) {
+  const { title, hint, commands } = group;
   return (
     <div data-wf="InstallCommands" className="flex flex-col gap-2">
-      <h3 className="flex items-baseline gap-2 font-medium text-fg-muted text-xs">
+      <h4 className="flex flex-wrap items-baseline gap-x-2 font-medium text-fg-muted text-xs">
         {title}
         <span className="font-normal text-fg-faint">{hint}</span>
-      </h3>
+      </h4>
       <ol className="m-0 flex list-none flex-col gap-2 p-0">
-        {commands.map((c, i) => (
+        {commands.map((c: InstallCommand, i) => (
           <li key={c.command} className="flex min-w-0 flex-col gap-1">
             <span className="text-fg-faint text-xs">
               {commands.length > 1 && <span className="tabular">{i + 1}. </span>}

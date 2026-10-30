@@ -148,12 +148,12 @@ export function roleHint(path: string, libraryDir = "library"): string | undefin
   return undefined;
 }
 
-/** The skill that creates a missing issue file (shown as a hint next to "Create"). */
+/** The skill of the workflow plugin that writes each issue file (a hint next to "Create"). */
 export const ISSUE_FILE_SKILL: Record<IssueFileName, string> = {
-  "goal.md": "write-goal",
-  "plan.md": "write-plan",
-  "current_state.md": "write-current-state",
-  "changes.md": "log-change",
-  "decisions.md": "log-decision",
-  "learnings.md": "log-learning",
+  "goal.md": "adding-work",
+  "plan.md": "planning-issues",
+  "current_state.md": "handing-off",
+  "changes.md": "logging-work",
+  "decisions.md": "logging-work",
+  "learnings.md": "logging-work",
 };

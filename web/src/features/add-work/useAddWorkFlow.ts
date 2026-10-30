@@ -107,7 +107,9 @@ export function useAddWorkFlow({
 
   const submit = useCallback(
     async (d: Draft) => {
-      const args = createArgs(d);
+      // A lone issue's context names its group; the top level has none to name.
+      const place = places.find((o) => o.id === d.where);
+      const args = createArgs(d, place && !place.root ? place.titles.join(" / ") : undefined);
       if (!args || submitting) return;
       setSubmitting(true);
       const res = await createWork(args);
@@ -127,7 +129,7 @@ export function useAddWorkFlow({
         toast.success(`Added ${d.name.trim()} with ${countIssues(res.issueIds.length)}`);
       }
     },
-    [submitting, createWork, root?.id, onClose, go, openIssue, parentOf],
+    [submitting, createWork, places, root?.id, onClose, go, openIssue, parentOf],
   );
 
   const advance = useCallback(

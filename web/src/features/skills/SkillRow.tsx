@@ -33,7 +33,8 @@ export function SkillRow({ skill, selected, onSelect }: SkillRowProps) {
         onClick={open}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "flex items-start gap-2.5 px-4 py-2.5 outline-none transition-colors duration-100 ease-wf",
+          // No `outline-none`: in Tailwind 4 it sets `outline-style: none` and the ring below never draws.
+          "flex items-start gap-2.5 px-4 py-2.5 transition-colors duration-100 ease-wf",
           "hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus",
           selected && "bg-muted hover:bg-muted focus-visible:bg-muted",
         )}

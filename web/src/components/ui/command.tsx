@@ -147,6 +147,8 @@ export interface CommandDialogProps {
   className?: string;
   /** Passed to the cmdk root (e.g. `shouldFilter={false}` for server search). */
   commandProps?: Omit<ComponentProps<typeof CommandPrimitive>, "children">;
+  /** Where focus goes when the dialog closes. Radix sends it to a trigger, and a palette has none. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** The ⌘K surface: a top-anchored dialog holding a `Command`. */
@@ -157,6 +159,7 @@ export function CommandDialog({
   children,
   className,
   commandProps,
+  onCloseAutoFocus,
 }: CommandDialogProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -165,6 +168,7 @@ export function CommandDialog({
         <DialogPrimitive.Content
           data-wf="CommandDialog"
           aria-describedby={undefined}
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             "fixed top-[14dvh] left-1/2 z-dialog w-[calc(100vw-32px)] max-w-[640px] -translate-x-1/2 overflow-hidden rounded-lg bg-bg shadow-pop outline-none",
             "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=open]:animate-in data-[state=open]:duration-150",

@@ -1,4 +1,4 @@
-import { Archive, BookOpen, FileSearch, Plus } from "lucide-react";
+import { Archive, BookOpen, FileSearch, Play, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,8 @@ import {
   StatusSelect,
 } from "@/components/common";
 import { Button } from "@/components/ui";
+import { MetaLine } from "@/features/issue/MetaLine";
+import { ASK, SkillHint, SkillLink } from "@/features/issue/skill-hint";
 import type { IssueStatus, TaskStatus } from "@/gen/types";
 import { useAuthors, useIssue } from "@/lib/api";
 import { STATUS_LABEL, STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/status";
@@ -308,16 +310,25 @@ function CopyButtonBody() {
   return (
     <>
       <V label="icon · sm">
-        <CopyButton text="wf context wf-3k9x2" label="Copy command" />
+        <CopyButton text="wf-3k9x2" label="Copy issue id" />
       </V>
       <V label="icon · md">
         <CopyButton text="wf-3k9x2" label="Copy id" size="md" />
       </V>
       <V label="button · sm">
-        <CopyButton text="wf context wf-3k9x2" label="Copy command" variant="button" />
+        <CopyButton
+          text="Hand wf-3k9x2 over: use the handing-off skill."
+          label="Copy prompt"
+          variant="button"
+        />
       </V>
       <V label="button · md">
-        <CopyButton text="wf context wf-3k9x2" label="Copy command" variant="button" size="md" />
+        <CopyButton
+          text="Hand wf-3k9x2 over: use the handing-off skill."
+          label="Copy prompt"
+          variant="button"
+          size="md"
+        />
       </V>
     </>
   );
@@ -353,14 +364,36 @@ function LintBadgeBody() {
 function EmptyStateBody() {
   return (
     <>
-      <V label="skill + command" width={420}>
+      <V
+        label="skill + command props"
+        note="The skill is a real one of the workflow plugin and the command is codex, which exists today. Issue screens use SkillHint (below) so the skill name links to its page."
+        width={420}
+      >
         <div className="rounded-md border border-border">
           <EmptyState
             icon={<BookOpen strokeWidth={1.75} />}
             title="No plan yet"
             hint="A plan breaks the goal into tasks that agents can claim."
-            skill="write-plan"
-            command="wf plan wf-3k9x2 --from -"
+            skill="planning-issues"
+            command="codex 'Plan wf-3k9x2 with the planning-issues skill.'"
+          />
+        </div>
+      </V>
+      <V label="with a SkillHint and a button" width={420}>
+        <div className="rounded-md border border-border">
+          <EmptyState
+            icon={<BookOpen strokeWidth={1.75} />}
+            title="No plan yet"
+            hint="A plan splits the goal into tasks that agents can claim in parallel."
+            action={
+              <div className="flex flex-col items-center gap-3">
+                <Button variant="secondary">
+                  <Play size={14} strokeWidth={1.75} className="fill-current" />
+                  Do next step
+                </Button>
+                <SkillHint skill="planning-issues" prompt={ASK.plan("wf-3k9x2")} />
+              </div>
+            }
           />
         </div>
       </V>
@@ -409,10 +442,60 @@ function EmptyStateBody() {
             icon={<Archive strokeWidth={1.75} />}
             title="No current state yet"
             hint="An agent writes a short snapshot here at the end of each session."
-            skill="write-current-state"
-            command="wf state wf-3k9x2 --from -"
+            action={<SkillHint skill="handing-off" prompt={ASK.state("wf-3k9x2")} align="start" />}
           />
         </div>
+      </V>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- SkillHint, MetaLine
+
+function SkillHintBody() {
+  return (
+    <>
+      <V
+        label="centered"
+        note="The skill name links to its page in Workdatabase · Skills; Copy puts the whole codex command on the clipboard."
+        width={420}
+      >
+        <SkillHint skill="planning-issues" prompt={ASK.plan("wf-3k9x2")} />
+      </V>
+      <V label="left-aligned, in a compact empty state" width={420}>
+        <SkillHint skill="logging-work" prompt={ASK.decision("wf-3k9x2")} align="start" />
+      </V>
+      <V label="a long prompt truncates, the command keeps whole" width={320}>
+        <SkillHint skill="doing-next-step" prompt={ASK.verify("wf-3k9x2", "SC-3")} align="start" />
+      </V>
+      <V label="SkillLink alone" width={320}>
+        <p className="text-fg-muted text-sm">
+          Written by <SkillLink skill="handing-off" />.
+        </p>
+      </V>
+    </>
+  );
+}
+
+function MetaLineBody() {
+  const facts = (
+    <>
+      <span>Updated 25m ago by @claude-opus</span>
+      <span>Live transport</span>
+      <span className="font-mono text-xs">cc-7d2e</span>
+    </>
+  );
+  return (
+    <>
+      <V label="fits one line" width={460}>
+        <MetaLine className="text-fg-faint text-sm">{facts}</MetaLine>
+      </V>
+      <V
+        label="wraps at 220 px"
+        note="The dot that would end or start a line is clipped instead of drawn."
+        width={220}
+      >
+        <MetaLine className="text-fg-faint text-sm">{facts}</MetaLine>
       </V>
     </>
   );
@@ -560,13 +643,14 @@ function CodeBlockBody() {
         <CodeBlock
           compact
           maxHeight={80}
-          code={Array.from({ length: 12 }, (_, i) => `line ${i + 1}: wf lint --format json`).join(
-            "\n",
-          )}
+          code={Array.from(
+            { length: 12 },
+            (_, i) => `line ${i + 1}: pnpm -s -C web wf:lint web/mock/workspace`,
+          ).join("\n")}
         />
       </V>
       <V label="no language" width={300}>
-        <CodeBlock code="wf context wf-3k9x2 --budget 6000" />
+        <CodeBlock code="codex 'Hand wf-3k9x2 over: use the handing-off skill.'" />
       </V>
     </>
   );
@@ -654,8 +738,22 @@ export const sharedEntries: KitEntry[] = [
     "Shared",
     "EmptyState",
     `${SRC}/EmptyState.tsx`,
-    "An empty panel should tell you what fills it: the skill to run and a copyable command, so an empty tab is an instruction, not a dead end.",
+    "An empty panel should tell you what fills it: a button when the dashboard can do it, and the one skill that does it without the dashboard, with a Codex command to copy, so an empty tab is an instruction, not a dead end.",
     EmptyStateBody,
+  ),
+  entry(
+    "Shared",
+    "SkillHint",
+    "src/features/issue/skill-hint.tsx",
+    "What an empty state offers instead of a command that does not exist: the one skill of the workflow plugin that does the job, linked to its page, and the codex command that asks for it.",
+    SkillHintBody,
+  ),
+  entry(
+    "Shared",
+    "MetaLine",
+    "src/features/issue/MetaLine.tsx",
+    "Small facts separated by dots that wrap without leaving a dot at the end or start of a line.",
+    MetaLineBody,
   ),
   entry(
     "Shared",

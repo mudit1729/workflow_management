@@ -70,7 +70,8 @@ export function UnavailableNote({
       <div className="min-w-0 flex-1">
         <p className="font-medium text-base text-fg">Diagram preview unavailable</p>
         <p className="text-fg-muted text-sm">
-          archify or node not found. Run <InlineCode>wf doctor</InlineCode>.
+          Archify or node is not installed here, so the picture is not drawn. The source stays
+          readable.
         </p>
         <p className="mt-0.5 text-fg-faint text-xs tabular">{facts}</p>
         {hint}

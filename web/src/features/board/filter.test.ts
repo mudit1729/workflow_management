@@ -4,6 +4,7 @@ import {
   applyFilter,
   filterFromSearch,
   hasActiveFilter,
+  laneSummary,
   needsYou,
   openRequestsFor,
   summarize,
@@ -127,6 +128,9 @@ describe("open requests for the person", () => {
     const n = needsYou(inbox, "shruti");
     expect(n.requests).toBe(3);
     expect([...n.issues].sort()).toEqual(["a", "d"]);
+    expect(n.byIssue.get("a")).toBe(2);
+    expect(n.byIssue.get("d")).toBe(1);
+    expect(n.byIssue.get("b")).toBeUndefined();
   });
 
   it("is empty for someone nothing waits on", () => {
@@ -137,13 +141,62 @@ describe("open requests for the person", () => {
 });
 
 describe("summarize", () => {
-  it("counts issues that need someone, as before", () => {
-    const list = [
-      issue("a", {
-        signals: { ...issue("a").signals, needs_you: 2, needs_you_blocking: 1 },
-      }),
-      issue("b"),
-    ];
-    expect(summarize(list)).toMatchObject({ total: 2, needsYou: 1, blocking: 1 });
+  // Issue a holds two open requests for shruti and one for mudit; b holds one for mudit only.
+  const signals = (needs_you: number, needs_you_blocking = 0) => ({
+    ...issue("x").signals,
+    needs_you,
+    needs_you_blocking,
+  });
+  const list = [
+    issue("a", { signals: signals(3, 1) }),
+    issue("b", { signals: signals(1) }),
+    issue("c"),
+  ];
+  const inbox = [
+    request("a", "shruti"),
+    request("a", "shruti", { id: "Q-a2" }),
+    request("a", "mudit", { id: "Q-a3" }),
+    request("b", "mudit"),
+  ];
+
+  it("counts the open requests of everyone when it does not know who is acting", () => {
+    expect(summarize(list)).toMatchObject({ total: 3, needsYou: 4, blocking: 1 });
+  });
+
+  it("counts what the Needs you toggle counts: the open requests for the acting person", () => {
+    const mine = needsYou(inbox, "shruti");
+    const line = summarize(list, mine);
+    // The toggle says 2 (across the workspace); the line over the same issues says the same.
+    expect(line.needsYou).toBe(mine.requests);
+    expect(line.needsYou).toBe(2);
+    expect(summarize(list, needsYou(inbox, "mudit")).needsYou).toBe(
+      needsYou(inbox, "mudit").requests,
+    );
+  });
+
+  it("counts only the issues in view, so a scope or a filter narrows it", () => {
+    const mine = needsYou(inbox, "shruti");
+    expect(summarize([list[1], list[2]], mine).needsYou).toBe(0);
+    expect(summarize([list[0]], mine).needsYou).toBe(2);
+  });
+
+  it("counts the same requests with the Needs you filter on", () => {
+    const mine = needsYou(inbox, "shruti");
+    const shown = applyFilter(list, filterFromSearch({ needs: "me" }), mine.issues);
+    expect(shown.map((i) => i.id)).toEqual(["a"]);
+    expect(summarize(shown, mine).needsYou).toBe(mine.requests);
+  });
+});
+
+describe("laneSummary", () => {
+  const list = [
+    issue("a", { signals: { ...issue("x").signals, needs_you: 1 } }),
+    issue("b", { signals: { ...issue("x").signals, needs_you: 1 } }),
+  ];
+
+  it("counts the issues that need someone, or the issues that need the acting person", () => {
+    expect(laneSummary(list)).toBe("2 issues · 2 need you");
+    const mine = needsYou([request("a", "shruti")], "shruti");
+    expect(laneSummary(list, mine)).toBe("2 issues · 1 needs you");
   });
 });

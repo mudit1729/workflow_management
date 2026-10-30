@@ -5,7 +5,7 @@
 //   900 px and up   the install panel and the list beside the open skill
 //   under 900 px    an open skill is a screen of its own, and so it is on a phone
 import { BookOpen, Package, SearchX } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { EmptyState, ViewTabs } from "@/components/common";
 import { Button, Chip, Skeleton } from "@/components/ui";
 import { useElementWidth } from "@/features/library/useElementWidth";
@@ -37,6 +37,26 @@ export function SkillsView() {
   const itemScreen = Boolean(selected) && !docked && width > 0;
 
   useHotkey("Escape", () => nav.close(), { enabled: Boolean(nav.selected) });
+
+  // On the screen layout a skill replaces the list, so the row that was clicked is gone while the
+  // skill shows: focus goes to the skill's Back button on the way in, and back to the row on the
+  // way out (the docked pane keeps focus where it was and needs none of this).
+  const shown = itemScreen && selected ? selected.name : undefined;
+  const before = useRef<string>(undefined);
+  useEffect(() => {
+    const from = before.current;
+    before.current = shown;
+    const frame = requestAnimationFrame(() => {
+      if (shown) {
+        document.querySelector<HTMLElement>('[data-wf="SkillsView"] [data-skill-back]')?.focus();
+      } else if (from) {
+        const row = document.getElementById(`skill-row-${from}`);
+        row?.focus({ preventScroll: true });
+        row?.scrollIntoView({ block: "nearest" });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [shown]);
 
   if (itemScreen && selected) {
     return (

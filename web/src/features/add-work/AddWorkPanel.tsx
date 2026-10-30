@@ -1,7 +1,7 @@
 // + Add work: the inside of the dialog. One screen at a time, Back and the progress dots at the
 // bottom, and the primary action at the right. The dialog and the gallery both render this.
 import { ArrowLeft, LoaderCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Button, Kbd } from "@/components/ui";
 import { countIssues, keptRows } from "./flow";
 import { DigitSlot, ProgressDots } from "./parts";
@@ -40,19 +40,37 @@ export function AddWorkPanel({
   const { step } = flow;
   const label = primaryLabel(flow);
 
-  // A new screen starts at the top, and focus goes to its first control. Codex's proposals arrive
-  // after the screen opens: then focus goes to the primary button.
-  const focusKey = step === "split" && flow.ready ? "split:ready" : step;
+  // Focus goes to the screen's first control. Codex's proposals (and a lone issue's criterion)
+  // arrive after the screen opens: then focus goes to the primary button.
+  const focusKey = (step === "split" || step === "review") && flow.ready ? `${step}:ready` : step;
+  const focusFirst = useCallback(() => {
+    const target = root.current?.querySelector<HTMLElement>("[data-autofocus]:not(:disabled)");
+    (target ?? root.current)?.focus({ preventScroll: true });
+    // A long list opens with its pick in view (a tenth place, say), not at the bottom of the scroll.
+    target?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  // A new screen starts at the top, and focus goes to its first control.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `focusKey` is the trigger: a new screen, or the proposals arriving.
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
     if (!autoFocus) return;
-    const frame = requestAnimationFrame(() => {
-      const target = root.current?.querySelector<HTMLElement>("[data-autofocus]:not(:disabled)");
-      (target ?? root.current)?.focus({ preventScroll: true });
-    });
+    const frame = requestAnimationFrame(focusFirst);
     return () => cancelAnimationFrame(frame);
-  }, [focusKey, autoFocus]);
+  }, [focusKey, autoFocus, focusFirst]);
+
+  // Pressing the primary button disables it, so focus leaves the panel for the dialog itself,
+  // outside the panel's keys. When the write is refused the button comes back and takes focus
+  // again, so Enter tries once more. (After a write that worked the dialog closes and Radix
+  // returns focus to the control that opened it.)
+  const wasSubmitting = useRef(false);
+  useEffect(() => {
+    const was = wasSubmitting.current;
+    wasSubmitting.current = flow.submitting;
+    if (!autoFocus || !was || flow.submitting) return;
+    const frame = requestAnimationFrame(focusFirst);
+    return () => cancelAnimationFrame(frame);
+  }, [flow.submitting, autoFocus, focusFirst]);
 
   return (
     <DigitSlot value={flow.digits}>

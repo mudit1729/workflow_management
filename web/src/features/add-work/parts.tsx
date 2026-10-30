@@ -33,7 +33,10 @@ export function useDigitKeys(handler: ((n: number) => void) | undefined) {
   });
 }
 
-/** The 1 to 9 key a person presses for the nth answer. */
+/**
+ * The 1 to 9 key a person presses for the nth answer. Past the ninth there is no key: the answer
+ * keeps its place in the column (an empty cap) and is reached with a click or the arrow keys.
+ */
 export function KeyCap({
   n,
   selected,
@@ -43,6 +46,7 @@ export function KeyCap({
   selected?: boolean;
   className?: string;
 }) {
+  if (n > 9) return <span aria-hidden className={cn("size-5 shrink-0 max-md:hidden", className)} />;
   return (
     <kbd
       aria-hidden

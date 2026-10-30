@@ -11,6 +11,7 @@ import { AddWorkPanel } from "@/features/add-work/AddWorkPanel";
 import {
   type Draft,
   emptyDraft,
+  issueSignature,
   rowsFrom,
   type SplitRow,
   type StepId,
@@ -137,6 +138,24 @@ function AddWorkDialogBody() {
       rows: rowsFrom([...PROPOSALS], "high"),
     },
   });
+  const issueAnswers = emptyDraft({
+    kind: "issue",
+    where: "g-web01",
+    title: "Fix tab-title count",
+    priority: "high",
+    size: "xs",
+    status: "planned",
+  });
+  // Seeded with Codex's draft, so the frame shows the criterion at once instead of the 2 s wait.
+  const issueReview: Partial<Draft> = {
+    ...issueAnswers,
+    issue: {
+      signature: issueSignature(issueAnswers),
+      criterion:
+        "When a board column holds cards, the tab title shall show the number of open cards.",
+      why: "People read the tab title to see how much is waiting, so it has to match the board.",
+    },
+  };
   return (
     <>
       <Screen
@@ -207,16 +226,9 @@ function AddWorkDialogBody() {
         height={380}
       />
       <Screen
-        label="Issue path · add"
+        label="Issue path · add (the criterion Codex drafted, with Edit)"
         step="review"
-        draft={{
-          kind: "issue",
-          where: "g-web01",
-          title: "Fix tab-title count",
-          priority: "high",
-          size: "xs",
-          status: "planned",
-        }}
+        draft={issueReview}
         start={{ kind: "issue" }}
         height={440}
       />

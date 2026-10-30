@@ -1,6 +1,14 @@
 // The card's "…" and right-click menu. `view="move"` (the `s` key) opens straight
 // into the status list; `view="all"` shows Move to…, Open in new page and copy actions.
-import { ArrowRightLeft, Copy, Link2, Play, SquareArrowOutUpRight, Terminal } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Copy,
+  Link2,
+  Play,
+  Square,
+  SquareArrowOutUpRight,
+  Terminal,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { StatusIcon } from "@/components/common";
@@ -155,7 +163,9 @@ export function IssueCardMenu({
 
 /**
  * Open in Codex and Do next step. A component of its own so the run state is read only while the
- * menu is open (its content mounts then), not by every card on the board.
+ * menu is open (its content mounts then), not by every card on the board. While a run goes on the
+ * issue the second item stops it, so a run started here (or from the palette) can be cancelled
+ * without opening the issue; the card's marker shows the run either way.
  */
 function CodexItems({ issue }: { issue: IssueSummary }) {
   const next = useNextStep(issue);
@@ -164,14 +174,19 @@ function CodexItems({ issue }: { issue: IssueSummary }) {
       <DropdownMenuItem icon={<Terminal {...ICON} />} onSelect={() => void copyCodexCommand(issue)}>
         Open in Codex
       </DropdownMenuItem>
-      <DropdownMenuItem
-        icon={<Play {...ICON} />}
-        disabled={next.busy}
-        hint={next.busy ? "Codex is working on it" : undefined}
-        onSelect={() => void next.start()}
-      >
-        Do next step
-      </DropdownMenuItem>
+      {next.busy ? (
+        <DropdownMenuItem
+          icon={<Square {...ICON} />}
+          hint="Codex is working on it"
+          onSelect={() => void next.cancel()}
+        >
+          Cancel Codex's run
+        </DropdownMenuItem>
+      ) : (
+        <DropdownMenuItem icon={<Play {...ICON} />} onSelect={() => void next.start()}>
+          Do next step
+        </DropdownMenuItem>
+      )}
     </>
   );
 }

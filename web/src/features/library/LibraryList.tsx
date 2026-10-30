@@ -102,9 +102,8 @@ export function LibraryList({
             <EmptyState
               icon={<BookOpen strokeWidth={1.75} />}
               title="The library is empty"
-              hint="Promote a learning or decision from an issue. It starts as a draft and waits for a reviewer."
-              skill="promote-to-library"
-              command="wf promote <issue>#<entry> --kind pattern"
+              hint="Mark a learning worth promoting when it is logged. It starts as a draft and waits for a reviewer."
+              skill="logging-work"
             />
           ) : (
             <EmptyState

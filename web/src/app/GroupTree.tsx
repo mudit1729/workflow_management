@@ -5,11 +5,13 @@ import { ChevronRight, Layers } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
 import { Button, Skeleton, Tooltip } from "@/components/ui";
+import { SkillHint } from "@/features/issue/skill-hint";
 import type { GroupId, GroupNode, GroupRollup, IssueStatus } from "@/gen/types";
 import { useGroupTree, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useBoardSearch, usePathname } from "@/lib/nav";
 import { STATUS_LABEL, STATUS_ORDER, statusColor } from "@/lib/status";
+import { openAddWork } from "./shell-store";
 import { useSelectGroup } from "./useSelectGroup";
 
 interface Row {
@@ -217,6 +219,9 @@ function GroupTreeLoaded({
   }
 
   const onlyRoot = root.children.length === 0;
+  // A workspace with no issue has no progress to draw: without the bar column the counts sit
+  // flush right, in line with the counts of the views above.
+  const bars = root.rollup.issues > 0;
 
   return (
     <div data-wf="GroupTree" className="flex flex-col px-2">
@@ -231,6 +236,7 @@ function GroupTreeLoaded({
             key={row.node.id}
             row={row}
             collapsed={collapsed}
+            bars={bars}
             selected={row.node.id === selectedId}
             expanded={expanded.has(row.node.id)}
             tabbable={row.node.id === tabStop}
@@ -246,7 +252,27 @@ function GroupTreeLoaded({
       </div>
       {onlyRoot && !collapsed && (
         <div className="px-1 pt-2">
-          <EmptyState compact title="No groups yet" command="wf new group <path>" />
+          <EmptyState
+            compact
+            title="No groups yet"
+            hint="Add work creates the first one."
+            action={
+              <div className="flex min-w-0 flex-col items-start gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openAddWork({ kind: "group" })}
+                >
+                  Add work
+                </Button>
+                <SkillHint
+                  skill="adding-work"
+                  prompt="Add work with the adding-work skill. Ask me for the outcome."
+                  align="start"
+                />
+              </div>
+            }
+          />
         </div>
       )}
     </div>
@@ -256,6 +282,8 @@ function GroupTreeLoaded({
 interface GroupRowProps {
   row: Row;
   collapsed: boolean;
+  /** Draw the progress bar column (off while no issue exists anywhere). */
+  bars: boolean;
   selected: boolean;
   expanded: boolean;
   tabbable: boolean;
@@ -268,6 +296,7 @@ interface GroupRowProps {
 function GroupRow({
   row,
   collapsed,
+  bars,
   selected,
   expanded,
   tabbable,
@@ -382,7 +411,7 @@ function GroupRow({
       </span>
       {signal && <SignalDot signal={signal} />}
       <span className="tabular shrink-0 text-fg-faint text-xs">{issues}</span>
-      <MiniBar rollup={node.rollup} />
+      {bars && <MiniBar rollup={node.rollup} />}
     </div>
   );
 }

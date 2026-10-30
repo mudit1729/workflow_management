@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { useBoardSearch } from "@/lib/nav";
 import { STATUS_LABEL, statusColor } from "@/lib/status";
 import { type CardDragData, useCellDropTarget } from "./dnd";
-import { type BoardLane, DIRECT_LANE, landingIndex, laneSummary } from "./filter";
+import { type BoardLane, DIRECT_LANE, landingIndex, laneSummary, type NeedsYou } from "./filter";
 import { CardStack, EmptyDropArea } from "./KanbanColumn";
 
 export interface SwimlaneProps {
@@ -22,6 +22,8 @@ export interface SwimlaneProps {
   onToggle: () => void;
   /** The card being dragged anywhere on the board. */
   active: CardDragData | null;
+  /** The acting person's open requests (the lane's "need you" count). */
+  mine?: NeedsYou;
 }
 
 export function Swimlane({
@@ -32,6 +34,7 @@ export function Swimlane({
   collapsed,
   onToggle,
   active,
+  mine,
 }: SwimlaneProps) {
   const [, setSearch] = useBoardSearch();
   const count = lane.issues.length;
@@ -79,7 +82,7 @@ export function Swimlane({
         </button>
         <MiniStatusBar issues={lane.issues} />
         {collapsed && (
-          <span className="truncate text-fg-faint text-sm">{laneSummary(lane.issues)}</span>
+          <span className="truncate text-fg-faint text-sm">{laneSummary(lane.issues, mine)}</span>
         )}
         {group && (
           <IconButton

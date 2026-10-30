@@ -5,7 +5,7 @@ import { CopyButton } from "@/components/common";
 import { Chip, Dialog, DialogContent, Skeleton } from "@/components/ui";
 import type { Diagram } from "@/gen/types";
 import { useSnapshot } from "@/lib/api";
-import { DiagramErrors, InlineCode, UnavailableNote } from "./DiagramNotes";
+import { DiagramErrors, UnavailableNote } from "./DiagramNotes";
 import { JsonSource } from "./JsonSource";
 import {
   agentReport,
@@ -115,8 +115,8 @@ function SourceView({ diagram, invalid }: { diagram: Diagram; invalid: boolean }
           <div>
             <p className="font-medium text-base text-fg">Archify could not draw this diagram</p>
             <p className="text-fg-muted text-sm">
-              Fix the {plural(diagram.errors.length, "error")} below in the block, then run{" "}
-              <InlineCode>wf lint --render</InlineCode>.
+              Fix the {plural(diagram.errors.length, "error")} below in the block. The picture
+              redraws when the file is saved.
             </p>
           </div>
           <DiagramErrors errors={errors} lines={lines} className="shrink-0" />

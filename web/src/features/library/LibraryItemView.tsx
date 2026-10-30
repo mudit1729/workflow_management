@@ -390,10 +390,10 @@ function PathRow({ id, path, retire }: { id: string; path: string; retire: boole
   );
 }
 
-/** A stub: retiring needs the CLI for now. The tooltip names the command. */
+/** A stub: the dashboard has no retire action yet. The tooltip says where the status lives. */
 function RetireButton() {
   return (
-    <Tooltip content="Retire from the CLI: wf library retire">
+    <Tooltip content="Retiring is not a dashboard action yet. Set status: retired in the item’s file.">
       <span className="inline-flex">
         <Button variant="ghost" size="sm" disabled>
           Retire

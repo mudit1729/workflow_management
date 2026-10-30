@@ -17,6 +17,7 @@ import type { Priority, Size } from "@/gen/types";
 import { useSplitWork } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
+  currentSplit,
   PRIORITIES,
   PRIORITY_LABEL,
   rowsFrom,
@@ -39,7 +40,8 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
   const run = useRef(0);
 
   const signature = splitSignature(draft);
-  const current = draft.split?.signature === signature ? draft.split : undefined;
+  // Proposals made for other answers are not shown, kept or added: they are made again.
+  const current = currentSplit(draft);
 
   const name = draft.name.trim();
   const outcome = draft.outcome.trim();
@@ -105,27 +107,12 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
   if (failed && !current) {
     hint = "Nothing was added. Go back to change the outcome, or try again.";
     body = (
-      <div className="flex items-start gap-3 rounded-md border border-border bg-subtle px-3 py-3">
-        <CircleAlert
-          aria-hidden
-          size={14}
-          strokeWidth={1.75}
-          className="mt-0.5 shrink-0 text-danger"
-        />
-        <div className="flex min-w-0 flex-col items-start gap-2">
-          <p className="text-base text-fg">Codex could not split this group.</p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              void start();
-            }}
-          >
-            <RotateCw size={14} strokeWidth={1.75} />
-            Try again
-          </Button>
-        </div>
-      </div>
+      <CodexFailed
+        message="Codex could not split this group."
+        onRetry={() => {
+          void start();
+        }}
+      />
     );
   } else if (!current) {
     hint = "This takes a few seconds.";
@@ -160,6 +147,32 @@ export function SplitStep({ flow }: { flow: AddWorkFlow }) {
     <Screen flow={flow} title="Codex splits it into issues" hint={hint}>
       {body}
     </Screen>
+  );
+}
+
+// ---------------------------------------------------------------- when Codex fails
+
+/** Codex did not answer: say so once, with the one way on (the toast has the reason). */
+export function CodexFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div
+      data-wf="CodexFailed"
+      className="flex items-start gap-3 rounded-md border border-border bg-subtle px-3 py-3"
+    >
+      <CircleAlert
+        aria-hidden
+        size={14}
+        strokeWidth={1.75}
+        className="mt-0.5 shrink-0 text-danger"
+      />
+      <div className="flex min-w-0 flex-col items-start gap-2">
+        <p className="text-base text-fg">{message}</p>
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          <RotateCw size={14} strokeWidth={1.75} />
+          Try again
+        </Button>
+      </div>
+    </div>
   );
 }
 

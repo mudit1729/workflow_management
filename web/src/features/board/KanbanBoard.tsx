@@ -19,7 +19,7 @@ import { useLayoutMode } from "@/lib/hooks";
 import { usePrefs } from "@/lib/prefs";
 import { FOLDABLE_COLUMNS, STATUS_LABEL } from "@/lib/status";
 import { useBoardDnd, useCardAutoScroll } from "./dnd";
-import { type BoardLane, bucketByStatus } from "./filter";
+import { type BoardLane, bucketByStatus, type NeedsYou } from "./filter";
 import { ColumnHeader, FoldedColumn, KanbanColumn } from "./KanbanColumn";
 import { FoldedHeader, Swimlane } from "./Swimlane";
 import {
@@ -37,9 +37,11 @@ export interface KanbanBoardProps {
   swimlanes: boolean;
   /** Titles of the selected group below the root, for relative card paths. */
   basePath: string[];
+  /** The acting person's open requests, so a lane's "N need you" agrees with the toggle. */
+  mine?: NeedsYou;
 }
 
-export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoardProps) {
+export function KanbanBoard({ columns, lanes, swimlanes, basePath, mine }: KanbanBoardProps) {
   const mobile = useLayoutMode() === "mobile";
   const foldedColumns = usePrefs((s) => s.foldedColumns);
   const toggleColumnFold = usePrefs((s) => s.toggleColumnFold);
@@ -122,6 +124,7 @@ export function KanbanBoard({ columns, lanes, swimlanes, basePath }: KanbanBoard
         onToggleLane={toggleLane}
         active={active}
         input={keys.input}
+        mine={mine}
       />
     );
   } else {
@@ -221,6 +224,7 @@ function SwimlaneBoard({
   onToggleLane,
   active,
   input,
+  mine,
 }: {
   columns: IssueStatus[];
   lanes: BoardLane[];
@@ -231,6 +235,7 @@ function SwimlaneBoard({
   onToggleLane: (id: string) => void;
   active: ReturnType<typeof useBoardDnd>;
   input?: BoardInput;
+  mine?: NeedsYou;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useCardAutoScroll(scrollRef);
@@ -269,6 +274,7 @@ function SwimlaneBoard({
             collapsed={collapsed.has(lane.id)}
             onToggle={() => onToggleLane(lane.id)}
             active={active}
+            mine={mine}
           />
         ))}
       </div>

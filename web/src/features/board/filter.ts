@@ -90,11 +90,15 @@ export interface NeedsYou {
   requests: number;
   /** The issues those requests sit in. */
   issues: ReadonlySet<string>;
+  /** Open requests for the person, per issue. */
+  byIssue: ReadonlyMap<string, number>;
 }
 
 export function needsYou(inbox: readonly NeedsYouItem[], me: string): NeedsYou {
   const open = openRequestsFor(inbox, me);
-  return { requests: open.length, issues: new Set(open.map((r) => r.issue)) };
+  const byIssue = new Map<string, number>();
+  for (const r of open) byIssue.set(r.issue, (byIssue.get(r.issue) ?? 0) + 1);
+  return { requests: open.length, issues: new Set(byIssue.keys()), byIssue };
 }
 
 /** Everyone attached to an issue: owner, coordinator, lease holders, last actor. */
@@ -157,17 +161,27 @@ export function bucketByStatus(issues: IssueSummary[]): Record<IssueStatus, Issu
 
 export interface BoardSummary {
   total: number;
-  needsYou: number; // issues with an open request
+  /**
+   * Open requests that wait on the acting person, in these issues. With `mine` this is the number
+   * the toolbar's "Needs you" toggle shows (at the whole workspace); without it, the open
+   * requests addressed to anyone.
+   */
+  needsYou: number;
   blocking: number; // issues with a blocking request
   stale: number;
 }
 
-export function summarize(issues: IssueSummary[]): BoardSummary {
+/**
+ * The counts of the line under the board's name. Pass `mine` (the acting person's requests) so
+ * the line and the "Needs you" toggle count the same thing: the toggle says 4 requests, the line
+ * says 4 requests for you, however many other people's requests the issues hold.
+ */
+export function summarize(issues: IssueSummary[], mine?: NeedsYou): BoardSummary {
   let needsYou = 0;
   let blocking = 0;
   let stale = 0;
   for (const i of issues) {
-    if (i.signals.needs_you > 0) needsYou++;
+    needsYou += mine ? (mine.byIssue.get(i.id) ?? 0) : i.signals.needs_you;
     if (i.signals.needs_you_blocking > 0) blocking++;
     if (i.signals.stale) stale++;
   }
@@ -205,13 +219,6 @@ export function relativeGroupPath(path: string[], base: string[]): string[] {
   if (base.length === 0 || base.length > path.length) return path;
   for (let i = 0; i < base.length; i++) if (path[i] !== base[i]) return path;
   return path.slice(base.length);
-}
-
-/** Workspace-relative group folder without the issues dir: "issues/wf/web" → "wf/web". */
-export function groupSlugPath(group: GroupNode, issuesDir: string): string {
-  const prefix = issuesDir.replace(/\/+$/, "");
-  if (group.path === prefix) return "";
-  return group.path.startsWith(`${prefix}/`) ? group.path.slice(prefix.length + 1) : group.path;
 }
 
 // ---------------------------------------------------------------- lanes
@@ -268,15 +275,21 @@ export function buildLanes(
   return lanes;
 }
 
-/** "8 issues · 3 in progress · 1 blocked · 2 need you" for a collapsed lane. */
-export function laneSummary(issues: IssueSummary[]): string {
+/**
+ * "8 issues · 3 in progress · 1 blocked · 2 need you" for a collapsed lane. Pass `mine` so the
+ * last part counts the issues with a request for the acting person, as the "Needs you" filter
+ * does; without it, the issues with an open request addressed to anyone.
+ */
+export function laneSummary(issues: IssueSummary[], mine?: NeedsYou): string {
   if (issues.length === 0) return "No issues";
   const parts = [`${issues.length} issue${issues.length === 1 ? "" : "s"}`];
   const count = (s: IssueStatus) => issues.filter((i) => i.status === s).length;
   const inProgress = count("in_progress");
   const blocked = count("blocked");
   const review = count("review");
-  const needsYou = issues.filter((i) => i.signals.needs_you > 0).length;
+  const needsYou = issues.filter((i) =>
+    mine ? mine.issues.has(i.id) : i.signals.needs_you > 0,
+  ).length;
   if (inProgress) parts.push(`${inProgress} in progress`);
   if (review) parts.push(`${review} in review`);
   if (blocked) parts.push(`${blocked} blocked`);

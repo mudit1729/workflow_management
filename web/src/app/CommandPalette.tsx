@@ -7,7 +7,9 @@ import {
   ArrowRight,
   ArrowUpRight,
   BookText,
+  ClipboardCopy,
   Component,
+  Eye,
   FilePenLine,
   FilePlus,
   FileText,
@@ -21,10 +23,10 @@ import {
   Play,
   Rows3,
   ScrollText,
+  Square,
   SquareTerminal,
   StepForward,
   SunMoon,
-  Terminal,
   Zap,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -41,6 +43,7 @@ import {
 } from "@/components/ui";
 import { copyCodexCommand, useNextStep } from "@/features/codex";
 import { useFilesNav } from "@/features/files";
+import { copyContextWithToast, showContext } from "@/features/issue/handoff";
 import type {
   GlossaryTerm,
   GroupNode,
@@ -63,8 +66,8 @@ import { parseTs } from "@/lib/format";
 import { useGo, useOpenIssue, useOpenIssueId } from "@/lib/nav";
 import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
-import { copyText } from "./clipboard";
 import { playNextEvent, withMockControls } from "./mock-controls";
+import { useReturnFocus } from "./return-focus";
 import { openAddWork, useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
@@ -77,6 +80,7 @@ type Page = "root" | "move";
 export function CommandPalette() {
   const open = useShell((s) => s.paletteOpen);
   const setOpen = useShell((s) => s.setPaletteOpen);
+  const focus = useReturnFocus("paletteOpen");
 
   return (
     <CommandDialog
@@ -84,14 +88,24 @@ export function CommandPalette() {
       onOpenChange={setOpen}
       title="Command palette"
       commandProps={{ shouldFilter: false, loop: true }}
+      onCloseAutoFocus={focus.onCloseAutoFocus}
     >
-      <PaletteBody close={() => setOpen(false)} />
+      <PaletteBody
+        // An item that takes the person somewhere (an issue, a page, another dialog) closes the
+        // palette and lets that place have focus; Esc and the in-place actions give focus back to
+        // what had it before the palette opened.
+        close={() => {
+          focus.release();
+          setOpen(false);
+        }}
+        closeInPlace={() => setOpen(false)}
+      />
     </CommandDialog>
   );
 }
 
 /** Lives inside the dialog content, so its state resets every time the palette closes. */
-function PaletteBody({ close }: { close: () => void }) {
+function PaletteBody({ close, closeInPlace }: { close: () => void; closeInPlace: () => void }) {
   const [query, setQuery] = useState("");
   const [page, setPageState] = useState<Page>("root");
   const openId = useOpenIssueId();
@@ -143,9 +157,15 @@ function PaletteBody({ close }: { close: () => void }) {
       />
       <CommandList>
         {page === "move" && openIssue ? (
-          <MovePage issue={openIssue} query={query} close={close} />
+          <MovePage issue={openIssue} query={query} close={closeInPlace} />
         ) : (
-          <RootPage query={query} openIssue={openIssue} setPage={setPage} close={close} />
+          <RootPage
+            query={query}
+            openIssue={openIssue}
+            setPage={setPage}
+            close={close}
+            closeInPlace={closeInPlace}
+          />
         )}
       </CommandList>
       <PaletteFooter page={page} />
@@ -229,10 +249,12 @@ interface Action {
   shortcut?: string;
   hint?: string;
   keywords?: string[];
-  /** Keep the palette open (sub-pages). */
+  /** Keep the palette open (sub-pages, and a row that has nothing to do right now). */
   stay?: boolean;
-  /** Shown but not runnable (a run is going). */
-  disabled?: boolean;
+  /** Takes the person nowhere: focus goes back to where it was when the palette closes. */
+  inPlace?: boolean;
+  /** Listed and selectable, but it does nothing now (a run is going). A reader hears it as unavailable. */
+  unavailable?: boolean;
   run: () => void;
 }
 
@@ -241,11 +263,13 @@ function RootPage({
   openIssue,
   setPage,
   close,
+  closeInPlace,
 }: {
   query: string;
   openIssue?: IssueSummary;
   setPage: (p: Page) => void;
   close: () => void;
+  closeInPlace: () => void;
 }) {
   const snapshot = useSnapshot().data;
   const root = useGroupTree();
@@ -373,7 +397,7 @@ function RootPage({
   }, [actions, q]);
 
   const runAction = (a: Action) => {
-    if (!a.stay) close();
+    if (!a.stay) (a.inPlace ? closeInPlace : close)();
     a.run();
   };
 
@@ -505,7 +529,10 @@ function RootPage({
             icon={a.icon}
             shortcut={a.shortcut}
             hint={a.hint}
-            disabled={a.disabled}
+            // Not `disabled`: cmdk skips a disabled row, and Enter would run the next match (a
+            // skill page) instead of saying why this one does nothing.
+            aria-disabled={a.unavailable || undefined}
+            className={a.unavailable ? "text-fg-muted" : undefined}
             onSelect={() => runAction(a)}
           >
             {a.label}
@@ -579,7 +606,9 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       shortcut: "n",
       hint: "Split into issues",
       keywords: ["create", "new", "group", "split", "issues", "outcome"],
-      run: () => openAddWork({ kind: "group" }),
+      // The same start as the `n` key and the toolbar button: the first question, "What are you
+      // adding?". "Add one issue…" below is the direct path.
+      run: () => openAddWork(),
     },
     {
       id: "add-issue",
@@ -598,13 +627,14 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         label: `Open ${openIssue.id} in Codex`,
         icon: <SquareTerminal {...ICON} />,
         hint: "Copies the command",
+        inPlace: true,
         keywords: [
           "open in codex",
           "codex",
           "agent",
           "terminal",
           "cli",
-          "handoff",
+          "command",
           openIssue.title,
         ],
         run: () => void copyCodexCommand(openIssue),
@@ -614,9 +644,66 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         label: `Do the next step of ${openIssue.id}`,
         icon: <StepForward {...ICON} />,
         hint: nextStep.busy ? "Codex is working on it" : "Codex, in the background",
-        keywords: ["codex", "run", "continue", "agent", "do next step", openIssue.title],
-        disabled: nextStep.busy,
-        run: () => void nextStep.start(),
+        keywords: [
+          "codex",
+          "run",
+          "continue",
+          "agent",
+          "do next step",
+          "do the next step",
+          openIssue.title,
+        ],
+        inPlace: true,
+        // A run is going: the row stays and says so, instead of running or being skipped.
+        unavailable: nextStep.busy,
+        stay: nextStep.busy,
+        run: () =>
+          nextStep.busy
+            ? void toast(`Codex is already working on ${openIssue.id}`, {
+                id: `codex-busy:${openIssue.id}`,
+              })
+            : void nextStep.start(),
+      },
+      ...(nextStep.busy
+        ? [
+            {
+              id: "cancel-run",
+              label: `Cancel Codex's run on ${openIssue.id}`,
+              icon: <Square {...ICON} />,
+              hint: "Stops the run",
+              keywords: ["stop", "abort", "cancel", "codex", "run", openIssue.title],
+              inPlace: true,
+              run: () => void nextStep.cancel(),
+            } satisfies Action,
+          ]
+        : []),
+      {
+        id: "copy-context",
+        label: `Hand over ${openIssue.id}: copy its context`,
+        icon: <ClipboardCopy {...ICON} />,
+        hint: "Copies the context bundle",
+        keywords: [
+          "handoff",
+          "hand off",
+          "hand over",
+          "bundle",
+          "context",
+          "copy context",
+          "markdown",
+          "share",
+          openIssue.title,
+        ],
+        inPlace: true,
+        run: () => void copyContextWithToast(openIssue.id),
+      },
+      {
+        id: "view-context",
+        label: `View the context of ${openIssue.id}`,
+        icon: <Eye {...ICON} />,
+        hint: "What a hand-off copies",
+        keywords: ["handoff", "bundle", "read", "show", "context", "markdown", openIssue.title],
+        // Opens a dialog of its own, which takes focus: the palette must not take it back.
+        run: () => showContext(openIssue.id),
       },
       {
         id: "move",
@@ -640,13 +727,6 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         icon: <FilePenLine {...ICON} />,
         keywords: ["source", "markdown", "file", "edit", openIssue.title],
         run: () => void files.edit(`${openIssue.path}/goal.md`),
-      },
-      {
-        id: "copy-context",
-        label: `Copy “wf context ${openIssue.id}”`,
-        icon: <Terminal {...ICON} />,
-        keywords: ["handoff", "agent", "cli", "command"],
-        run: () => copyText(`wf context ${openIssue.id}`, "Command copied"),
       },
     );
   }

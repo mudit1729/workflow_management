@@ -65,6 +65,7 @@ export function BoardToolbar({
 }: BoardToolbarProps) {
   const [search, setSearch] = useBoardSearch();
   const selected = chain[chain.length - 1];
+  const scoped = chain.length > 1;
   const showCancelled = search.show === "cancelled";
   const selectedAuthors = parseAuthorParam(search.author);
 
@@ -88,22 +89,36 @@ export function BoardToolbar({
   return (
     <header
       data-wf="BoardToolbar"
-      className="flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 border-border border-b bg-bg px-3 @md/board:gap-3"
+      className={cn(
+        "flex h-[var(--wf-topbar-h)] shrink-0 items-center gap-2 border-border border-b bg-bg px-3 @md/board:gap-3",
+        // On a phone the scope gets a line of its own under the 44 px bar: the filter, the count and
+        // the buttons leave it two letters otherwise.
+        scoped &&
+          "@max-[479px]/board:h-auto @max-[479px]/board:flex-wrap @max-[479px]/board:gap-y-0",
+      )}
     >
       <h1 className="sr-only">Workflow · Board</h1>
-      <ViewTabs view="workflow" />
+      <ViewTabs
+        view="workflow"
+        className={cn(scoped && "@max-[479px]/board:h-[var(--wf-topbar-h)]")}
+      />
+      {/* The divider sets real crumbs apart from the tabs. A lone "All issues" has none. */}
       <span
         aria-hidden
         className={cn(
           "hidden h-4 w-px shrink-0 bg-border",
-          // Without a selected group there is no crumb below 1024 px, so no divider either.
-          chain.length > 1 ? "@md/board:block" : "@5xl/board:block",
+          scoped && "@md/board:block @max-[479px]/board:hidden",
         )}
       />
       <GroupCrumbs chain={chain} onGroup={(group) => setSearch({ group })} />
       <SummaryLine summary={summary} scopedTotal={scopedTotal} filtered={filtered} />
 
-      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+      <div
+        className={cn(
+          "ml-auto flex shrink-0 items-center gap-1.5",
+          scoped && "@max-[479px]/board:h-[var(--wf-topbar-h)]",
+        )}
+      >
         <SearchInput
           size="sm"
           value={draft}
@@ -182,8 +197,10 @@ function GroupDot({ color }: { color: number }) {
 /**
  * The scope breadcrumb. Where the board has the room (1152 px and up) it shows the whole chain;
  * narrower, it shows only the current scope (a quiet label, so it does not pass for a tab) so it
- * never fights the filters for space. With no group selected it says only "All issues", which the
- * tabs already imply: it appears from 1024 px. The full path stays in the tooltip.
+ * never fights the filters for space; on a phone (under 480 px) it takes a line of its own under
+ * the bar and shows the whole chain there. With no group selected it says only "All issues": a
+ * quiet label like the ancestors of a crumb, never the weight of the active tab. It appears from
+ * 1024 px. The full path stays in the tooltip.
  */
 function GroupCrumbs({
   chain,
@@ -198,7 +215,22 @@ function GroupCrumbs({
   // Narrow, the scope is a quiet label with its dot, so it cannot be read as a third tab.
   const current =
     "flex h-6 min-w-0 items-center gap-1.5 px-1.5 font-normal text-fg-muted @6xl/board:font-medium @6xl/board:text-fg";
+  // The unscoped label stays quiet at every width: it is not a place to be, only a hint of the scope.
+  const lone = "flex h-6 min-w-0 items-center gap-1.5 px-1.5 font-normal text-fg-muted";
   const path = groups.length > 0 ? ["All issues", ...groups.map((g) => g.title)].join(" / ") : "";
+  // The whole chain needs about 190 px for two groups and 330 px for three; the tabs and filters
+  // leave the crumbs about 190 px at 1152 px, so a third group waits for 1280 px (measured: at
+  // 1440 px with the sidebar open, the current group was clipped to its first letter).
+  const deep = groups.length >= 3;
+  const showAncestors = deep
+    ? "hidden @7xl/board:flex @max-[479px]/board:flex"
+    : "hidden @6xl/board:flex @max-[479px]/board:flex";
+  const showRoot = deep
+    ? "hidden @7xl/board:block @max-[479px]/board:block"
+    : "hidden @6xl/board:block @max-[479px]/board:block";
+  const showSlash = deep
+    ? "hidden @7xl/board:inline @max-[479px]/board:inline"
+    : "hidden @6xl/board:inline @max-[479px]/board:inline";
 
   return (
     // Padding and a matching negative margin keep the focus rings of the buttons inside the clip.
@@ -210,13 +242,16 @@ function GroupCrumbs({
         "-m-1 min-w-0 shrink overflow-hidden p-1",
         // "All issues" alone says nothing a tab does not. It shows where the bar has the room
         // (measured: narrower, the tabs, filters and the docked drawer's width squeeze it to "Al").
-        groups.length === 0 ? "hidden @5xl/board:block" : "min-w-[7ch]",
+        // A scope on a phone is a full-width line under the bar, whole chain included.
+        groups.length === 0
+          ? "hidden @5xl/board:block"
+          : "min-w-[7ch] @max-[479px]/board:order-last @max-[479px]/board:m-0 @max-[479px]/board:w-full @max-[479px]/board:basis-full @max-[479px]/board:px-0 @max-[479px]/board:pb-1.5",
       )}
     >
       <ol className="flex min-w-0 items-center gap-0.5 text-base">
-        <li className={cn("shrink-0", groups.length > 0 && "hidden @6xl/board:block")}>
+        <li className={cn("shrink-0", groups.length > 0 && showRoot)}>
           {groups.length === 0 ? (
-            <span aria-current="page" className={current}>
+            <span aria-current="page" className={lone}>
               <span className="truncate">All issues</span>
             </span>
           ) : (
@@ -232,10 +267,10 @@ function GroupCrumbs({
               key={g.id}
               className={cn(
                 "items-center gap-0.5",
-                last ? "flex min-w-0" : "hidden shrink-0 @6xl/board:flex",
+                last ? "flex min-w-0" : cn("shrink-0", showAncestors),
               )}
             >
-              <span aria-hidden className="hidden text-fg-faint @6xl/board:inline">
+              <span aria-hidden className={cn("text-fg-faint", showSlash)}>
                 /
               </span>
               {last ? (
@@ -271,8 +306,9 @@ function SummaryLine({
       ? `${summary.total} of ${scopedTotal} issues`
       : `${summary.total} issue${summary.total === 1 ? "" : "s"}`,
   ];
+  // Open requests for the acting person: the number the "Needs you" toggle shows.
   if (summary.needsYou > 0)
-    parts.push(`${summary.needsYou} need${summary.needsYou === 1 ? "s" : ""} you`);
+    parts.push(`${summary.needsYou} request${summary.needsYou === 1 ? "" : "s"} for you`);
   if (summary.stale > 0) parts.push(`${summary.stale} stale`);
   return (
     <span

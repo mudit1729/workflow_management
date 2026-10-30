@@ -5,6 +5,7 @@ import { type ReactNode, useMemo } from "react";
 import { openAddWork } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
+import { SkillHint } from "@/features/issue/skill-hint";
 import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
 import { issuesInGroup, useInbox, useMe, useSnapshot } from "@/lib/api";
 import { type BoardSearch, useBoardSearch } from "@/lib/nav";
@@ -16,7 +17,6 @@ import {
   buildLanes,
   filterFromSearch,
   groupChain,
-  groupSlugPath,
   hasActiveFilter,
   issueAuthors,
   type NeedsYou,
@@ -28,7 +28,8 @@ import { BoardSkeleton, KanbanBoard } from "./KanbanBoard";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
-function buildModel(data: WorkspaceSnapshot, search: BoardSearch, needs: ReadonlySet<string>) {
+function buildModel(data: WorkspaceSnapshot, search: BoardSearch, mine: NeedsYou) {
+  const needs = mine.issues;
   const root = data.groups;
   const chain = search.group ? groupChain(root, search.group) : [root];
   const missing = chain.length === 0;
@@ -87,9 +88,9 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch, needs: Readonl
     lanes,
     columns: boardColumns(filter.showCancelled),
     basePath: basePathOf(chain),
-    summary: summarize(visible),
+    // Counted as the toolbar's "Needs you" toggle counts: open requests for the acting person.
+    summary: summarize(visible, mine),
     authors,
-    slugPath: groupSlugPath(selected, data.config.issues_dir),
   };
 }
 
@@ -105,8 +106,8 @@ export function BoardPage() {
   const mine: NeedsYou = useMemo(() => needsYou(inbox.all, me), [inbox.all, me]);
 
   const model = useMemo(
-    () => (data ? buildModel(data, { group, swim, author, q, show, needs }, mine.issues) : null),
-    [data, group, swim, author, q, show, needs, mine.issues],
+    () => (data ? buildModel(data, { group, swim, author, q, show, needs }, mine) : null),
+    [data, group, swim, author, q, show, needs, mine],
   );
 
   if (snapshot.isError && !data) {
@@ -119,9 +120,8 @@ export function BoardPage() {
             hint={
               snapshot.error instanceof Error
                 ? snapshot.error.message
-                : "The workspace server did not answer. Check that wf serve is running."
+                : "The workspace server did not answer. Try again in a moment."
             }
-            command="wf serve"
             action={
               <Button variant="secondary" size="sm" onClick={() => snapshot.refetch()}>
                 Try again
@@ -160,15 +160,22 @@ export function BoardPage() {
   // "Add work" opens at the first question; "Add one issue" skips it.
   const addWork = () => openAddWork(scopeGroup ? { group: scopeGroup } : undefined);
   const addIssue = () => openAddWork({ kind: "issue", group: scopeGroup });
-  const addActions = (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      <Button variant="primary" size="sm" onClick={addWork}>
-        <Plus size={14} strokeWidth={1.75} />
-        Add work
-      </Button>
-      <Button variant="secondary" size="sm" onClick={addIssue}>
-        Add one issue
-      </Button>
+  // The buttons first, then the one skill that does the same without the dashboard.
+  const addActions = (scope?: string) => (
+    <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button variant="primary" size="sm" onClick={addWork}>
+          <Plus size={14} strokeWidth={1.75} />
+          Add work
+        </Button>
+        <Button variant="secondary" size="sm" onClick={addIssue}>
+          Add one issue
+        </Button>
+      </div>
+      <SkillHint
+        skill="adding-work"
+        prompt={`Add work${scope ? ` to ${scope}` : ""} with the adding-work skill. Ask me for the outcome.`}
+      />
     </div>
   );
 
@@ -195,7 +202,7 @@ export function BoardPage() {
         <EmptyState
           title="No work yet"
           hint="Add a group of work and Codex splits it into issues, or add one issue."
-          action={addActions}
+          action={addActions()}
         />
       </Centered>
     );
@@ -254,10 +261,8 @@ export function BoardPage() {
         ) : (
           <EmptyState
             title={`No issues in ${title} yet`}
-            hint="Add work here, or let an agent write the goal."
-            skill="write-goal"
-            command={`wf new issue ${model.slugPath || "<group-path>"}/<slug> --title "…"`}
-            action={addActions}
+            hint="Add work here and Codex splits it into issues."
+            action={addActions(model.chain.length > 1 ? model.selected.title : undefined)}
           />
         )}
       </Centered>
@@ -288,6 +293,7 @@ export function BoardPage() {
         lanes={model.lanes}
         swimlanes={model.swim === "child"}
         basePath={model.basePath}
+        mine={mine}
       />
     );
   }

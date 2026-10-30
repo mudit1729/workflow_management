@@ -7,7 +7,7 @@ export interface EmptyStateProps {
   icon?: ReactNode;
   title: ReactNode;
   hint?: ReactNode;
-  /** Skill name, shown as "Run the `write-plan` skill". */
+  /** Skill name, shown as "Run the `planning-issues` skill". */
   skill?: string;
   /** A `wf …` command, shown copyable. */
   command?: string;

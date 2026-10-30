@@ -66,7 +66,7 @@ function Body({
     <div data-wf="SkillItemView" data-view={mode} className="flex h-full min-h-0 flex-col bg-bg">
       <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-border border-b py-1 pr-3 pl-5">
         {variant === "screen" && onClose && (
-          <Button variant="ghost" size="sm" onClick={onClose} className="-ml-3">
+          <Button variant="ghost" size="sm" data-skill-back="" onClick={onClose} className="-ml-3">
             <ArrowLeft aria-hidden size={14} strokeWidth={1.75} />
             Skills
           </Button>
@@ -143,15 +143,20 @@ function SkillHeader({ skill, plugin }: { skill: Skill; plugin?: SkillPlugin }) 
       : "";
   return (
     <header data-wf="SkillHeader" className="flex min-w-0 flex-col gap-2">
+      {/* Three steps down: the name leads (16 px, semibold), the sentence that says when to use it
+          is quieter (13 px, muted), the rest of the description quieter still. */}
       <h2 className="font-semibold text-fg text-lg leading-snug">{skill.name}</h2>
-      <p className="text-fg text-md leading-normal">{skill.use_when || skill.description}</p>
-      {rest && <p className="text-fg-muted text-sm leading-normal">{rest}</p>}
+      <p className="text-base text-fg-muted leading-normal">
+        {skill.use_when || skill.description}
+      </p>
+      {rest && <p className="text-fg-faint text-sm leading-normal">{rest}</p>}
+      {/* One key and its value per row: a two-column grid broke the pairs across the columns. */}
       <Properties>
-        <Property label="plugin">
+        <Property label="plugin" wide>
           {plugin?.name ?? skill.plugin}
           {plugin?.version && <span className="text-fg-faint"> · v{plugin.version}</span>}
         </Property>
-        <Property label="lines">
+        <Property label="lines" wide>
           <span className="tabular">{skill.lines}</span>
         </Property>
         <Property label="claude" wide>
