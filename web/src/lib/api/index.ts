@@ -7,13 +7,21 @@ export {
   agentControls,
   agentHandle,
   agentName,
+  BLOCKED_NOTE,
   isStaticBuild,
   preferredAgent,
   useAgent,
   useAgentControls,
   usePreferredAgent,
 } from "./agent";
-export { makePairCode, pairCommand, simulatedConnection, WF_SKILL_NAMES } from "./agent-info";
+export {
+  CLAUDE_ALLOWED_TOOLS,
+  claudeAllowFlags,
+  makePairCode,
+  pairCommand,
+  simulatedConnection,
+  WF_SKILL_NAMES,
+} from "./agent-info";
 export {
   BRIDGE_URL,
   BridgeError,

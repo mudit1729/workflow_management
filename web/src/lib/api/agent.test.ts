@@ -2,11 +2,13 @@
 // bridge client (pairing, the static build's simulated pairing, cancel, disconnect, a reload, a lost
 // bridge) and the hooks' view of the shared store.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import readme from "../../../../plugins/workflow/README.md?raw";
 import {
   AGENT_STORAGE_KEY,
   AgentNotConnectedError,
   type AgentStorage,
   agentStore,
+  BLOCKED_NOTE,
   createAgentStore,
   preferredAgent,
   SIMULATED_PAIR_MS,
@@ -19,6 +21,8 @@ import {
   agentCommand,
   agentHandle,
   agentName,
+  CLAUDE_ALLOWED_TOOLS,
+  claudeAllowFlags,
   makePairCode,
   pairCommand,
   simulatedConnection,
@@ -29,6 +33,7 @@ import {
   BridgeError,
   type BridgeStatus,
   BridgeUnreachableError,
+  type PairPollOptions,
 } from "./bridge-client";
 import { codexCommand } from "./codex";
 import { loadMock } from "./mock-bridge";
@@ -70,6 +75,20 @@ describe("names, handles and commands", () => {
   });
 });
 
+describe("what a headless Claude Code may run", () => {
+  test("the list the README shows is the list the dashboard has", () => {
+    expect(claudeAllowFlags()).toBe(
+      "-- --allowedTools 'Bash(*/wf-env.sh *)' 'Bash(*/wf-status.sh *)' 'Bash(git add *)' 'Bash(git commit *)' 'Bash(pnpm *)'",
+    );
+    for (const tool of CLAUDE_ALLOWED_TOOLS) expect(readme).toContain(`'${tool}'`);
+    // The README keeps the line breaks of its example; the flags are the same.
+    const example = /--agent claude --pair 4F7K-92 -- \\\n\s+--allowedTools([^`]*)```/.exec(readme);
+    expect(example?.[1].replace(/\s*\\\n\s*/g, " ").trim()).toBe(
+      CLAUDE_ALLOWED_TOOLS.map((tool) => `'${tool}'`).join(" "),
+    );
+  });
+});
+
 describe("pair codes", () => {
   test("a code looks like 4F7K-92 and leaves out the letters that read alike", () => {
     for (let i = 0; i < 200; i++)
@@ -90,6 +109,23 @@ describe("pair codes", () => {
     );
     expect(pairCommand("claude", "4F7K-92")).toBe(
       "node plugins/workflow/scripts/wf-bridge.mjs --agent claude --pair 4F7K-92",
+    );
+  });
+
+  test("a dashboard on another address allows itself with --origin; the dev server's two need nothing", () => {
+    const plain = pairCommand("codex", "4F7K-92");
+    expect(pairCommand("codex", "4F7K-92", "http://localhost:5177")).toBe(plain);
+    expect(pairCommand("codex", "4F7K-92", "http://127.0.0.1:5177")).toBe(plain);
+    expect(pairCommand("codex", "4F7K-92", undefined)).toBe(plain);
+    expect(pairCommand("claude", "4F7K-92", "http://localhost:4173")).toBe(
+      `${pairCommand("claude", "4F7K-92")} --origin http://localhost:4173`,
+    );
+    expect(pairCommand("codex", "4F7K-92", "http://192.168.1.20:7777")).toMatch(
+      / --origin http:\/\/192\.168\.1\.20:7777$/,
+    );
+    // Anything a shell reads is quoted.
+    expect(pairCommand("codex", "4F7K-92", "http://[::1]:5177")).toMatch(
+      / --origin 'http:\/\/\[::1\]:5177'$/,
     );
   });
 });
@@ -128,7 +164,7 @@ function fakeClient() {
   const pairing = deferred<string>();
   const client = {
     pair: vi.fn(),
-    pollPair: vi.fn((_code: string, _o?: { signal?: AbortSignal }) => pairing.promise),
+    pollPair: vi.fn((_code: string, _o?: PairPollOptions) => pairing.promise),
     unpair: vi.fn(async (_t: string) => {}),
     status: vi.fn(async (_t: string) => status()),
     startRun: vi.fn(),
@@ -217,27 +253,100 @@ describe("begin", () => {
     expect(store.get().workspace).toBeUndefined();
   });
 
-  test("a refusal stops the pairing and says why; trying again makes a new code", async () => {
+  test("a refusal stops the pairing and says why; retry polls again with the same code", async () => {
     const { client, pairing } = fakeClient();
     const store = createAgentStore({ client, storage: null });
     const first = await store.begin("codex");
-    pairing.reject(new BridgeError(403, "wrong_code", "That code does not match this bridge."));
+    pairing.reject(new BridgeError(500, "internal", "The bridge failed on that request."));
     await tick();
     expect(store.get()).toMatchObject({
       status: "pairing",
       pairCode: first.pairCode,
-      problem: expect.stringContaining("another code"),
+      problem: "The bridge failed on that request.",
     });
-    const locked = fakeClient();
-    const s2 = createAgentStore({ client: locked.client, storage: null });
-    await s2.begin("codex");
-    locked.pairing.reject(new BridgeError(429, "locked", "Pairing is closed after 5 wrong codes."));
-    await tick();
-    expect(s2.get().problem).toBe("Pairing is closed after 5 wrong codes.");
+    const signal = client.pollPair.mock.calls[0][1]?.signal;
 
-    const again = await store.begin("codex");
+    store.retry();
+    const again = store.get();
+    expect(again).toMatchObject({
+      status: "pairing",
+      pairCode: first.pairCode,
+      command: first.command,
+    });
     expect(again.problem).toBeUndefined();
-    expect(again.pairCode).not.toBe(first.pairCode);
+    expect(client.pollPair).toHaveBeenCalledTimes(2);
+    expect(client.pollPair.mock.calls[1][0]).toBe(first.pairCode);
+    // The first polling is over; the second has its own signal.
+    expect(signal?.aborted).toBe(true);
+    expect(client.pollPair.mock.calls[1][1]?.signal?.aborted).toBe(false);
+
+    // Only begin makes a new code.
+    const fresh = await store.begin("codex");
+    expect(fresh.pairCode).not.toBe(first.pairCode);
+  });
+
+  test("retry does nothing unless a pairing waits", async () => {
+    const { client } = fakeClient();
+    const store = createAgentStore({ client, storage: null });
+    store.retry();
+    expect(store.get()).toEqual({ status: "none" });
+    store.simulate("codex");
+    store.retry();
+    expect(store.get().status).toBe("connected");
+    expect(client.pollPair).not.toHaveBeenCalled();
+  });
+
+  test("an old bridge that refuses the code is a note, not a problem; the polling goes on", async () => {
+    const { client, pairing } = fakeClient();
+    const store = createAgentStore({ client, storage: null });
+    const first = await store.begin("claude");
+    const onBlocked = client.pollPair.mock.calls[0][1]?.onBlocked;
+    expect(onBlocked).toBeTypeOf("function");
+
+    // The client says an old bridge stayed: the screen can tell the person what to do.
+    onBlocked?.(new BridgeError(403, "wrong_code", "That code does not match this bridge."));
+    expect(store.get()).toMatchObject({
+      status: "pairing",
+      pairCode: first.pairCode,
+      note: BLOCKED_NOTE,
+    });
+    expect(store.get().problem).toBeUndefined();
+    expect(BLOCKED_NOTE).toBe(
+      "Another bridge is still running. Press Ctrl+C in its terminal, then run this.",
+    );
+
+    // It was stopped: the note goes, the same polling pairs.
+    onBlocked?.(null);
+    expect(store.get().note).toBeUndefined();
+    onBlocked?.(new BridgeError(409, "paired", "Already paired."));
+    pairing.resolve(TOKEN);
+    await tick();
+    expect(store.get()).toMatchObject({ status: "connected", agent: "codex" });
+    expect(store.get().note).toBeUndefined();
+    expect(client.pollPair).toHaveBeenCalledTimes(1);
+  });
+
+  test("a note from a pairing that was replaced is dropped", async () => {
+    const { client } = fakeClient();
+    const store = createAgentStore({ client, storage: null });
+    await store.begin("codex");
+    const old = client.pollPair.mock.calls[0][1]?.onBlocked;
+    await store.begin("claude");
+    old?.(new BridgeError(403, "wrong_code", "That code does not match this bridge."));
+    expect(store.get()).toMatchObject({ status: "pairing", agent: "claude" });
+    expect(store.get().note).toBeUndefined();
+  });
+
+  test("the note is not kept for a reload", async () => {
+    const { client } = fakeClient();
+    const { storage, data } = memory();
+    const store = createAgentStore({ client, storage });
+    await store.begin("codex");
+    client.pollPair.mock.calls[0][1]?.onBlocked?.(
+      new BridgeError(403, "wrong_code", "That code does not match this bridge."),
+    );
+    expect(store.get().note).toBe(BLOCKED_NOTE);
+    expect(saved(data).connection.note).toBeUndefined();
   });
 
   test("a bridge that paired and then fails its first status is not connected", async () => {
@@ -249,6 +358,8 @@ describe("begin", () => {
     await tick();
     expect(store.get()).toMatchObject({ status: "pairing", problem: expect.any(String) });
     expect(store.token()).toBeUndefined();
+    // The token is given back, so the bridge is not left paired with nobody.
+    expect(client.unpair).toHaveBeenCalledWith(TOKEN);
   });
 });
 
@@ -690,10 +801,10 @@ describe("the hooks", () => {
     expect(preferredAgent()).toBe("claude");
   });
 
-  test("useAgentControls is one object with begin, cancel, disconnect, simulate and recheck", () => {
+  test("useAgentControls is one object with begin, retry, cancel, disconnect, simulate and recheck", () => {
     const controls = capture(useAgentControls);
     expect(capture(useAgentControls)).toBe(controls);
-    for (const name of ["begin", "cancel", "disconnect", "simulate", "recheck"] as const)
+    for (const name of ["begin", "retry", "cancel", "disconnect", "simulate", "recheck"] as const)
       expect(controls[name]).toBeTypeOf("function");
     controls.simulate("codex");
     expect(agentStore.get().agent).toBe("codex");

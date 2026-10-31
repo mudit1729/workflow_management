@@ -1,6 +1,7 @@
 // The client of the bridge against a stand-in `fetch`: what it sends, how it reads a refusal and a
-// dead bridge, pair polling, and the event stream (chunks that cut an event in two, CRLF, a stream
-// that ends without its exit). The real bridge is exercised in `scripts/wf-bridge.test.ts`.
+// dead bridge, pair polling (including an old bridge that still holds the port), and the event
+// stream (chunks that cut an event in two, CRLF, a stream that ends early and is asked for again).
+// The real bridge is exercised in `scripts/wf-bridge.test.ts`.
 import { describe, expect, test, vi } from "vitest";
 import {
   BRIDGE_URL,
@@ -140,6 +141,19 @@ describe("what goes wrong", () => {
     });
   });
 
+  test("a refusal names the bridge process that gave it", async () => {
+    const s = stub(() =>
+      json(
+        { error: "unauthorized", message: "Pair with the bridge first.", instance: "1a2b3c4d" },
+        401,
+      ),
+    );
+    const err = await createBridgeClient({ fetch: s.fetch })
+      .status(TOKEN)
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 401, code: "unauthorized", instance: "1a2b3c4d" });
+  });
+
   test("an answer that is not the bridge's JSON still says what the status was", async () => {
     const s = stub(() => new Response("<html>nope</html>", { status: 502 }));
     const err = await createBridgeClient({ fetch: s.fetch })
@@ -210,13 +224,151 @@ describe("pair polling", () => {
     }
   });
 
-  test("a refusal ends it at once: a wrong code is never tried twice", async () => {
-    const s = stub(() => json({ error: "wrong_code", message: "That code does not match." }, 403));
+  test("a refusal other than a held port ends it at once", async () => {
+    const s = stub(() =>
+      json({ error: "bad_request", message: "The request body is not valid." }, 400),
+    );
     const err = await createBridgeClient({ fetch: s.fetch })
       .pollPair("NOPE-00", { intervalMs: 1 })
       .catch((e: unknown) => e);
-    expect(err).toMatchObject({ name: "BridgeError", code: "wrong_code" });
+    expect(err).toMatchObject({ name: "BridgeError", code: "bad_request" });
     expect(s.calls).toHaveLength(1);
+  });
+
+  /** A bridge that answers every pair attempt with `refusal` while `up()`, then the next one pairs. */
+  function oldBridge(refusal: string, up: () => boolean, instance = "old00001") {
+    const asked: string[] = [];
+    const s = stub((url, init) => {
+      const path = url.slice(BRIDGE_URL.length);
+      asked.push(`${init.method ?? "GET"} ${path}`);
+      if (!up()) {
+        // Gone, or a new bridge that takes the code.
+        if (path === "/pair") return json({ token: TOKEN });
+        throw new TypeError("Failed to fetch");
+      }
+      if (path === "/pair")
+        return json(
+          { error: refusal, message: "That code does not match this bridge.", instance },
+          403,
+        );
+      return json({ error: "unauthorized", message: "Pair with the bridge first.", instance }, 401);
+    });
+    return { ...s, asked };
+  }
+
+  test("an old bridge that refuses the code is waited out, and the code is tried once on it", async () => {
+    let up = true;
+    const old = oldBridge("wrong_code", () => up);
+    const told: (string | null)[] = [];
+    const polling = createBridgeClient({ fetch: old.fetch }).pollPair("NEW-22", {
+      intervalMs: 5,
+      onBlocked: (r) => told.push(r ? r.code : null),
+    });
+    // It stays for a while: the code was tried once, the rest were looks at /status.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(told).toEqual(["wrong_code"]);
+    expect(old.asked.filter((a) => a === "POST /pair")).toHaveLength(1);
+    expect(old.asked.filter((a) => a === "GET /status").length).toBeGreaterThan(2);
+    up = false;
+    // It was stopped: the same code is tried again and pairs.
+    expect(await polling).toBe(TOKEN);
+    expect(told).toEqual(["wrong_code", null]);
+    expect(old.asked.at(-1)).toBe("POST /pair");
+    for (const c of old.calls.filter((c) => c.url.endsWith("/status")))
+      expect(c.headers.has("authorization")).toBe(false);
+    for (const c of old.calls.filter((c) => c.url.endsWith("/pair")))
+      expect(JSON.parse(String(c.init.body))).toEqual({ code: "NEW-22" });
+  });
+
+  test("an already paired or closed bridge is waited out the same way", async () => {
+    for (const refusal of ["paired", "locked"]) {
+      let up = true;
+      const old = oldBridge(refusal, () => up);
+      const told: (string | null)[] = [];
+      const polling = createBridgeClient({ fetch: old.fetch }).pollPair("NEW-22", {
+        intervalMs: 5,
+        onBlocked: (r) => told.push(r ? r.code : null),
+      });
+      await new Promise((r) => setTimeout(r, 30));
+      up = false;
+      expect(await polling).toBe(TOKEN);
+      expect(told, refusal).toEqual([refusal, null]);
+    }
+  });
+
+  test("a bridge that was stopped and started again in between is noticed by its name", async () => {
+    // The port never goes quiet between two looks: the new bridge answers /status at once, with
+    // another instance. The old one's refusal is over; the code goes to the new one.
+    let fresh = false;
+    const s = stub((url) => {
+      const path = url.slice(BRIDGE_URL.length);
+      if (path === "/pair" && fresh) return json({ token: TOKEN });
+      if (path === "/pair")
+        return json({ error: "wrong_code", message: "No.", instance: "old00001" }, 403);
+      fresh = true;
+      return json({ error: "unauthorized", message: "Pair first.", instance: "new00002" }, 401);
+    });
+    const told: unknown[] = [];
+    const token = await createBridgeClient({ fetch: s.fetch }).pollPair("NEW-22", {
+      intervalMs: 1,
+      onBlocked: (r) => told.push(r),
+    });
+    expect(token).toBe(TOKEN);
+    // It never stayed long enough to be called a blocker.
+    expect(told).toEqual([]);
+  });
+
+  test("a bridge on its way out is waited for without a word", async () => {
+    let up = true;
+    const s = stub((url) => {
+      if (!up) {
+        if (url.endsWith("/pair")) return json({ token: TOKEN });
+        throw new TypeError("Failed to fetch");
+      }
+      return json(
+        { error: "stopping", message: "The bridge is stopping.", instance: "old00001" },
+        503,
+      );
+    });
+    const told: unknown[] = [];
+    const polling = createBridgeClient({ fetch: s.fetch }).pollPair("NEW-22", {
+      intervalMs: 5,
+      onBlocked: (r) => told.push(r),
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    up = false;
+    expect(await polling).toBe(TOKEN);
+    expect(told).toEqual([]);
+  });
+
+  test("a bridge that names no instance is waited out until nothing answers", async () => {
+    let up = true;
+    const s = stub((url) => {
+      const path = url.slice(BRIDGE_URL.length);
+      if (!up) {
+        if (path === "/pair") return json({ token: TOKEN });
+        throw new TypeError("Failed to fetch");
+      }
+      return json({ error: path === "/pair" ? "wrong_code" : "unauthorized", message: "No." }, 403);
+    });
+    const polling = createBridgeClient({ fetch: s.fetch }).pollPair("NEW-22", { intervalMs: 5 });
+    await new Promise((r) => setTimeout(r, 30));
+    up = false;
+    expect(await polling).toBe(TOKEN);
+  });
+
+  test("cancelling while an old bridge is waited out stops it with an AbortError", async () => {
+    const old = oldBridge("wrong_code", () => true);
+    const controller = new AbortController();
+    const polling = createBridgeClient({ fetch: old.fetch }).pollPair("NEW-22", {
+      intervalMs: 5,
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 40);
+    await expect(polling).rejects.toMatchObject({ name: "AbortError" });
+    const asked = old.asked.length;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(old.asked).toHaveLength(asked);
   });
 
   test("cancelling stops it with an AbortError", async () => {
@@ -311,22 +463,81 @@ describe("following a run", () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
-  test("a stream that ends without an exit means the bridge is gone", async () => {
+  test("a stream that ends early is asked for again from the last line seen", async () => {
+    let n = 0;
+    const s = stub(() => {
+      n += 1;
+      return n === 1
+        ? stream([event("line", { text: "one" }, 1), event("line", { text: "two" }, 2)])
+        : stream([
+            event("line", { text: "three" }, 3),
+            event("exit", { code: 0, signal: null, status: "done" }),
+          ]);
+    });
+    const lines: string[] = [];
+    const exits: unknown[] = [];
+    await createBridgeClient({ fetch: s.fetch, resumeMs: 1 }).follow(TOKEN, "run-0a1b2c3d", {
+      onLine: (t) => lines.push(t),
+      onExit: (e) => exits.push(e),
+    });
+    expect(lines).toEqual(["one", "two", "three"]);
+    expect(exits).toEqual([{ code: 0, signal: null, status: "done" }]);
+    expect(s.calls).toHaveLength(2);
+    expect(s.calls[0].headers.has("last-event-id")).toBe(false);
+    expect(s.calls[1].headers.get("last-event-id")).toBe("2");
+    expect(s.calls[1].headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+  });
+
+  test("a stream that breaks is asked for again the same way", async () => {
+    let n = 0;
+    const s = stub(() => {
+      n += 1;
+      if (n > 1) return stream([event("exit", { code: 0, signal: null, status: "done" })]);
+      // One line gets through, then the connection breaks.
+      let sent = false;
+      return new Response(
+        new ReadableStream({
+          pull(controller) {
+            if (sent) return controller.error(new TypeError("network error"));
+            sent = true;
+            controller.enqueue(new TextEncoder().encode(event("line", { text: "one" }, 1)));
+          },
+        }),
+      );
+    });
+    const onExit = vi.fn();
+    await createBridgeClient({ fetch: s.fetch, resumeMs: 1 }).follow(TOKEN, "run-0a1b2c3d", {
+      onLine: vi.fn(),
+      onExit,
+    });
+    expect(s.calls[1].headers.get("last-event-id")).toBe("1");
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  test("a stream that keeps ending without an exit means the bridge is gone", async () => {
     const s = stub(() => stream([event("line", { text: "working" }, 1)]));
     const onLine = vi.fn();
-    const err = await createBridgeClient({ fetch: s.fetch })
+    const err = await createBridgeClient({ fetch: s.fetch, resumeMs: 1 })
       .follow(TOKEN, "run-0a1b2c3d", { onLine, onExit: vi.fn() })
       .catch((e: unknown) => e);
     expect(onLine).toHaveBeenCalledWith("working");
     expect(err).toBeInstanceOf(BridgeUnreachableError);
+    // The first request and two more, then it gives up.
+    expect(s.calls).toHaveLength(3);
   });
 
-  test("a stream that breaks is the same", async () => {
-    const s = stub(() => stream([event("line", { text: "working" }, 1)], "error"));
-    const err = await createBridgeClient({ fetch: s.fetch })
+  test("a bridge that does not come back when asked again is unreachable", async () => {
+    let n = 0;
+    const s = stub(() => {
+      n += 1;
+      if (n > 1) throw new TypeError("Failed to fetch");
+      return stream([event("line", { text: "working" }, 1)]);
+    });
+    const err = await createBridgeClient({ fetch: s.fetch, resumeMs: 1 })
       .follow(TOKEN, "run-0a1b2c3d", { onLine: vi.fn(), onExit: vi.fn() })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BridgeUnreachableError);
+    expect(s.calls).toHaveLength(2);
   });
 
   test("a refusal before the stream starts is a BridgeError", async () => {

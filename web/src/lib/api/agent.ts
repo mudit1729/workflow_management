@@ -2,7 +2,7 @@
 // dashboard. The hooks below are what the UI builds on:
 //
 //   useAgent()           the connection, live: `{ status, agent, mode, host, repo, ... }`
-//   useAgentControls()   begin(agent), cancel(), disconnect(), simulate(), recheck()
+//   useAgentControls()   begin(agent), retry(), cancel(), disconnect(), simulate(), recheck()
 //   usePreferredAgent()  the agent the buttons should name: the connected one, else the last chosen
 //
 // How a connection comes about:
@@ -10,6 +10,10 @@
 //  - In the dev server the dashboard polls the real bridge on 127.0.0.1:7457 until it answers with
 //    the code (`mode: "bridge"`). `simulate()` is the escape hatch: it pairs at once with the
 //    prototype's own answers (`mode: "simulated"`).
+//  - An old bridge that still runs (the one of the last pairing) refuses the new code. That is not
+//    the end of the pairing: `note` says to stop it, and the polling goes on with the same code
+//    once it is gone, so the command on screen stays the right one. `retry()` polls again with the
+//    current code; only `begin` makes a new one.
 //  - The static build (`VITE_STATIC=1`, the published artifact) cannot reach 127.0.0.1, so there
 //    `begin` pairs in simulated mode by itself after about 2.5 s. `isStaticBuild` tells the two apart;
 //    the screen says "Prototype: the bridge answers by itself".
@@ -47,6 +51,10 @@ export const SIMULATED_PAIR_MS = 2500;
 const HEARTBEAT_MS = 15_000;
 
 const NONE: AgentConnection = { status: "none" };
+
+/** Shown while an old bridge holds the port and refuses the new code. */
+export const BLOCKED_NOTE =
+  "Another bridge is still running. Press Ctrl+C in its terminal, then run this.";
 
 // ---------------------------------------------------------------- the error
 
@@ -89,12 +97,19 @@ export interface AgentControls {
   /**
    * Start connecting `agent`: make a pair code and the command to copy, and set `pairing`. Resolves
    * at once with that pairing connection; it does not wait for the bridge. Watch `useAgent()`.
-   * Any earlier connection or pairing ends first (the old bridge's token is revoked).
+   * Any earlier connection or pairing ends first (the old bridge is told to disconnect, which
+   * stops it).
    */
   begin: (agent: AgentKind) => Promise<AgentConnection>;
+  /**
+   * A pairing that stopped (`problem`): poll the bridge again with the same code and command, which
+   * the person may already have started. Does nothing for any other status. `begin` would make a
+   * new code that the running bridge does not hold.
+   */
+  retry: () => void;
   /** Stop a pairing: back to `none`. Does nothing for any other status. */
   cancel: () => void;
-  /** End the connection: the bridge is told to forget the token, and the status is `none`. */
+  /** End the connection: the bridge is told to disconnect (it stops, with its runs), and the status is `none`. */
   disconnect: () => void;
   /**
    * Prototype: connect at once in simulated mode, as the agent being paired, or the preferred one.
@@ -124,6 +139,11 @@ interface Saved {
 }
 
 const isKind = (x: unknown): x is AgentKind => x === "codex" || x === "claude";
+
+/** The address the dashboard is served from; the bridge must allow it. Absent outside a browser. */
+function pageOrigin(): string | undefined {
+  return typeof location === "undefined" ? undefined : location.origin;
+}
 
 function browserStorage(): AgentStorage | null {
   try {
@@ -190,6 +210,7 @@ export function createAgentStore(options: AgentStoreOptions = {}): AgentStore {
               ...c,
               status: c.status === "pairing" ? "pairing" : "connected",
               problem: undefined,
+              note: undefined,
               token,
             }
           : undefined,
@@ -248,7 +269,7 @@ export function createAgentStore(options: AgentStoreOptions = {}): AgentStore {
     beat = setInterval(() => void check(2), heartbeatMs);
   }
 
-  /** Forget the bridge: tell it, best effort, to drop the token. */
+  /** Forget the bridge: tell it, best effort, to disconnect. It drops the token and stops. */
   function revoke() {
     const old = token;
     token = undefined;
@@ -313,6 +334,8 @@ export function createAgentStore(options: AgentStoreOptions = {}): AgentStore {
       startBeat();
     } catch {
       if (id !== generation) return;
+      // The token is nobody's now: give it back, or that bridge stays paired and refuses the code.
+      giveBack();
       set({ ...connection, problem: "The bridge paired, then stopped answering. Try again." });
     }
   }
@@ -339,19 +362,22 @@ export function createAgentStore(options: AgentStoreOptions = {}): AgentStore {
     }
     const controller = new AbortController();
     polling = controller;
-    client.pollPair(code, { signal: controller.signal }).then(
-      (t) => finishPairing(id, t),
-      (e) => {
-        if (id !== generation || controller.signal.aborted) return;
-        const problem =
-          e instanceof BridgeError && e.code === "wrong_code"
-            ? "A bridge answered, but with another code. Stop it (Ctrl+C) and run the command again."
-            : e instanceof BridgeError
-              ? e.message
-              : "The bridge could not be reached.";
-        set({ ...connection, problem });
-      },
-    );
+    client
+      .pollPair(code, {
+        signal: controller.signal,
+        onBlocked: (refusal) => {
+          if (id !== generation || controller.signal.aborted) return;
+          set({ ...connection, note: refusal ? BLOCKED_NOTE : undefined });
+        },
+      })
+      .then(
+        (t) => finishPairing(id, t),
+        (e) => {
+          if (id !== generation || controller.signal.aborted) return;
+          const problem = e instanceof BridgeError ? e.message : "The bridge could not be reached.";
+          set({ ...connection, note: undefined, problem });
+        },
+      );
   }
 
   // ---- the store
@@ -362,8 +388,13 @@ export function createAgentStore(options: AgentStoreOptions = {}): AgentStore {
   const store: AgentStore = {
     begin: async (agent) => {
       const code = makePairCode();
-      startPairing(agent, code, pairCommand(agent, code));
+      startPairing(agent, code, pairCommand(agent, code, staticBuild ? undefined : pageOrigin()));
       return connection;
+    },
+    retry: () => {
+      const { status, agent, pairCode, command } = connection;
+      if (status === "pairing" && agent && pairCode && command)
+        startPairing(agent, pairCode, command);
     },
     cancel: () => {
       if (connection.status !== "pairing") return;
@@ -428,6 +459,7 @@ export const agentStore: AgentStore = createAgentStore();
 /** The same controls without a hook, for code that is not a component (the palette's commands). */
 export const agentControls: AgentControls = {
   begin: agentStore.begin,
+  retry: agentStore.retry,
   cancel: agentStore.cancel,
   disconnect: agentStore.disconnect,
   simulate: agentStore.simulate,
@@ -439,7 +471,7 @@ export function useAgent(): AgentConnection {
   return useSyncExternalStore(agentStore.subscribe, agentStore.get, agentStore.get);
 }
 
-/** begin, cancel, disconnect, simulate, recheck. The object never changes. */
+/** begin, retry, cancel, disconnect, simulate, recheck. The object never changes. */
 export function useAgentControls(): AgentControls {
   return agentControls;
 }

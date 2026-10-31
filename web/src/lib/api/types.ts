@@ -191,8 +191,10 @@ export interface AgentSkills {
  *
  * - `none`: no agent. `agent` is absent.
  * - `pairing`: waiting for the bridge. `pairCode` and `command` are set; show the command to copy.
- *   `problem` appears when pairing stopped for good (a wrong code, a closed bridge): offer to try
- *   again, which makes a new code. `mode` says how it ends: `simulated` pairs by itself.
+ *   `note` appears while an old bridge still holds the port and refuses the code: not an error, the
+ *   pairing goes on by itself once that bridge is stopped. `problem` appears when pairing stopped
+ *   (the bridge answered with something else, or not at all): offer to try again, which polls with
+ *   the same code (`retry`). `mode` says how it ends: `simulated` pairs by itself.
  * - `connected`: the agent answers. `host`, `repo`, `version`, `workspace`, `skills` and `since` are set.
  * - `lost`: it was connected and stopped answering (the bridge was closed or restarted). The fields
  *   of the last status stay, `problem` says why. Connect again, or check again.
@@ -219,6 +221,8 @@ export interface AgentConnection {
   since?: Ts;
   /** Why pairing stopped, or why the agent is lost. A plain sentence. */
   problem?: string;
+  /** What the person can do while pairing waits ("Another bridge is still running. ..."). Not an error. */
+  note?: string;
 }
 
 // ---------------------------------------------------------------- Codex runs

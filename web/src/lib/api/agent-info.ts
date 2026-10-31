@@ -45,9 +45,42 @@ export function makePairCode(
   return `${chars.slice(0, 4).join("")}-${chars.slice(4).join("")}`;
 }
 
-/** The command the person runs in the repository: the bridge, for this agent, with this code. */
-export const pairCommand = (kind: AgentKind, code: string) =>
-  `node plugins/workflow/scripts/wf-bridge.mjs --agent ${kind} --pair ${code}`;
+/** The origins the bridge allows without being told (`--origin`): the dev server's. */
+export const BRIDGE_DEFAULT_ORIGINS: readonly string[] = [
+  "http://localhost:5177",
+  "http://127.0.0.1:5177",
+];
+
+/**
+ * The command the person runs in the repository: the bridge, for this agent, with this code. A
+ * dashboard served from any other address (`vite preview`, a LAN host) passes its `origin`, which
+ * the command then allows with `--origin`; the bridge refuses an origin it was not told.
+ */
+export function pairCommand(kind: AgentKind, code: string, origin?: string): string {
+  const base = `node plugins/workflow/scripts/wf-bridge.mjs --agent ${kind} --pair ${code}`;
+  if (!origin || BRIDGE_DEFAULT_ORIGINS.includes(origin)) return base;
+  // Quoted when it holds anything a shell reads (an IPv6 host has brackets).
+  return `${base} --origin ${/^[\w.:/-]+$/.test(origin) ? origin : `'${origin.replace(/'/g, "'\\''")}'`}`;
+}
+
+/**
+ * What a headless Claude Code needs allowed to run `doing-next-step` in `acceptEdits` mode: the two
+ * helper scripts, `git add`, `git commit` and the project's checks (swap `pnpm` for the tool the
+ * tasks' `verify` commands use). Without them the claim, verify and commit steps are skipped, and
+ * `Bash(git *)` alone does not help: the scripts stay denied. Run against a real `claude -p`; the
+ * plugin README shows the same list (a test keeps them equal).
+ */
+export const CLAUDE_ALLOWED_TOOLS: readonly string[] = [
+  "Bash(*/wf-env.sh *)",
+  "Bash(*/wf-status.sh *)",
+  "Bash(git add *)",
+  "Bash(git commit *)",
+  "Bash(pnpm *)",
+];
+
+/** The extra arguments of the bridge that pass `CLAUDE_ALLOWED_TOOLS` on: `-- --allowedTools '…' '…'`. */
+export const claudeAllowFlags = (): string =>
+  `-- --allowedTools ${CLAUDE_ALLOWED_TOOLS.map((tool) => `'${tool}'`).join(" ")}`;
 
 // ---------------------------------------------------------------- the simulated bridge
 

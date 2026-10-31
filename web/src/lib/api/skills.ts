@@ -9,7 +9,9 @@ import { isRealApi, loadMock } from "./mock-bridge";
 
 /**
  * The team's repository: what `/plugin marketplace add` points at, and what the install panel
- * names. One place to change it.
+ * names. It is the `repository` of `plugins/workflow/.claude-plugin/plugin.json`, which
+ * `scripts/install-skills.sh --claude-plugin` reads too; `web/scripts/install-skills.test.ts`
+ * keeps the two equal.
  */
 export const SKILLS_REPO = "mudit1729/workflow_management";
 
