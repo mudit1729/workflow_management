@@ -4,14 +4,17 @@
 //
 // Do next step needs a connected agent (plan D12). Where none is, the click is not an error: it
 // opens the connect flow, which remembers the issue and starts the run once the agent is
-// connected (`askToConnect`, `useResumeNextStep`). An agent that was lost opens the Agent panel
-// instead, where Reconnect is. Nothing is toasted for either: the dialog is the answer.
+// connected (`askToConnect`, `useResumeNextStep`). An agent that was lost is asked once whether it
+// answers again (its heartbeat stopped, so nothing else would notice); if it does the run starts at
+// once, and if not the Agent panel opens, where Reconnect is. Nothing is toasted for either: the
+// dialog is the answer.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type AgentThen, openAgent, openAgentPanel } from "@/app/shell-store";
 import type { IssueId } from "@/gen/types";
 import {
   AgentNotConnectedError,
+  agentControls,
   type CodexRun,
   type CodexRunKind,
   useCodexRuns,
@@ -37,18 +40,29 @@ export function askToConnect(
   else openAgent({ then });
 }
 
-/** `start`, except that a missing agent asks to be connected and resolves to nothing. */
-async function startOrConnect(
+/**
+ * `start`, except that a missing agent asks to be connected and resolves to nothing. A lost agent
+ * is asked once whether it answers again before the panel opens: the bridge may be back, and the
+ * person should not have to find "Check again" to start a step.
+ */
+export async function startOrConnect(
   start: (issueId: IssueId, kind: CodexRunKind) => Promise<CodexRun | undefined>,
   issueId: IssueId,
   kind: CodexRunKind,
 ): Promise<CodexRun | undefined> {
-  try {
-    return await start(issueId, kind);
-  } catch (err) {
-    if (!(err instanceof AgentNotConnectedError)) throw err;
-    askToConnect(issueId, kind, err.status);
-    return undefined;
+  let asked = false;
+  for (;;) {
+    try {
+      return await start(issueId, kind);
+    } catch (err) {
+      if (!(err instanceof AgentNotConnectedError)) throw err;
+      if (err.status === "lost" && !asked) {
+        asked = true;
+        if ((await agentControls.recheck()).status === "connected") continue;
+      }
+      askToConnect(issueId, kind, err.status);
+      return undefined;
+    }
   }
 }
 
@@ -246,16 +260,17 @@ export function useNextStep(issue: CodexIssue | undefined): NextStep {
 /**
  * The run a connect flow was opened for (`AgentThen`), started now that the agent is connected. The
  * same path as the card menu's Do next step, so the run, its card marker and its one toast are the
- * same. Returns at once; an issue that is gone starts nothing.
+ * same. Resolves to the run once it has started (the dialog that asked puts focus on its strip),
+ * and to nothing for an issue that is gone.
  */
-export function useResumeNextStep(): (then: AgentThen) => void {
+export function useResumeNextStep(): (then: AgentThen) => Promise<CodexRun | undefined> {
   const issues = useIssueMap();
   const { start } = useStartCodexRun();
   const openIssue = useOpenIssue();
   return useCallback(
-    (then) => {
+    async (then) => {
       const issue = issues.get(then.issueId);
-      if (issue) void runNextStep(issue, start, openIssue);
+      return issue ? runNextStep(issue, start, openIssue) : undefined;
     },
     [issues, start, openIssue],
   );

@@ -39,6 +39,13 @@ const SHORT: Record<CodexPhaseId, string> = {
 export const isBridgeRun = (run: CodexRun): boolean => run.source === "bridge";
 
 /**
+ * A run on a real bridge that failed because the bridge stopped answering (the data layer's own
+ * reason starts "Lost the bridge"). Nothing in the issue answers it: the Agent panel does.
+ */
+export const lostBridge = (run: CodexRun): boolean =>
+  isBridgeRun(run) && run.status === "failed" && /^Lost the bridge/.test(run.reason ?? "");
+
+/**
  * The line for a run: what it is doing now, or how it ended. `host` is the computer a bridge run
  * works on ("Running on laptop"); a run on the prototype's own simulation has no use for it.
  */

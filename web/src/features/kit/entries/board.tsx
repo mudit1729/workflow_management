@@ -189,7 +189,11 @@ function KanbanColumnBody() {
       <V label="ColumnHeader" width={264}>
         <ColumnHeader status="review" count={3} onFold={() => undefined} />
       </V>
-      <V label="EmptyDropArea · resting" width={248}>
+      <V
+        label="EmptyDropArea · resting"
+        note="One faint line, no box. The column is the drop zone."
+        width={248}
+      >
         <EmptyDropArea status="done" active={false} />
       </V>
       <V label="EmptyDropArea · drop active" width={248}>

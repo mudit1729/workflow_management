@@ -5,7 +5,7 @@ import { Check, Copy, Terminal, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { copyText } from "@/components/common";
 import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from "@/components/ui";
-import { type AgentKind, agentCommand, agentName, usePreferredAgent } from "@/lib/api";
+import { type AgentKind, agentCommand, agentName, useAgent, usePreferredAgent } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { type CodexIssue, copyCodexCommand, openInAgentHint } from "./open-in-codex";
 
@@ -24,6 +24,7 @@ export interface OpenInCodexPanelProps {
 /** The prompt, the command, two Copy buttons and a line on what Do next step does instead. */
 export function OpenInCodexPanel({ issue, copied, agent }: OpenInCodexPanelProps) {
   const preferred = usePreferredAgent();
+  const connected = useAgent().status === "connected";
   const name = agentName(agent ?? preferred);
   const { prompt, command } = agentCommand(agent ?? preferred, issue);
   return (
@@ -70,7 +71,7 @@ export function OpenInCodexPanel({ issue, copied, agent }: OpenInCodexPanelProps
 
       <p className="text-fg-faint text-xs leading-snug">
         {name} reads current_state.md first and does the rest with the wf skills. Do next step runs
-        it for you once an agent is connected.
+        it for you{connected ? "" : " once an agent is connected"}.
       </p>
     </div>
   );

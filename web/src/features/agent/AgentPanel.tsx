@@ -3,10 +3,10 @@
 // so it opens from anywhere (the nav row, the palette, a Do next step on a lost agent) and on a
 // phone. `AgentPanelBody` is the inside, shared with the gallery.
 import { Check, TriangleAlert } from "lucide-react";
-import { type ReactNode, useCallback } from "react";
+import { type ReactNode, useCallback, useRef } from "react";
 import { useShell } from "@/app/shell-store";
 import { RelativeTime } from "@/components/common";
-import { Button, Chip, Dialog, DialogContent, DialogFooter } from "@/components/ui";
+import { Button, Chip, Dialog, DialogContent, DialogFooter, Tooltip } from "@/components/ui";
 import { isBridgeRun, RunGlyph, runDetail, runLine, useResumeNextStep } from "@/features/codex";
 import {
   type AgentConnection,
@@ -20,6 +20,7 @@ import {
 import { useOpenIssue } from "@/lib/nav";
 import { connectionAgent, modeLabel, otherAgent, skillsLine } from "./agent-copy";
 import { InstallSkills } from "./ConnectScreens";
+import { settleFocus } from "./close-focus";
 import { AgentTile, Facts, StatusDot } from "./parts";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -57,6 +58,23 @@ export function AgentPanelBody({
   const agent = connectionAgent(c);
   const name = agentName(agent);
   const known = c.status === "connected" || c.status === "lost";
+  // Disconnecting tells a real bridge to stop, and a run that goes on it ends with it.
+  const stops =
+    c.mode === "bridge"
+      ? `Stops the bridge on ${c.host ?? "this computer"}${
+          runs.some((r) => r.status === "running" && isBridgeRun(r))
+            ? " and the run that is going"
+            : ""
+        }`
+      : undefined;
+  // The step that waits for the agent (Do next step opened the panel), in words. The id does not
+  // break at its hyphen.
+  const waiting = waitingFor ? (
+    <>
+      {c.status === "lost" ? "Reconnect" : "Connect an agent"}, then Do next step starts on{" "}
+      <span className="whitespace-nowrap">{waitingFor}</span>.
+    </>
+  ) : undefined;
 
   return (
     <div data-wf="AgentPanel" data-status={c.status} className="flex flex-col gap-4">
@@ -84,30 +102,31 @@ export function AgentPanelBody({
         <StatusChip status={c.status} />
       </header>
 
-      {waitingFor && (
-        <p
-          data-wf="AgentWaiting"
-          className="rounded-md bg-accent-subtle px-2.5 py-1.5 text-base text-fg leading-snug"
-        >
-          {c.status === "lost"
-            ? `Reconnect, then Do next step starts on ${waitingFor}.`
-            : `Connect an agent, then Do next step starts on ${waitingFor}.`}
-        </p>
-      )}
-
-      {c.status === "lost" && (
+      {c.status === "lost" ? (
+        // One warning: the sentence about the step that waits is its second line, not a band of its own.
         <div
           role="status"
           className="flex items-start gap-2 rounded-md bg-stale/12 py-1.5 pr-1.5 pl-2.5 text-base"
         >
           <TriangleAlert {...ICON} aria-hidden className="mt-px shrink-0 text-stale-text" />
-          <span className="min-w-0 flex-1 text-fg leading-snug">
-            {c.problem ?? `${name} stopped answering.`}
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5 leading-snug">
+            <span className="text-fg">{c.problem ?? `${name} stopped answering.`}</span>
+            {waiting && (
+              <span data-wf="AgentWaiting" className="text-fg-muted">
+                {waiting}
+              </span>
+            )}
           </span>
           <Button variant="ghost" size="sm" onClick={onCheck} className="-my-0.5 shrink-0">
             Check again
           </Button>
         </div>
+      ) : (
+        waiting && (
+          <p data-wf="AgentWaiting" className="text-base text-fg-muted leading-snug">
+            {waiting}
+          </p>
+        )
       )}
 
       {c.status === "none" && (
@@ -146,9 +165,11 @@ export function AgentPanelBody({
 
       <DialogFooter className="mt-0 flex-wrap">
         {known && (
-          <Button variant="ghost" onClick={onDisconnect} className="mr-auto">
-            Disconnect
-          </Button>
+          <Tooltip content={stops} disabled={!stops}>
+            <Button variant="ghost" onClick={onDisconnect} className="mr-auto">
+              Disconnect
+            </Button>
+          </Tooltip>
         )}
         {c.status === "none" && (
           <Button variant="primary" onClick={onConnect}>
@@ -166,9 +187,16 @@ export function AgentPanelBody({
           </>
         )}
         {known && (
-          <Button variant="secondary" onClick={() => onSwitch(otherAgent(agent))}>
-            Switch to {agentName(otherAgent(agent))}
-          </Button>
+          <Tooltip
+            content={
+              stops && `${stops}. Then you start the ${agentName(otherAgent(agent))} bridge.`
+            }
+            disabled={!stops}
+          >
+            <Button variant="secondary" onClick={() => onSwitch(otherAgent(agent))}>
+              Switch to {agentName(otherAgent(agent))}
+            </Button>
+          </Tooltip>
         )}
         {c.status === "lost" && (
           <Button variant="primary" onClick={onReconnect}>
@@ -228,32 +256,29 @@ function Section({
   );
 }
 
-/** Skills installed, the names of the ones that are missing, and the commands that fix it. */
+/**
+ * Skills installed, and the commands that fix it. The names of the missing ones are shown only when
+ * some are installed: all eight missing says nothing the count has not said.
+ */
 function Skills({ connection: c, agent }: { connection: AgentConnection; agent: AgentKind }) {
   if (!c.skills) return null;
   const line = skillsLine(c.skills, agent);
-  const total = c.skills.installed.length + c.skills.missing.length;
   return (
-    <Section
-      title="Skills"
-      aside={line.ok ? undefined : `${c.skills.installed.length} of ${total} installed`}
-    >
+    <Section title="Skills">
       <p className="flex items-start gap-1.5 text-base text-fg">
         {line.ok ? (
           <Check {...ICON} aria-hidden className="mt-px shrink-0 text-status-done" />
         ) : (
           <TriangleAlert {...ICON} aria-hidden className="mt-px shrink-0 text-stale-text" />
         )}
-        {line.text}
+        {line.value}
       </p>
-      {!line.ok && (
-        <>
-          <p className="text-fg-muted text-sm leading-snug">
-            Missing: <span className="font-mono text-xs">{c.skills.missing.join(", ")}</span>
-          </p>
-          <InstallSkills agent={agent} />
-        </>
+      {line.partial && (
+        <p className="text-fg-muted text-sm leading-snug">
+          Missing: <span className="font-mono text-xs">{c.skills.missing.join(", ")}</span>
+        </p>
       )}
+      {!line.ok && <InstallSkills agent={agent} />}
     </Section>
   );
 }
@@ -312,6 +337,8 @@ function Runs({
 export function AgentPanel() {
   const open = useShell((s) => s.agentPanelOpen);
   const setOpen = useShell((s) => s.setAgentPanelOpen);
+  // The run that Check again started as the panel closed: its strip takes focus.
+  const started = useRef<Promise<CodexRun | undefined>>(undefined);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
@@ -322,16 +349,27 @@ export function AgentPanel() {
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+          started.current = undefined;
+        }}
+        // Radix returns focus to the opener, unless a run replaced it.
+        onCloseAutoFocus={(e) => {
+          if (!started.current) return;
+          e.preventDefault();
+          void settleFocus(null, started.current);
         }}
       >
-        <AgentPanelContent />
+        <AgentPanelContent onStarted={(run) => (started.current = run)} />
       </DialogContent>
     </Dialog>
   );
 }
 
 /** The panel's inside, tied to the connection. Mounted only while the dialog is open. */
-function AgentPanelContent() {
+function AgentPanelContent({
+  onStarted,
+}: {
+  onStarted: (run: Promise<CodexRun | undefined>) => void;
+}) {
   const then = useShell((s) => s.agentStart?.then);
   const setOpen = useShell((s) => s.setAgentPanelOpen);
   const openFlow = useShell((s) => s.setAgentOpen);
@@ -346,8 +384,8 @@ function AgentPanelContent() {
     // The agent answers again: the step that was waiting for it starts, and the panel has done its job.
     if (now.status !== "connected" || !then) return;
     setOpen(false);
-    resume(then);
-  }, [controls, then, setOpen, resume]);
+    onStarted(resume(then));
+  }, [controls, then, setOpen, resume, onStarted]);
 
   return (
     <AgentPanelBody

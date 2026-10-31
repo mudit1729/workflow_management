@@ -19,15 +19,19 @@ export function AgentTile({ kind, px = 16 }: { kind: AgentKind; px?: number }) {
 
 /**
  * One dot for a connection: hollow when there is none, a pulse while it pairs, green when it
- * answers, amber when it stopped. Color only means status.
+ * answers, amber when it stopped. Color only means status. `warn` turns the dot of a connected
+ * agent amber too: it answers, but something is left to fix (its skills are missing).
  */
 export function StatusDot({
   status,
+  warn,
   className,
 }: {
   status: AgentConnection["status"];
+  warn?: boolean;
   className?: string;
 }) {
+  const stale = status === "lost" || (status === "connected" && warn);
   return (
     <span
       aria-hidden
@@ -36,8 +40,8 @@ export function StatusDot({
         "inline-block size-1.5 shrink-0 rounded-full",
         status === "none" && "size-[7px] border border-fg-faint",
         status === "pairing" && "animate-pulse bg-status-in_progress motion-reduce:animate-none",
-        status === "connected" && "bg-status-done",
-        status === "lost" && "bg-stale",
+        status === "connected" && !stale && "bg-status-done",
+        stale && "bg-stale",
         className,
       )}
     />
@@ -90,6 +94,21 @@ export function CopyAction({
   );
 }
 
+/**
+ * The arguments of a command as the lines may break it: a flag stays with its value
+ * (`--agent claude`), so a line breaks between arguments and never inside one.
+ */
+function commandUnits(command: string): string[] {
+  const units: string[] = [];
+  for (const word of command.split(" ")) {
+    const last = units.at(-1);
+    if (last && /^--?[\w-]+$/.test(last) && !word.startsWith("-"))
+      units[units.length - 1] = `${last} ${word}`;
+    else units.push(word);
+  }
+  return units;
+}
+
 /** A command to paste in a terminal: a `$`, the command on as many lines as it needs, Copy. */
 export function CommandBox({
   command,
@@ -112,18 +131,18 @@ export function CommandBox({
         $
       </span>
       <code className="min-w-0 flex-1 select-text whitespace-pre-wrap py-[3px] font-mono text-fg text-sm leading-[18px]">
-        {/* A line breaks between words, and after a slash if a path is wider than the box; never inside `--agent`. */}
-        {command.split(" ").map((word, i, words) => (
+        {/* A line breaks between arguments, and after a slash if a path is wider than the box; never inside `--agent claude` or at the hyphen of `wf-bridge.mjs`. */}
+        {commandUnits(command).map((unit, i, units) => (
           <Fragment key={i}>
-            <span className="inline-block max-w-full break-words">
-              {word.split(/(?<=\/)/).map((part, j) => (
+            <span className="inline-block max-w-full">
+              {unit.split(/(?<=\/)/).map((part, j) => (
                 <Fragment key={j}>
                   {j > 0 && <wbr />}
-                  {part}
+                  <span className="whitespace-nowrap">{part}</span>
                 </Fragment>
               ))}
             </span>
-            {i < words.length - 1 && " "}
+            {i < units.length - 1 && " "}
           </Fragment>
         ))}
       </code>

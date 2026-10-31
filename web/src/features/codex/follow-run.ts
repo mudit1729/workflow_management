@@ -9,10 +9,12 @@
 // The mock stream and the polling of mounted `useCodexRuns` hooks carry the updates. `wf serve`
 // has no stream, so a run started there is announced while a hook polls it.
 import { toast } from "sonner";
+import { openAgentPanel } from "@/app/shell-store";
 import type { IssueId } from "@/gen/types";
 import { agentName, type CodexRun, connectCodexLive, qk, queryClient } from "@/lib/api";
 import type { IssueTab } from "@/lib/nav";
 import type { CodexIssue } from "./open-in-codex";
+import { isBridgeRun, lostBridge } from "./run-copy";
 
 /** Same shape as `useOpenIssue()` returns. */
 export type OpenIssue = (id: IssueId, opts?: { tab?: IssueTab }) => unknown;
@@ -48,7 +50,8 @@ function find(id: string, issue: IssueId): CodexRun | undefined {
 /**
  * Say how the run ended, once. A cancel is the person's own act and needs no toast, and a strip
  * on screen already says the rest. The agent's name is the run's own: it may not be the one that
- * is connected now. A run on a real bridge names no task.
+ * is connected now. A run on a real bridge names no task, and its failure has nothing to show in
+ * the plan: a lost bridge is answered in the Agent panel, an agent that exited has no button.
  */
 export function announce(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue) {
   if (stripShows(issue.id)) return;
@@ -60,9 +63,14 @@ export function announce(run: CodexRun, issue: CodexIssue, openIssue: OpenIssue)
       action: { label: "Open log", onClick: () => void openIssue(issue.id, { tab: "log" }) },
     });
   } else if (run.status === "failed") {
+    const action = !isBridgeRun(run)
+      ? { label: "Open plan", onClick: () => void openIssue(issue.id, { tab: "plan" }) }
+      : lostBridge(run)
+        ? { label: "Agent status", onClick: () => openAgentPanel() }
+        : undefined;
     toast.error(task ? `${name} failed on ${task}` : `${name} failed`, {
       description: run.reason,
-      action: { label: "Open plan", onClick: () => void openIssue(issue.id, { tab: "plan" }) },
+      action,
     });
   }
 }

@@ -7,6 +7,7 @@ import {
   initialAgent,
   initialStep,
   needsPairing,
+  pairCodeOf,
   primaryLabel,
   stepsFor,
 } from "./connect-flow";
@@ -67,6 +68,16 @@ describe("needsPairing", () => {
   it("keeps a pairing or a connection of the same agent", () => {
     expect(needsPairing("codex", codex)).toBe(false);
     expect(needsPairing("claude", pairing("claude"))).toBe(false);
+  });
+});
+
+describe("pairCodeOf", () => {
+  it("reads the code out of the command, for the line that stays once it is spent", () => {
+    expect(
+      pairCodeOf("node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 7RQT-KN"),
+    ).toBe("7RQT-KN");
+    expect(pairCodeOf("node plugins/workflow/scripts/wf-bridge.mjs --agent codex")).toBeUndefined();
+    expect(pairCodeOf(undefined)).toBeUndefined();
   });
 });
 

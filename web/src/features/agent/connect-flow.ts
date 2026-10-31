@@ -56,6 +56,10 @@ export function canContinue(step: StepId, agent: AgentKind, connection: AgentCon
   return true;
 }
 
+/** The code a pairing command carries (`--pair 4F7K-92`), for the line that stays once it is spent. */
+export const pairCodeOf = (command: string | undefined): string | undefined =>
+  command?.match(/--pair\s+(\S+)/)?.[1];
+
 /** The words of the last screen. `issueId` is the issue whose Do next step opened the flow. */
 export function doneCopy(
   connection: AgentConnection,

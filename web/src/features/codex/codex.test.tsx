@@ -34,6 +34,7 @@ import { RunNotice, RunProgress, RunStatus } from "./RunStatus";
 import { RunsList } from "./RunsPopover";
 import {
   activeRun,
+  lostBridge,
   plansFirst,
   reasonAction,
   runLine,
@@ -41,7 +42,7 @@ import {
   runsLabel,
   runWord,
 } from "./run-copy";
-import { askToConnect } from "./use-codex";
+import { askToConnect, startOrConnect } from "./use-codex";
 
 const ORDER: CodexPhaseId[] = ["claim", "log", "verify", "done"];
 
@@ -389,6 +390,33 @@ describe("a run on a real bridge", () => {
     expect(html).toContain("Failed: Codex exited with code 1.");
   });
 
+  it("offers no plan for a failed run on a bridge: the plan holds no answer to it", () => {
+    const failed = (reason: string) =>
+      view(<RunNotice run={bridgeRun("failed", { reason })} onOpen={() => undefined} />);
+    expect(failed("Codex exited with code 1.")).not.toContain("Open plan");
+    expect(failed("Codex exited with code 1.")).not.toContain("<button");
+    // A run of the prototype's own simulation held a task, and keeps its way to the plan.
+    expect(
+      view(
+        <RunNotice
+          run={run("failed", "log", { reason: "T-3 changed." })}
+          onOpen={() => undefined}
+        />,
+      ),
+    ).toContain("Open plan");
+  });
+
+  it("sends a lost bridge to the Agent panel, where Reconnect is", () => {
+    const reason = "Lost the bridge. Codex may still be working on your computer.";
+    const html = view(<RunNotice run={bridgeRun("failed", { reason })} onOpen={() => undefined} />);
+    expect(html).toContain("Agent status");
+    expect(html).not.toContain("Open plan");
+    expect(lostBridge(bridgeRun("failed", { reason }))).toBe(true);
+    expect(lostBridge(bridgeRun("failed", { reason: "Codex exited with code 1." }))).toBe(false);
+    // Only a run on a bridge can lose one.
+    expect(lostBridge(run("failed", "log", { reason }))).toBe(false);
+  });
+
   it("marks the card without a task id", () => {
     const html = view(<CodexRunMarker run={bridgeRun("running")} />);
     expect(html).toContain("Running");
@@ -458,6 +486,17 @@ describe("the labels follow the agent", () => {
     );
   });
 
+  it("says Do next step runs it, and asks for an agent only while none is connected", () => {
+    agentControls.disconnect();
+    expect(renderToStaticMarkup(<OpenInCodexPanel issue={issue} />)).toContain(
+      "Do next step runs it for you once an agent is connected.",
+    );
+    agentControls.simulate("claude");
+    const html = renderToStaticMarkup(<OpenInCodexPanel issue={issue} />);
+    expect(html).toContain("Do next step runs it for you.");
+    expect(html).not.toContain("once an agent is connected");
+  });
+
   it("says the same in the tooltip", () => {
     expect(openInAgentHint("claude")).toContain("claude command");
     expect(openInAgentHint("claude")).toContain("Claude Code");
@@ -478,6 +517,20 @@ describe("the labels follow the agent", () => {
   it("names no task for a run that picked none", () => {
     announce(bridgeRun("done"), issue, open);
     expect(toast.mock.calls[0]?.[0]).toBe("Codex finished");
+  });
+
+  it("points a failed run at the plan only when the plan can answer it", () => {
+    const action = (r: CodexRun) => {
+      toast.error.mockClear();
+      announce(r, issue, open);
+      const options = toast.error.mock.calls[0]?.[1] as { action?: { label: string } } | undefined;
+      return options?.action?.label;
+    };
+    expect(action(run("failed", "log", { reason: "T-3 changed." }))).toBe("Open plan");
+    expect(action(bridgeRun("failed", { reason: "Codex exited with code 1." }))).toBeUndefined();
+    expect(
+      action(bridgeRun("failed", { reason: "Lost the bridge. Codex may still be working." })),
+    ).toBe("Agent status");
   });
 });
 
@@ -536,5 +589,69 @@ describe("Do next step without an agent", () => {
   it("is what the start of a run asks for: a missing agent is an error that names its state", () => {
     expect(new AgentNotConnectedError("lost").status).toBe("lost");
     expect(new AgentNotConnectedError().status).toBe("none");
+  });
+});
+
+describe("Do next step on a lost agent", () => {
+  const state = () => useShell.getState();
+  const lost = new AgentNotConnectedError("lost");
+  const started = run("running", "claim");
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useShell.setState({ agentOpen: false, agentPanelOpen: false, agentStart: undefined });
+  });
+
+  /** A start that fails like a lost agent until `after` calls have been made. */
+  const flaky = (after: number) => {
+    let calls = 0;
+    return vi.fn(async () => {
+      calls += 1;
+      if (calls <= after) throw lost;
+      return started;
+    });
+  };
+
+  it("asks the bridge once, and starts the step with no dialog when it answers again", async () => {
+    const recheck = vi
+      .spyOn(agentControls, "recheck")
+      .mockResolvedValue(simulatedConnection("codex"));
+    const start = flaky(1);
+    await expect(startOrConnect(start, "wf-3k9x2", "next_step")).resolves.toBe(started);
+    expect(recheck).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(state().agentPanelOpen).toBe(false);
+    expect(state().agentOpen).toBe(false);
+  });
+
+  it("opens the Agent panel when the bridge still does not answer", async () => {
+    const recheck = vi
+      .spyOn(agentControls, "recheck")
+      .mockResolvedValue({ ...simulatedConnection("codex"), status: "lost" });
+    const start = flaky(5);
+    await expect(startOrConnect(start, "wf-3k9x2", "next_step")).resolves.toBeUndefined();
+    expect(recheck).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(state().agentPanelOpen).toBe(true);
+    expect(state().agentStart?.then?.issueId).toBe("wf-3k9x2");
+  });
+
+  it("asks only once, even if the agent is lost again at once", async () => {
+    const recheck = vi
+      .spyOn(agentControls, "recheck")
+      .mockResolvedValue(simulatedConnection("codex"));
+    await startOrConnect(flaky(5), "wf-3k9x2", "next_step");
+    expect(recheck).toHaveBeenCalledTimes(1);
+    expect(state().agentPanelOpen).toBe(true);
+  });
+
+  it("does not ask the bridge when no agent was ever connected", async () => {
+    const recheck = vi.spyOn(agentControls, "recheck");
+    const start = vi.fn(async () => {
+      throw new AgentNotConnectedError("none");
+    });
+    await expect(startOrConnect(start, "wf-3k9x2", "next_step")).resolves.toBeUndefined();
+    expect(recheck).not.toHaveBeenCalled();
+    expect(state().agentOpen).toBe(true);
   });
 });

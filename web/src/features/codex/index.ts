@@ -2,6 +2,7 @@
 // marks of a run.
 export { CodexActions, type CodexActionsProps } from "./CodexActions";
 export { CodexRunMarker, type CodexRunMarkerProps } from "./CodexRunMarker";
+export { focusRunStrip } from "./focus-run";
 export { OpenInCodex, OpenInCodexPanel, type OpenInCodexPanelProps } from "./OpenInCodex";
 export {
   type CodexIssue,
@@ -13,6 +14,7 @@ export { RunNotice, RunProgress, RunStatus, type RunStatusProps } from "./RunSta
 export { RunGlyph, RunsList, RunsPopover, runDetail } from "./RunsPopover";
 export {
   isBridgeRun,
+  lostBridge,
   type ReasonAction,
   reasonAction,
   runLine,

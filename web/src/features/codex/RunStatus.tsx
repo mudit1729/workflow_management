@@ -4,12 +4,20 @@
 // printed. A reason the person has to read (nothing ready, failed) is `RunNotice`, on a line of
 // its own.
 import { ArrowUpRight, Check, CircleX, Info, Minus, X } from "lucide-react";
+import { openAgentPanel } from "@/app/shell-store";
 import { AuthorChip } from "@/components/common";
 import { Button, IconButton } from "@/components/ui";
 import type { CodexRun } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { IssueTab } from "@/lib/nav";
-import { isBridgeRun, reasonAction, runLine, runProgress } from "./run-copy";
+import {
+  isBridgeRun,
+  lostBridge,
+  type ReasonAction,
+  reasonAction,
+  runLine,
+  runProgress,
+} from "./run-copy";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -137,25 +145,43 @@ export interface RunNoticeProps {
   onOpen?: (tab: IssueTab) => void;
   /** Always open the Plan tab. Kept for callers that predate `onOpen`; `onOpen` wins. */
   onOpenPlan?: () => void;
+  /** Open the Agent panel, for a run that lost its bridge. Default: the shell's panel. */
+  onOpenAgent?: () => void;
   onDismiss?: () => void;
   className?: string;
 }
+
+const PLAN: ReasonAction = { label: "Open plan", tab: "plan" };
 
 /**
  * A run that did no work and says why: nothing was ready, or the task changed under it. A line of
  * its own under the buttons, because the reason is a sentence and wraps on a phone.
  */
-export function RunNotice({ run, onOpen, onOpenPlan, onDismiss, className }: RunNoticeProps) {
+export function RunNotice({
+  run,
+  onOpen,
+  onOpenPlan,
+  onOpenAgent = () => openAgentPanel(),
+  onDismiss,
+  className,
+}: RunNoticeProps) {
   const failed = run.status === "failed";
   const text = run.reason ?? (failed ? "The run stopped." : "No ready task.");
-  // A failed run points at the plan (the task it held); a run that did no work, at its answer.
-  const where = onOpen
-    ? failed
-      ? { label: "Open plan", tab: "plan" as const }
-      : reasonAction(run)
-    : onOpenPlan
-      ? { label: "Open plan", tab: "plan" as const }
-      : undefined;
+  const toTab = (a: ReasonAction | undefined) =>
+    a && { label: a.label, go: () => (onOpen ? onOpen(a.tab) : onOpenPlan?.()) };
+  // A failed run points at the plan (the task it held); a run that did no work, at its answer. A
+  // run on a real bridge held no task: the plan has nothing for it. A lost bridge is answered in
+  // the Agent panel, where Reconnect is; an agent that exited has nowhere to go.
+  const where =
+    failed && isBridgeRun(run)
+      ? lostBridge(run)
+        ? { label: "Agent status", go: onOpenAgent }
+        : undefined
+      : onOpen
+        ? toTab(failed ? PLAN : reasonAction(run))
+        : onOpenPlan
+          ? toTab(PLAN)
+          : undefined;
   return (
     <div
       data-wf="CodexRunNotice"
@@ -176,12 +202,7 @@ export function RunNotice({ run, onOpen, onOpenPlan, onDismiss, className }: Run
         {failed ? `Failed: ${text}` : text}
       </span>
       {where && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => (onOpen ? onOpen(where.tab) : onOpenPlan?.())}
-          className="-my-0.5 shrink-0"
-        >
+        <Button variant="ghost" size="sm" onClick={where.go} className="-my-0.5 shrink-0">
           {where.label}
           <ArrowUpRight {...ICON} className="text-fg-faint" />
         </Button>

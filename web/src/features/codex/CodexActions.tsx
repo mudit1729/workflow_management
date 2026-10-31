@@ -13,6 +13,7 @@
 //  - `children` are more buttons for the same row, such as the header's Copy context.
 import { Play } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
+import { openAgentPanel } from "@/app/shell-store";
 import { Button, Tooltip } from "@/components/ui";
 import { type AgentConnection, agentName, useAgent } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -98,6 +99,7 @@ export function CodexActions({ issue, children, className }: CodexActionsProps) 
     <div
       ref={root}
       data-wf="CodexActions"
+      data-issue={issue.id}
       data-busy={active ? "" : undefined}
       // detail is 0 for a click from the keyboard (Enter or Space on a button).
       onClickCapture={(e) => {
@@ -137,6 +139,10 @@ export function CodexActions({ issue, children, className }: CodexActionsProps) 
           run={notice}
           onOpen={(tab) => {
             openTab(tab);
+            dismiss();
+          }}
+          onOpenAgent={() => {
+            openAgentPanel();
             dismiss();
           }}
           onDismiss={dismiss}

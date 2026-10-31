@@ -18,6 +18,7 @@ import {
   useAgentControls,
   usePreferredAgent,
 } from "@/lib/api";
+import { endedBridgeLine, stopBridgeLine } from "./agent-copy";
 import {
   canContinue,
   initialAgent,
@@ -33,6 +34,8 @@ export interface FlowSeed {
   agent?: AgentKind;
   /** Show this connection and talk to no bridge: picking, retrying and Simulate do nothing. */
   connection?: AgentConnection;
+  /** The connection this flow replaces (Switch, Reconnect): its bridge may still run. */
+  replaces?: AgentConnection;
 }
 
 export interface ConnectFlow {
@@ -44,6 +47,10 @@ export interface ConnectFlow {
   connection: AgentConnection;
   /** The run to start when the flow ends: Do next step opened it. */
   then?: AgentThen;
+  /** After a lost agent: its bridge may still run, and the new one cannot start beside it. */
+  stopBridge?: string;
+  /** After Switch: the connected bridge was told to stop, and the new one is theirs to start. */
+  stopped?: string;
   /** The screen's answer is complete: the person can go on. */
   ready: boolean;
   /** Choose an agent without leaving the screen (a number key, an arrow). */
@@ -52,7 +59,7 @@ export interface ConnectFlow {
   advance: (agent?: AgentKind) => void;
   back: () => void;
   goTo: (index: number) => void;
-  /** Pair again with a new code (a pairing that stopped for good). */
+  /** Look for the bridge again with the same code (a pairing that stopped). */
   retry: () => void;
   /** Dev only: connect without a bridge, as the prototype. */
   simulate: () => void;
@@ -77,6 +84,14 @@ export function useConnectFlow({
   const preferred = usePreferredAgent();
   const frozen = seed?.connection !== undefined;
   const connection = seed?.connection ?? live;
+  // The connection the flow found when it opened, read before the pairing replaces it.
+  const [stopBridge] = useState(() => stopBridgeLine(frozen ? seed?.replaces : live));
+  // A connected bridge ends when another agent is paired: say so, once, on the command screen.
+  const [stopped] = useState(() => {
+    const was = frozen ? seed?.replaces : live;
+    const next = seed?.agent ?? initialAgent(start, connection, preferred);
+    return was && needsPairing(next, was) ? endedBridgeLine(was) : undefined;
+  });
 
   const skipWhich = !!start?.agent;
   const then = start?.then;
@@ -175,12 +190,14 @@ export function useConnectFlow({
     connection,
     then,
     ready,
+    stopBridge,
+    stopped,
     pick: setAgent,
     advance,
     back,
     goTo,
     retry: () => {
-      if (!frozen) void controls.begin(agent);
+      if (!frozen) controls.retry();
     },
     simulate: () => {
       if (!frozen) controls.simulate(agent);

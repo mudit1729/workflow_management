@@ -1,5 +1,5 @@
-// Kit entries for connecting an agent (plan D10, D11): the nav row in its four states, each screen
-// of the connect flow, and the Agent panel. The nav rows and the panels take the connection as
+// Kit entries for connecting an agent (plan D10, D11): the nav row in its states (a connected agent
+// with skills missing speaks in the warning tone), each screen of the connect flow, and the Agent panel. The nav rows and the panels take the connection as
 // data, so every state shows without a bridge; the flow frames run the real flow on a fixed
 // connection (a click goes on to the next screen and starts nothing).
 import type { AgentStart } from "@/app/shell-store";
@@ -10,6 +10,7 @@ import { type FlowSeed, useConnectFlow } from "@/features/agent/useConnectFlow";
 import {
   type AgentConnection,
   type AgentKind,
+  BLOCKED_NOTE,
   type CodexRun,
   pairCommand,
   simulatedConnection,
@@ -57,6 +58,15 @@ const CODEX_BRIDGE: AgentConnection = {
 const CLAUDE_PROTOTYPE: AgentConnection = {
   ...simulatedConnection("claude"),
   since: ago(3 * 60),
+  command: pairCommand("claude", CODE),
+};
+
+/** A real Claude Code bridge in a repository that never installed the skills. */
+const CLAUDE_BRIDGE: AgentConnection = {
+  ...CODEX_BRIDGE,
+  agent: "claude",
+  version: "claude 2.0.31",
+  skills: { installed: [], missing: [...WF_SKILL_NAMES] },
   command: pairCommand("claude", CODE),
 };
 
@@ -147,7 +157,10 @@ function AgentStatusBody() {
     { label: "none", connection: NONE },
     { label: "pairing", connection: pairing("codex", "bridge") },
     { label: "connected · Codex", connection: CODEX_BRIDGE },
-    { label: "connected · Claude Code", connection: CLAUDE_PROTOTYPE },
+    {
+      label: "connected · skills missing · the warning tone, the label stays",
+      connection: CLAUDE_PROTOTYPE,
+    },
     { label: "lost · a warning tone", connection: LOST },
   ];
   return (
@@ -160,17 +173,15 @@ function AgentStatusBody() {
         </V>
       ))}
       <V
-        label="collapsed rail · none, pairing, connected, lost"
-        note="Just the icon with the dot. Hover for the words."
+        label="collapsed rail · none, pairing, connected, skills missing, lost"
+        note="Just the icon with the dot. Hover for the words; skills missing add 'Skills missing: open to install'."
         width={52}
       >
         <Rail width={52}>
           <div className="flex flex-col items-center gap-1">
-            {states
-              .filter((s) => s.label !== "connected · Claude Code")
-              .map(({ label, connection }) => (
-                <AgentStatusRow key={label} connection={connection} collapsed onClick={noop} />
-              ))}
+            {states.map(({ label, connection }) => (
+              <AgentStatusRow key={label} connection={connection} collapsed onClick={noop} />
+            ))}
           </div>
         </Rail>
       </V>
@@ -207,7 +218,7 @@ function Screen({
   height?: number;
 }) {
   return (
-    <V label={label} note={note} width={520} height={height}>
+    <V label={label} note={note} width={600} height={height}>
       <FlowFrame seed={seed} start={start} />
     </V>
   );
@@ -236,27 +247,68 @@ function ConnectAgentBody() {
         height={380}
       />
       <Screen
+        label="2 · Run this in the repo · an old bridge still holds the port"
+        note="Not an error: the pairing goes on by itself once the old bridge is stopped."
+        seed={{
+          step: "run",
+          agent: "claude",
+          connection: {
+            ...pairing("claude", "bridge"),
+            note: BLOCKED_NOTE,
+          },
+        }}
+        height={400}
+      />
+      <Screen
+        label="2 · Run this in the repo · Reconnect after the agent was lost"
+        note="The old bridge may still run, so the hint says to stop it first."
+        seed={{
+          step: "run",
+          agent: "codex",
+          connection: pairing("codex", "bridge"),
+          replaces: LOST,
+        }}
+        height={400}
+      />
+      <Screen
+        label="2 · Run this in the repo · Switch from a connected bridge"
+        note="Pairing again told the Codex bridge to stop, so the hint says to start the new one. Claude Code also gets its permissions line: the allowlist is one button."
+        seed={{
+          step: "run",
+          agent: "claude",
+          connection: pairing("claude", "bridge"),
+          replaces: CODEX_BRIDGE,
+        }}
+        height={420}
+      />
+      <Screen
         label="2 · Run this in the repo · the bridge did not answer"
         seed={{
           step: "run",
           agent: "codex",
           connection: {
             ...pairing("codex", "bridge"),
-            problem:
-              "A bridge answered, but with another code. Stop it (Ctrl+C) and run the command again.",
+            problem: "The bridge could not be reached.",
           },
         }}
         height={380}
       />
       <Screen
         label="2 · Connected, every skill installed (Codex)"
+        note="The spent code is one quiet line, with no Copy."
         seed={{ step: "run", agent: "codex", connection: CODEX_BRIDGE }}
-        height={470}
+        height={430}
       />
       <Screen
         label="2 · Connected, skills not installed (Claude Code): the install commands to copy"
+        note="The commands install for the whole repository, so the bridge counts them; the only Copy buttons left are theirs."
+        seed={{ step: "run", agent: "claude", connection: CLAUDE_BRIDGE }}
+        height={600}
+      />
+      <Screen
+        label="2 · Connected, skills not installed · in the prototype"
         seed={{ step: "run", agent: "claude", connection: CLAUDE_PROTOTYPE }}
-        height={640}
+        height={580}
       />
       <Screen
         label="3 · Done"

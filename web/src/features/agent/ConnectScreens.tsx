@@ -6,8 +6,15 @@ import { Button } from "@/components/ui";
 import { ChoiceList, KeyHint } from "@/features/add-work/parts";
 import { AGENT_KINDS, type AgentKind, agentName, pairCommand, useSkills } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { installCommands, installWhere, skillsLine } from "./agent-copy";
-import { doneCopy, STEP_LABEL } from "./connect-flow";
+import {
+  ALLOW_DOC,
+  allowLine,
+  installCommands,
+  installWhere,
+  skillsLine,
+  withAllowList,
+} from "./agent-copy";
+import { doneCopy, pairCodeOf, STEP_LABEL } from "./connect-flow";
 import { AgentTile, CommandBox, Facts, StatusDot } from "./parts";
 import type { ConnectFlow } from "./useConnectFlow";
 
@@ -84,27 +91,45 @@ function RunStep({ flow }: { flow: ConnectFlow }) {
   const { connection: c, agent } = flow;
   const connected = c.status === "connected" && c.agent === agent;
 
-  // The command stays on screen after the bridge answers, so the screen does not jump; the
-  // connection forgets it once it is connected, the screen keeps it.
+  // The connection forgets the command once it is connected; the screen keeps it, for the code.
   const [kept, setKept] = useState(c.command);
   if (c.command && c.command !== kept) setKept(c.command);
   const command = c.command ?? kept ?? (connected ? undefined : pairCommand(agent, "…"));
+  // Once a real bridge has answered the code is spent: one quiet line, and no Copy for a dead
+  // command. The prototype never ran the command, so it has no code to name.
+  const code = connected && c.mode === "bridge" ? pairCodeOf(command) : undefined;
+  // Claude Code only: the command with its allowlist (a headless run skips scripts and commits).
+  const [allow, setAllow] = useState(false);
 
   return (
     <Screen
       flow={flow}
       title="Run this in the repo"
-      hint="Open a terminal at the repo root, paste it and leave it running."
+      hint={
+        connected
+          ? c.mode === "bridge"
+            ? "Leave the bridge running in its terminal."
+            : "Prototype: there is no bridge to run."
+          : flow.stopBridge
+            ? `${flow.stopBridge} Then paste this at the repo root and leave it running.`
+            : flow.stopped
+              ? `${flow.stopped} Paste this at the repo root to start the new one, and leave it running.`
+              : "Open a terminal at the repo root, paste it and leave it running."
+      }
     >
-      {command && (
+      {command && !connected && (
         <>
-          <CommandBox command={command} autoFocus={!connected} />
-          {!connected && (
-            <p className="-mt-1 text-fg-faint text-xs">
-              Needs Node 18 or newer. The code works once.
-            </p>
-          )}
+          <CommandBox command={allow ? withAllowList(command) : command} autoFocus />
+          <p className="-mt-1 text-fg-faint text-xs">
+            Needs Node 18 or newer. The code works once.
+          </p>
+          {agent === "claude" && <AllowLine allowed={allow} onToggle={() => setAllow(!allow)} />}
         </>
+      )}
+      {code && (
+        <p data-wf="PairedCode" className="text-fg-faint text-xs">
+          Paired with code <span className="font-mono">{code}</span>
+        </p>
       )}
       <div role="status" aria-live="polite" data-wf="ConnectStatus">
         {connected ? <Connected flow={flow} /> : <Waiting flow={flow} />}
@@ -113,7 +138,34 @@ function RunStep({ flow }: { flow: ConnectFlow }) {
   );
 }
 
-/** "Waiting for the bridge…", or why it stopped. The prototype says it answers by itself. */
+/** One line about what a headless Claude Code may run, with the one button that allows more. */
+function AllowLine({ allowed, onToggle }: { allowed: boolean; onToggle: () => void }) {
+  const line = allowLine(allowed);
+  return (
+    <div data-wf="AllowLine" className="-mt-1 flex items-start gap-2">
+      <p className="min-w-0 flex-1 text-fg-faint text-xs leading-snug">
+        {line.text}
+        <span className="block">
+          What it can do: <span className="font-mono">{ALLOW_DOC}</span>
+        </span>
+      </p>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onToggle}
+        aria-pressed={allowed}
+        className="-my-0.5 shrink-0"
+      >
+        {line.button}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * "Waiting for the bridge…", what the person can do while it waits (stop an old bridge), or why it
+ * stopped. The prototype says it answers by itself.
+ */
 function Waiting({ flow }: { flow: ConnectFlow }) {
   const { connection: c } = flow;
   if (c.problem)
@@ -142,6 +194,12 @@ function Waiting({ flow }: { flow: ConnectFlow }) {
           </button>
         )}
       </p>
+      {/* Not an error: an old bridge holds the port, and the pairing goes on once it is stopped. */}
+      {c.note && (
+        <p data-wf="PairNote" className="pl-[14px] text-fg-muted text-sm leading-snug">
+          {c.note}
+        </p>
+      )}
       {c.mode === "simulated" && (
         <p className="pl-[14px] text-fg-faint text-xs">Prototype: the bridge answers by itself.</p>
       )}
@@ -175,7 +233,7 @@ function Connected({ flow }: { flow: ConnectFlow }) {
               ) : (
                 <TriangleAlert {...ICON} aria-hidden className="shrink-0 text-stale-text" />
               )}
-              <span className="truncate">{skills.text}</span>
+              <span className="truncate">{skills.value}</span>
             </span>,
           ],
         ]}
@@ -191,7 +249,7 @@ export function InstallSkills({ agent, className }: { agent: AgentKind; classNam
   const commands = installCommands(agent, catalog);
   return (
     <div data-wf="InstallSkills" className={cn("flex flex-col gap-2", className)}>
-      <p className="text-fg-faint text-xs">{installWhere(agent)}. You can go on without them.</p>
+      <p className="text-fg-faint text-xs">{installWhere(agent)}.</p>
       {commands.map((command) => (
         <div key={command.command} className="flex min-w-0 flex-col gap-1">
           <span className="text-fg-muted text-xs">{command.label}</span>

@@ -869,7 +869,9 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
 
 /**
  * The agent's commands (plan D11): Connect an agent while none is, Switch and Disconnect while one
- * is, and Agent status always. They open the same dialogs as the nav row.
+ * is, and Agent status once there is something to show (a pairing, a connection, a lost one). With
+ * no agent "Connect an agent" is the one row: a second row that opens the same place is noise.
+ * They open the same dialogs as the nav row.
  */
 function agentActions(agent: AgentConnection): Action[] {
   const kind = agent.agent;
@@ -892,7 +894,10 @@ function agentActions(agent: AgentConnection): Action[] {
         id: "switch-agent",
         label: `Switch to ${agentName(other)}`,
         icon: <ArrowLeftRight {...ICON} />,
-        hint: `Instead of ${name}`,
+        hint:
+          agent.mode === "bridge"
+            ? `Instead of ${name}, stops the bridge on ${agent.host ?? "this computer"}`
+            : `Instead of ${name}`,
         keywords: [...keywords, "change", "switch agent"],
         run: () => openAgent({ agent: other }),
       },
@@ -900,7 +905,11 @@ function agentActions(agent: AgentConnection): Action[] {
         id: "disconnect-agent",
         label: `Disconnect ${name}`,
         icon: <Unplug {...ICON} />,
-        hint: "Do next step needs an agent",
+        // A real bridge is told to stop; the prototype has none, so only the consequence is said.
+        hint:
+          agent.mode === "bridge"
+            ? `Stops the bridge on ${agent.host ?? "this computer"}`
+            : "Do next step needs an agent",
         keywords: [...keywords, "disconnect", "unpair", "forget", "stop"],
         inPlace: true,
         run: () => {
@@ -910,14 +919,16 @@ function agentActions(agent: AgentConnection): Action[] {
       },
     );
   }
-  actions.push({
-    id: "agent-status",
-    label: "Agent status",
-    icon: <Bot {...ICON} />,
-    hint: name && agent.status !== "pairing" ? `${name} · ${agent.status}` : "Not connected",
-    keywords: [...keywords, "status", "runs", "skills", "host"],
-    run: () => openAgentPanel(),
-  });
+  if (agent.status !== "none")
+    actions.push({
+      id: "agent-status",
+      label: "Agent status",
+      icon: <Bot {...ICON} />,
+      hint:
+        name && agent.status !== "pairing" ? `${name} · ${agent.status}` : "Waiting for the bridge",
+      keywords: [...keywords, "status", "runs", "skills", "host"],
+      run: () => openAgentPanel(),
+    });
   return actions;
 }
 

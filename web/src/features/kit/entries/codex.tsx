@@ -274,10 +274,28 @@ function RunNoticeBody() {
           onDismiss={() => undefined}
         />
       </V>
-      <V label="failed · on a bridge, by the exit code" width={480}>
+      <V
+        label="failed · on a bridge, by the exit code"
+        note="No button: the plan holds no answer to an exit code."
+        width={480}
+      >
         <RunNotice
           run={bridge("failed", { reason: "Codex exited with code 1." })}
           onOpen={() => undefined}
+          onDismiss={() => undefined}
+        />
+      </V>
+      <V
+        label="failed · on a bridge, the bridge was lost"
+        note="Agent status opens the Agent panel, where Reconnect is."
+        width={480}
+      >
+        <RunNotice
+          run={bridge("failed", {
+            reason: "Lost the bridge. Codex may still be working on your computer.",
+          })}
+          onOpen={() => undefined}
+          onOpenAgent={() => undefined}
           onDismiss={() => undefined}
         />
       </V>
