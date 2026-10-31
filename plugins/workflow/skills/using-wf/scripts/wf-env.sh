@@ -164,7 +164,7 @@ case "${1:-}" in
   later) later_ts "${2:-}" ;;
   id) new_id "${2:-}" ;;
   issue) find_issue "${2:-}" ;;
-  author) [ -n "${WF_AUTHOR:-}" ] || die "WF_AUTHOR is not set. Use the handle of your runtime from authors.md (codex = @codex)."
+  author) [ -n "${WF_AUTHOR:-}" ] || die "WF_AUTHOR is not set. Use the handle of your runtime from authors.md (codex = @codex, claude = @claude)."
           echo "@${WF_AUTHOR#@}" ;;
   ''|-h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0" ;;
   *) die "unknown command '$1'. Run wf-env.sh --help." ;;

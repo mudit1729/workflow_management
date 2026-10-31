@@ -14,7 +14,7 @@ A wf workspace is a folder of markdown files. An issue is a folder with a `goal.
 3. Read `<root>/workflow.toml`: `issues_dir` (default `issues`), `id_prefix` (default `wf`), `[leases] minutes`, `[context] budget_tokens`.
 4. Read `<root>/glossary.md` and `<root>/authors.md` once. Use the glossary's words in everything you write.
 5. Judging leases and staleness at another time than the real one (an eval on a copy of the sample world): set `WF_NOW=<RFC 3339 time>` on every command. `wf-env.sh now|later` and `wf-status.sh` then use it.
-6. Decide your author handle: `$WF_AUTHOR`, else the `authors.md` entry for your runtime (Codex is `@codex`, Claude Code is `@claude-opus` or `@claude-sonnet`), else ask.
+6. Decide your author handle: `$WF_AUTHOR`, else the `authors.md` entry for your runtime (Codex is `@codex`; Claude Code is `@claude` when the bridge starts it and sets `WF_AUTHOR`, else `@claude-opus` or `@claude-sonnet` by model), else ask.
 
 File map of a workspace (full formats in `references/format.md`):
 

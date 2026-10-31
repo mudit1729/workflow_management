@@ -31,7 +31,7 @@ Every wf skill points here. The source is `docs/plan/contract.md` sections 1.2 t
 - **Quote handles in YAML frontmatter** (`owner: "@shruti"`). A bare `@` breaks the YAML (F001). Inside the markdown body (meta lists) write them bare (`- claimed_by: @codex`).
 - Lists in frontmatter are flow lists: `labels: [live, sse]`, `blocked_by: []`. In meta lists they are comma separated; paths and commands go in backticks.
 - Helper `../scripts/wf-env.sh` (relative to this file): `root`, `config leases.minutes`, `now`, `later 60`, `id issue|group|change|decision|learning|request`, `issue <id|slug>`, `author`. The by-hand equivalents: `date +%Y-%m-%dT%H:%M%z` (insert a colon in the offset); `LC_ALL=C tr -dc '0-9a-hjkmnp-tv-z' </dev/urandom | head -c5`, then `grep -r <id> <workspace>` must find nothing.
-- Author: `$WF_AUTHOR`, else the `authors.md` entry for your runtime (Codex is `@codex`; Claude Code is `@claude-opus` or `@claude-sonnet` by model), else ask. If your handle is missing from `authors.md`, add a block (section 9) before you write entries (Q012).
+- Author: `$WF_AUTHOR`, else the `authors.md` entry for your runtime (Codex is `@codex`; Claude Code is `@claude` when the bridge starts it and sets `WF_AUTHOR`, else `@claude-opus` or `@claude-sonnet` by model), else ask. If your handle is missing from `authors.md`, add a block (section 9) before you write entries (Q012).
 
 ## 3. workflow.toml (read it, rarely write it)
 

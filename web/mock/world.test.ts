@@ -806,7 +806,7 @@ describe("library and glossary", () => {
       "learning",
       "criterion",
       "task",
-      "lane",
+      "area",
       "lease",
       "author",
       "library item",

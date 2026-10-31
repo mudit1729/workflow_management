@@ -68,14 +68,14 @@ node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92
 | Flag | Meaning |
 |---|---|
 | `--agent codex\|claude` | Which agent to run (required) |
-| `--pair <CODE>` | The code the dashboard shows (required) |
+| `--pair <CODE>` | The code the dashboard shows (required; `WF_PAIR=<CODE>` works too and keeps the code out of `ps`) |
 | `--port <n>` | Port on `127.0.0.1` (default 7457; the dashboard expects the default) |
-| `--origin <url>` | A dashboard origin that may use the bridge; repeat it for more (default `http://localhost:5177` and `http://127.0.0.1:5177`) |
+| `--origin <url>` | A dashboard origin that may use the bridge; repeat it for more (default `http://localhost:5177` and `http://127.0.0.1:5177`). The dashboard adds it to the command it shows when it is served from another address |
 | `--repo <dir>` | The repository the agent works in (default: the current folder) |
 | `--agent-bin <path>` | The agent's binary (default `codex` or `claude` from the `PATH`) |
 | `-- <args>` | Everything after `--` is passed to the agent as extra arguments |
 
-The bridge prints one line when it starts (`wf bridge: Codex 0.46.0 on my-laptop, repo workflow_management. Pair code 4F7K-92: waiting for the dashboard.`), one when the dashboard pairs, and two for each run (started, ended). Ctrl+C stops the runs and exits. In `pnpm -C web dev` the dashboard pairs with the real bridge; the published static page cannot reach `127.0.0.1`, so there pairing is simulated ("Prototype: the bridge answers by itself"), and the dashboard's **simulate** button does the same when no bridge can run.
+The bridge prints one line when it starts (`wf bridge: Codex 0.46.0 on my-laptop, repo workflow_management. Pair code 4F7K-92: waiting for the dashboard.`), one when the dashboard pairs, and two for each run (started, ended). It also says so, once, when it refuses an `Origin` or `Host` (`refused Origin http://localhost:4173. If that is your dashboard, start the bridge with --origin http://localhost:4173.`); a browser sees such a refusal only as a network error, so the dashboard would otherwise wait for it in silence. Ctrl+C stops the runs and exits, and so does **Disconnect** in the dashboard: one bridge serves one dashboard, and **Switch agent** or **Connect** again needs the port and a fresh code, so run the new command the dashboard shows. In `pnpm -C web dev` the dashboard pairs with the real bridge; the published static page cannot reach `127.0.0.1`, so there pairing is simulated ("Prototype: the bridge answers by itself"), and the dashboard's **simulate** button does the same when no bridge can run.
 
 ### What it can do
 
@@ -86,17 +86,30 @@ One job: **do the next step of an issue**. The dashboard sends the issue id (`wf
 | Codex | `codex exec --full-auto <prompt> [extra...]` |
 | Claude Code | `claude -p <prompt> --permission-mode acceptEdits [extra...]` |
 
-An extra argument that chooses the sandbox itself replaces the default flag: for Codex `--sandbox`, `-s`, `--ask-for-approval`, `-a`, `--full-auto` or `--dangerously-bypass-approvals-and-sandbox`; for Claude Code `--permission-mode` or `--dangerously-skip-permissions`. For example `... --agent codex --pair 4F7K-92 -- --sandbox workspace-write --model gpt-5-codex`. Codex's flags change between releases; check `codex exec --help` and override them rather than editing the script. `--permission-mode acceptEdits` lets Claude Code edit files but not run commands, and a headless run cannot answer a question: to let it run `git` and the project's checks, allow them after `--`, for example `-- --allowedTools 'Bash(git *)' 'Bash(pnpm *)'`.
+An extra argument that chooses the sandbox itself replaces the default flag: for Codex `--sandbox`, `-s`, `--ask-for-approval`, `-a`, `--full-auto` or `--dangerously-bypass-approvals-and-sandbox`; for Claude Code `--permission-mode` or `--dangerously-skip-permissions`. For example `... --agent codex --pair 4F7K-92 -- --sandbox workspace-write --model gpt-5-codex`. Codex's flags change between releases; check `codex exec --help` and override them rather than editing the script.
 
-It also reports its status (agent, version, host, repository, workspace, skills), lists its runs, streams a run's output lines to the dashboard, and stops a run (SIGTERM to the process group, SIGKILL after 3 s). The status says which of this plugin's skills the agent finds: for Codex the folders of `<repo>/.agents/skills` that hold a `SKILL.md`; for Claude Code those of `<repo>/.claude/skills`, or all of them when `<repo>/.claude/settings.json` enables the `workflow` plugin. Skills installed for your user only are not counted, because the point is that the whole team has them: the dashboard offers the install command when some are missing (see **Install for Claude Code** and **Install for Codex** above).
+**Claude Code and what `acceptEdits` allows.** A headless run cannot answer "may I run this?", so what the mode does not allow is skipped. `--permission-mode acceptEdits` lets Claude Code edit files and run read-only commands such as `date`, but not the helper scripts (`wf-env.sh`, `wf-status.sh`), `git add`, `git commit` or the project's checks, which are the claim, the verify and the commit steps of `doing-next-step`. Allow them after `--`. This is the list that was run against a real `claude -p` (scripts, `git add`, `git commit` and `pnpm` ran; `curl` stayed denied), and it is the one to start from:
+
+```
+node plugins/workflow/scripts/wf-bridge.mjs --agent claude --pair 4F7K-92 -- \
+  --allowedTools 'Bash(*/wf-env.sh *)' 'Bash(*/wf-status.sh *)' \
+  'Bash(git add *)' 'Bash(git commit *)' 'Bash(pnpm *)'
+```
+
+Swap `pnpm` for the tool your tasks' `verify` commands use. `Bash(git *)` alone is not enough: it lets `git` run, and the scripts stay denied. The bridge keeps the default as it is, because every pattern here is a permission; it prints one line at start-up when you gave Claude Code no tool or mode flags.
+
+It also reports its status (agent, version, host, repository, workspace, skills), lists its runs, streams a run's output lines to the dashboard, and stops a run (SIGTERM to the process group, then SIGKILL to whatever of the group is left, and "cancelled" is answered only when the processes are gone; the same holds for Ctrl+C). The status says which of this plugin's skills the agent finds: for Codex the folders of `<repo>/.agents/skills` that hold a `SKILL.md`; for Claude Code those of `<repo>/.claude/skills`, or all of them when the `settings.json` or `settings.local.json` of the repository enables a `workflow@…` plugin. Skills installed for your user only are not counted, because the point is that the whole team has them: the dashboard offers the install command when some are missing (see **Install for Claude Code** and **Install for Codex** above).
 
 The workspace is found the way `using-wf` finds it: `$WF_ROOT`, else the nearest folder with a `workflow.toml` above the repository, else `workspace/` or `web/mock/workspace/` of the git repository. If there is none the bridge says so when it starts and refuses runs.
+
+**Issues must be files.** The bridge finds an issue by the `goal.md` that holds its id, so it can run only issues that exist in the workspace folder it found. Issues made in the prototype (Add work, the loaded sample) live in the browser and are never written to disk; asking for one of them answers `No issue wf-3k9x2 in web/mock/workspace.` To run the 26 sample issues, which are files, start the bridge on that folder: `WF_ROOT=web/mock/sample node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92` (run it on a copy if you do not want the agent to edit the sample).
 
 ### Safety rules
 
 - It listens on `127.0.0.1` only, and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>` (against DNS rebinding).
 - A request that names an `Origin` must come from an allowed one (`--origin`); others get 403. Preflights are answered for allowed origins only, with `Access-Control-Allow-Private-Network`.
-- Everything but `POST /pair` needs `Authorization: Bearer <token>`, compared in constant time. The token is 32 random bytes and is handed out once, to the one who knows the code. Five wrong codes close pairing until the bridge restarts. `DELETE /pair` (the dashboard's Disconnect) revokes the token.
+- Everything but `POST /pair` needs `Authorization: Bearer <token>`, compared in constant time. The token is 32 random bytes and is handed out once, to the one who knows the code. Five wrong codes close pairing until the bridge restarts. `DELETE /pair` (the dashboard's Disconnect) is the end of the bridge: it closes the open event streams, stops the runs and exits, so the code cannot pair again and nothing stays behind. Every refusal carries `instance`, a random name of the bridge process, so the dashboard can tell a restarted bridge from the one that refused it; a dashboard whose new code meets an old bridge (answers `wrong_code`) asks that bridge for its name, which costs no attempt, waits until it is stopped or replaced, and then goes on with the same code.
+- A reader of a run's output that stops reading is dropped once a megabyte is waiting for it, instead of being buffered; the dashboard asks again with `Last-Event-ID` and gets the lines the ring (the last 500) still holds.
 - The browser never sends a prompt, a path or a command. The bridge validates the issue id, takes the folder from the workspace files, builds the prompt, and starts the agent without a shell, so a title with quotes or `$(...)` stays text. Symbolic links in the workspace are not followed.
 - At most three runs go at once, one per issue (a second answers 409).
 - It runs the agent with the permissions of the flags above, in your repository, as you. Run it only where you would run the agent yourself, and stop it (Ctrl+C) when you are done.
