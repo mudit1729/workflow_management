@@ -53,8 +53,9 @@ export async function until<T>(check: () => T | Promise<T>, ms = 5000): Promise<
 /**
  * What the fake agent does is chosen by the issue id in its prompt, from `behaviors.json` in
  * `FAKE_AGENT_DIR`: `ok` (default) prints lines, edits `changes.md` of the issue and exits 0;
- * `fail` exits 3; `hang` starts a child and waits to be stopped; `stubborn` ignores SIGTERM.
- * Every call is appended to `calls.jsonl` there.
+ * `fail` exits 3; `hang` starts a child and waits to be stopped; `stubborn` ignores SIGTERM;
+ * `straggler` dies on SIGTERM but leaves a grandchild that ignores it; `flood` prints 30 MB of
+ * output and exits. Every call is appended to `calls.jsonl` there.
  */
 const FAKE_AGENT = `#!/usr/bin/env node
 const fs = require("node:fs");
@@ -75,7 +76,24 @@ fs.appendFileSync(path.join(dir, "calls.jsonl"), JSON.stringify({
 }) + "\\n");
 console.log("claiming the task");
 console.error("warning: slow disk");
-if (mode === "hang" || mode === "stubborn") {
+if (mode === "flood") {
+  const filler = "x".repeat(200);
+  let n = 0;
+  const pump = () => {
+    while (n < 150000) {
+      n += 1;
+      if (!process.stdout.write(filler + n + "\\n")) return process.stdout.once("drain", pump);
+    }
+    process.stdout.write("flooded\\n", () => process.exit(0));
+  };
+  pump();
+} else if (mode === "straggler") {
+  // The leader is plain Node, so SIGTERM ends it; the grandchild shares its group and ignores SIGTERM.
+  const child = spawn("bash", ["-c", "trap '' TERM; sleep 120"], { stdio: "ignore" });
+  fs.writeFileSync(path.join(dir, id + ".pids"), JSON.stringify({ pid: process.pid, child: child.pid }));
+  console.log("working");
+  setInterval(() => {}, 1000);
+} else if (mode === "hang" || mode === "stubborn") {
   if (mode === "stubborn") process.on("SIGTERM", () => console.log("ignoring SIGTERM"));
   const child = spawn("sleep", ["60"], { stdio: "ignore" });
   fs.writeFileSync(path.join(dir, id + ".pids"), JSON.stringify({ pid: process.pid, child: child.pid }));
@@ -101,7 +119,7 @@ export interface TestRepo {
   /** Where the workspace is, relative to `dir`. */
   workspace: string;
   /** Choose what the fake agent does for an issue. */
-  behave(issue: string, mode: "ok" | "fail" | "hang" | "stubborn"): void;
+  behave(issue: string, mode: "ok" | "fail" | "hang" | "stubborn" | "straggler" | "flood"): void;
   /** Every call the fake agent got. */
   calls(): {
     argv: string[];
@@ -191,7 +209,8 @@ export interface RunningBridge {
 
 export interface BridgeOptions {
   agent?: "codex" | "claude";
-  pair?: string;
+  /** The `--pair` code; `null` leaves the flag out (a test then sets `WF_PAIR`). */
+  pair?: string | null;
   /** Default: the repo's fake agent. */
   bin?: string;
   repo?: string;
@@ -208,8 +227,7 @@ export async function startBridge(repo: TestRepo, options: BridgeOptions = {}) {
     BRIDGE,
     "--agent",
     options.agent ?? "codex",
-    "--pair",
-    options.pair ?? "TEST-42",
+    ...(options.pair === null ? [] : ["--pair", options.pair ?? "TEST-42"]),
     "--port",
     String(port),
     "--repo",
@@ -227,6 +245,7 @@ export async function startBridge(repo: TestRepo, options: BridgeOptions = {}) {
   // A bridge started inside another workspace session must find its own.
   if (!options.env?.WF_ROOT) delete env.WF_ROOT;
   delete env.WF_AUTHOR;
+  if (!options.env?.WF_PAIR) delete env.WF_PAIR;
   const child = spawn(process.execPath, args, { env, stdio: ["ignore", "pipe", "pipe"] });
   let text = "";
   child.stdout?.on("data", (d) => {

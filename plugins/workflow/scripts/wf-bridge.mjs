@@ -4,7 +4,8 @@
 //   node plugins/workflow/scripts/wf-bridge.mjs --agent codex|claude --pair <CODE> [options] [-- <agent args>]
 //
 //   --agent codex|claude   which agent to run (required)
-//   --pair <CODE>          the code the dashboard shows, like 4F7K-92 (required)
+//   --pair <CODE>          the code the dashboard shows, like 4F7K-92 (required; $WF_PAIR works too and
+//                          keeps the code out of `ps`)
 //   --port <n>             port on 127.0.0.1 (default 7457; the dashboard expects the default)
 //   --origin <url>         a dashboard origin that may talk to the bridge; repeat it for more
 //                          (default http://localhost:5177 and http://127.0.0.1:5177)
@@ -22,7 +23,8 @@
 // Safety: it binds 127.0.0.1 only; it answers only requests with a Host of 127.0.0.1:<port> or
 // localhost:<port> (DNS rebinding) and, when a request names an Origin, only an allowed one; every
 // route but POST /pair needs the token that pairing returned; five wrong codes close pairing. The
-// browser never sends a prompt, a path or a command: only a validated issue id.
+// browser never sends a prompt, a path or a command: only a validated issue id. A refused Origin or
+// Host is logged once, so a dashboard on another address can be told apart from a stranger.
 //
 // Agent command lines (a change of the agent's flags goes after "--", or use --agent-bin):
 //   codex   <bin> exec --full-auto <prompt> [extra...]
@@ -30,15 +32,21 @@
 // Extra arguments that set the sandbox or permission mode themselves replace the default flag:
 // codex: --sandbox, -s, --ask-for-approval, -a, --full-auto, --dangerously-bypass-approvals-and-sandbox;
 // claude: --permission-mode, --dangerously-skip-permissions.
+// A headless Claude Code in acceptEdits mode skips helper scripts and git commit; the README lists
+// the --allowedTools that let doing-next-step run them.
 //
 // Routes (JSON; a run's events are text/event-stream):
 //   POST   /pair             {code}                  -> {token}
-//   DELETE /pair                                     -> revoke the token; pairing opens again
+//   DELETE /pair                                     -> disconnect: end the streams, stop the runs and the bridge
 //   GET    /status                                   -> {agent, version, host, repo, workspace, skills, runs, active}
 //   POST   /runs             {issue, kind:"next_step"} -> {id, issue, agent, startedAt, status}
 //   GET    /runs                                     -> [run, ...] newest first
 //   GET    /runs/<id>/events                         -> "line" {text} events, then one "exit" {code, signal, status}
-//   DELETE /runs/<id>                                -> stop the run (SIGTERM to its group, SIGKILL after 3 s)
+//   DELETE /runs/<id>                                -> stop the run (SIGTERM to its group, SIGKILL after 3 s, or at
+//                                                       once for what the leader left in the group)
+//
+// Every refusal is {error, message, instance}; `instance` names this bridge process, so the dashboard
+// can tell a restarted bridge from the one it was refused by.
 //
 // Node 18 or newer, macOS or Linux, no dependencies. Exit codes: 0 stopped, 1 could not start, 2 bad usage.
 import { execFile, spawn } from "node:child_process";
@@ -57,6 +65,8 @@ const DEFAULT_ORIGINS = ["http://localhost:5177", "http://127.0.0.1:5177"];
 const MAX_WRONG_CODES = 5;
 /** Time a run gets between SIGTERM and SIGKILL. */
 const KILL_AFTER_MS = 3000;
+/** Time to wait for the last process of a stopped run to vanish after the SIGKILL. */
+const GONE_WITHIN_MS = 1000;
 /** Output lines a run keeps for a late reader, and the longest line kept. */
 const MAX_LINES = 500;
 const MAX_LINE = 2000;
@@ -64,6 +74,10 @@ const MAX_LINE = 2000;
 const MAX_ACTIVE = 3;
 const MAX_RUNS = 50;
 const MAX_BODY = 8 * 1024;
+/** Bytes an event stream may hold back for a reader that does not read, before it is dropped. */
+const MAX_STREAM_BACKLOG = 1024 * 1024;
+/** Refused origins and hosts that are logged (once each), so a local script cannot fill the terminal. */
+const MAX_REFUSED_LOGGED = 20;
 
 const ISSUE_ID = /^wf-[0-9a-z]{5}$/;
 const RUN_ID = /^run-[0-9a-f]{8}$/;
@@ -110,6 +124,9 @@ const AGENTS = {
     ],
   },
 };
+
+/** Extra arguments with which the person already chose what Claude Code may run. */
+const CLAUDE_TOOL_FLAGS = /^--(allowed-?tools|permission-mode|dangerously-skip-permissions)\b/i;
 
 const log = (msg) => console.log(`wf bridge: ${msg}`);
 
@@ -207,9 +224,10 @@ function parseArgs(argv) {
         return badUsage(`unknown option ${flag}. Extra agent arguments go after "--".`);
     }
   }
+  if (!opts.pair) opts.pair = normalizeCode(process.env.WF_PAIR);
   if (!Object.hasOwn(AGENTS, opts.agent)) return badUsage("--agent must be codex or claude.");
   if (!PAIR_CODE.test(opts.pair))
-    return badUsage("--pair needs the code the dashboard shows, like 4F7K-92.");
+    return badUsage("--pair needs the code the dashboard shows, like 4F7K-92 (or set WF_PAIR).");
   if (opts.origins.length === 0) opts.origins = DEFAULT_ORIGINS;
   opts.origins = [...new Set(opts.origins)];
   if (opts.agentBin?.includes("/") || opts.agentBin?.includes(sep))
@@ -238,8 +256,18 @@ const posix = (path) => path.split(sep).join("/");
 /** `a` is `b` or lies inside it. */
 const inside = (a, b) => a === b || a.startsWith(b.endsWith(sep) ? b : b + sep);
 
-const stripAnsi = (text) =>
-  text.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "").replace(/\u001b\][^\u0007]*\u0007/g, "");
+/** Text from a request, safe to put in the terminal: printable ASCII only, and short. */
+const printable = (text) =>
+  String(text)
+    .replace(/[^\x20-\x7e]/g, "?")
+    .slice(0, 80);
+
+// Escape sequences are control characters, and removing them is the point.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above.
+const ANSI_CSI = /\u001b\[[0-?]*[ -/]*[@-~]/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above.
+const ANSI_OSC = /\u001b\][^\u0007]*\u0007/g;
+const stripAnsi = (text) => text.replace(ANSI_CSI, "").replace(ANSI_OSC, "");
 
 // ---------------------------------------------------------------- the workspace (using-wf, section 1)
 
@@ -425,6 +453,10 @@ async function main() {
   const repoInfo = { name: basename(repo), ...(remote ? { remote } : {}) };
 
   const allowed = new Set(opts.origins);
+  /** Names this process in every refusal, so the dashboard can tell a restarted bridge from this one. */
+  const instance = randomBytes(4).toString("hex");
+  /** Origins and hosts already logged as refused. */
+  const refused = new Set();
   let port = opts.port;
   let token = null;
   let wrong = 0;
@@ -495,9 +527,30 @@ async function main() {
     }
   }
 
+  /** Resolves when no process of the run's group is left, or after a second. */
+  async function groupGone(run) {
+    const pid = run.child?.pid;
+    if (!pid) return;
+    const end = Date.now() + GONE_WITHIN_MS;
+    for (;;) {
+      try {
+        process.kill(-pid, 0);
+      } catch {
+        return;
+      }
+      if (Date.now() > end) return;
+      await sleep(20);
+    }
+  }
+
   function finish(run, code, signal) {
     if (run.finished) return;
     run.finished = true;
+    // A stopped run leaves nothing behind: the leader is gone, so whatever still lives in its group
+    // ignored SIGTERM (a test runner, a dev server, a nohup job). The group id stays valid while
+    // any member lives, and ESRCH for an empty group is harmless.
+    const sweep = run.cancelled || stopping;
+    if (sweep) killGroup(run, "SIGKILL");
     run.flush();
     run.code = code ?? null;
     run.signal = signal ?? null;
@@ -518,7 +571,8 @@ async function main() {
     const finished = [...runs.values()].filter((r) => r.status !== "running");
     for (const old of finished.slice(0, Math.max(0, finished.length - MAX_RUNS)))
       runs.delete(old.id);
-    run.resolveDone();
+    // `done` means the processes are gone, so "cancelled" is only answered once they are.
+    (sweep ? groupGone(run) : Promise.resolve()).then(run.resolveDone);
   }
 
   /** Stop a run and wait until its process is gone. */
@@ -608,7 +662,34 @@ async function main() {
     });
     res.end(text);
   };
-  const fail = (res, status, error, message) => send(res, status, { error, message });
+  const fail = (res, status, error, message) => send(res, status, { error, message, instance });
+
+  /** Log a refused origin or host once. */
+  function noteRefused(kind, value, advice) {
+    const key = `${kind} ${printable(value)}`;
+    if (refused.has(key) || refused.size >= MAX_REFUSED_LOGGED) return;
+    refused.add(key);
+    log(`refused ${key}. ${advice}`);
+  }
+
+  /**
+   * Why an issue is not in the workspace. Issues made in the prototype (Add work, the loaded
+   * sample) live in the browser and are never files, so name the folder that was searched and,
+   * in this repository, how to point the bridge at the sample.
+   */
+  function noIssue(issue, workspace) {
+    const sample = existsSync(join(repo, "web", "mock", "sample", "workflow.toml"));
+    return (
+      `No issue ${issue} in ${workspaceLabel(workspace)}.` +
+      (sample
+        ? " Issues made in the prototype live in the browser; start the bridge with WF_ROOT=web/mock/sample to try the sample."
+        : "")
+    );
+  }
+
+  /** The workspace as the dashboard reads it: relative to the repository when it lies inside. */
+  const workspaceLabel = (workspace) =>
+    inside(workspace, repo) ? posix(relative(repo, workspace)) || "." : workspace;
 
   function readJson(req) {
     return new Promise((done, reject) => {
@@ -646,12 +727,7 @@ async function main() {
       version,
       host,
       repo: repoInfo,
-      // Relative to the repository when it lies inside, else the full path.
-      workspace: !workspace
-        ? null
-        : inside(workspace, repo)
-          ? posix(relative(repo, workspace)) || "."
-          : workspace,
+      workspace: workspace ? workspaceLabel(workspace) : null,
       skills: skillsOf(opts.agent, repo),
       runs: runs.size,
       active: active().length,
@@ -665,33 +741,50 @@ async function main() {
       connection: "keep-alive",
       "x-accel-buffering": "no",
     });
-    const write = (event, data, id) =>
+    let beat;
+    const leave = () => {
+      clearInterval(beat);
+      run.listeners.delete(write);
+      run.closers.delete(end);
+    };
+    // A reader that does not read (a tab that sleeps with the socket open) must not make the bridge
+    // hold the run's output in memory: past a megabyte it is dropped, and it can come back with
+    // Last-Event-ID to the lines the ring still holds.
+    const write = (event, data, id) => {
+      if (res.destroyed) return;
       res.write(`${id ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (res.writableLength > MAX_STREAM_BACKLOG) {
+        leave();
+        res.destroy();
+      }
+    };
+    const end = () => {
+      clearInterval(beat);
+      res.end();
+    };
     const from = Number(req.headers["last-event-id"]) || 0;
     for (const line of run.lines) if (line.seq > from) write("line", { text: line.text }, line.seq);
+    if (res.destroyed) return;
     if (run.finished) {
       write("exit", { code: run.code, signal: run.signal, status: run.status });
       res.end();
       return;
     }
-    const beat = setInterval(() => res.write(": ping\n\n"), 15_000);
-    const end = () => {
-      clearInterval(beat);
-      res.end();
-    };
+    beat = setInterval(() => {
+      if (!res.destroyed) res.write(": ping\n\n");
+    }, 15_000);
     run.listeners.add(write);
     run.closers.add(end);
-    res.on("close", () => {
-      clearInterval(beat);
-      run.listeners.delete(write);
-      run.closers.delete(end);
-    });
+    res.on("close", leave);
   }
 
   async function route(req, res) {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const path = url.pathname;
     const method = req.method ?? "GET";
+
+    // A bridge on its way out answers nothing: not a pair, not a run.
+    if (stopping) return fail(res, 503, "stopping", "The bridge is stopping.");
 
     if (path === "/pair" && method === "POST") {
       const locked = () => {
@@ -719,9 +812,15 @@ async function main() {
     if (!authed(req)) return fail(res, 401, "unauthorized", "Pair with the bridge first.");
 
     if (path === "/pair" && method === "DELETE") {
+      // Disconnect ends the bridge. One bridge serves one dashboard, and the next pairing (another
+      // agent, or the same one again) needs the port and a fresh code: a bridge that kept running
+      // would block both and could be paired again by anyone who read the old code.
       token = null;
-      log("the dashboard disconnected. Waiting for it again.");
-      return send(res, 200, { ok: true });
+      log("the dashboard disconnected.");
+      const sent = new Promise((done) => res.once("close", done));
+      send(res, 200, { ok: true });
+      void shutdown(sent);
+      return;
     }
     if (path === "/status" && method === "GET") return send(res, 200, await status());
     if (path === "/runs" && method === "GET")
@@ -745,12 +844,11 @@ async function main() {
       const found = findIssue(workspace, issue);
       if (found.error === "ambiguous")
         return fail(res, 409, "ambiguous", `More than one goal.md has the id ${issue}.`);
-      if (found.error) return fail(res, 404, "no_issue", `No issue ${issue} in the workspace.`);
+      if (found.error) return fail(res, 404, "no_issue", noIssue(issue, workspace));
       if (active().some((r) => r.issue === issue))
         return fail(res, 409, "busy", `${agent.name} is already working on ${issue}.`);
       if (active().length >= MAX_ACTIVE)
         return fail(res, 429, "too_many", `${MAX_ACTIVE} runs are going. Wait for one to end.`);
-      if (stopping) return fail(res, 503, "stopping", "The bridge is stopping.");
       const run = startRun(issue, found, workspace);
       return send(res, 200, publicRun(run));
     }
@@ -778,11 +876,23 @@ async function main() {
   async function handle(req, res) {
     res.setHeader("cache-control", "no-store");
     res.setHeader("x-content-type-options", "nosniff");
-    if (!hostOk(req.headers.host))
+    if (!hostOk(req.headers.host)) {
+      noteRefused(
+        "Host",
+        req.headers.host ?? "",
+        `The bridge answers 127.0.0.1:${port} and localhost:${port} only.`,
+      );
       return fail(res, 403, "bad_host", "Ask for 127.0.0.1 or localhost on the bridge's port.");
+    }
     const origin = req.headers.origin;
-    if (origin !== undefined && !allowed.has(origin))
+    if (origin !== undefined && !allowed.has(origin)) {
+      noteRefused(
+        "Origin",
+        origin,
+        `If that is your dashboard, start the bridge with --origin ${printable(origin)}.`,
+      );
       return fail(res, 403, "bad_origin", "That origin may not use this bridge.");
+    }
     if (origin !== undefined) {
       res.setHeader("access-control-allow-origin", origin);
       res.setHeader("vary", "Origin");
@@ -831,18 +941,38 @@ async function main() {
     log(`listening on 127.0.0.1:${port}; the dashboard expects ${DEFAULT_PORT}.`);
   if (!(await findWorkspace(repo)))
     log("no wf workspace found here. Set WF_ROOT, or run it inside the repository that has one.");
+  // A headless Claude Code cannot answer "may I run this?", so in acceptEdits mode it skips the
+  // helper scripts and git commit of doing-next-step. Say so where the person can act on it.
+  if (opts.agent === "claude" && !opts.extra.some((a) => CLAUDE_TOOL_FLAGS.test(a)))
+    log(
+      'Claude Code may not run scripts or git commit in this mode. To allow them, see "What it can do" in plugins/workflow/README.md.',
+    );
 
   // ---- stopping
 
-  const stop = async () => {
-    if (stopping) process.exit(130);
+  /**
+   * End the bridge: the open streams hear that their runs ended, the runs are stopped and their
+   * processes are gone before the exit. `sent` is a pending answer that must reach its reader first.
+   */
+  async function shutdown(sent = Promise.resolve()) {
     stopping = true;
+    token = null;
     const going = active();
     if (going.length > 0) log(`stopping ${going.length} run${going.length === 1 ? "" : "s"}.`);
     server.close();
-    for (const run of runs.values()) for (const end of run.closers) end();
-    await Promise.race([Promise.all(going.map(cancelRun)), sleep(KILL_AFTER_MS + 1000)]);
+    for (const run of going) {
+      emit(run, "exit", { code: null, signal: null, status: "cancelled" });
+      for (const end of run.closers) end();
+      run.listeners.clear();
+      run.closers.clear();
+    }
+    await Promise.race([Promise.all([sent, ...going.map(cancelRun)]), sleep(KILL_AFTER_MS + 1000)]);
     process.exit(0);
+  }
+
+  const stop = () => {
+    if (stopping) process.exit(130);
+    void shutdown();
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

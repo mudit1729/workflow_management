@@ -7,8 +7,8 @@ import net from "node:net";
 import os from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createBridgeClient } from "../src/lib/api/bridge-client";
 import format from "../../plugins/workflow/skills/using-wf/references/format.md?raw";
+import { createBridgeClient } from "../src/lib/api/bridge-client";
 import {
   alive,
   BRIDGE,
@@ -91,16 +91,33 @@ describe("pairing", () => {
     expect(again.status).toBe(409);
   });
 
-  test("a revoked token stops working and pairing opens again", async () => {
+  test("every refusal names the bridge process; another bridge has another name", async () => {
     const other = makeRepo();
-    const c = await bridge(other, { pair: "AGAIN-7" });
-    const first = await pair(c, "AGAIN-7");
-    expect((await call(c.port, "GET", "/status", { token: first })).status).toBe(200);
-    expect((await call(c.port, "DELETE", "/pair", { token: first })).status).toBe(200);
-    expect((await call(c.port, "GET", "/status", { token: first })).status).toBe(401);
-    const second = await pair(c, "AGAIN-7");
-    expect(second).not.toBe(first);
-    expect((await call(c.port, "GET", "/status", { token: second })).status).toBe(200);
+    const c = await bridge(other, { pair: "NAME-77" });
+    const wrong = (await call(b.port, "POST", "/pair", { body: { code: "NOPE-00" } })).json();
+    const unauthorized = (await call(b.port, "GET", "/status")).json();
+    expect(wrong.instance).toMatch(/^[0-9a-f]{8}$/);
+    expect(unauthorized).toMatchObject({ error: "unauthorized", instance: wrong.instance });
+    const bad = (
+      await call(b.port, "GET", "/status", { origin: "http://evil.example.com" })
+    ).json();
+    expect(bad.instance).toBe(wrong.instance);
+    const elsewhere = (await call(c.port, "GET", "/status")).json();
+    expect(elsewhere.instance).toMatch(/^[0-9a-f]{8}$/);
+    expect(elsewhere.instance).not.toBe(wrong.instance);
+  });
+
+  test("the code may come from WF_PAIR, which keeps it out of the process list", async () => {
+    const other = makeRepo();
+    const c = await bridge(other, { pair: null, env: { WF_PAIR: "env-77" } });
+    expect(c.output()).toContain("Pair code ENV-77: waiting for the dashboard.");
+    expect((await call(c.port, "POST", "/pair", { body: { code: "ENV-77" } })).status).toBe(200);
+    // A flag wins over the variable.
+    const both = await bridge(makeRepo(), { pair: "FLAG-11", env: { WF_PAIR: "ENV-77" } });
+    expect((await call(both.port, "POST", "/pair", { body: { code: "ENV-77" } })).status).toBe(403);
+    expect((await call(both.port, "POST", "/pair", { body: { code: "FLAG-11" } })).status).toBe(
+      200,
+    );
   });
 
   test("five wrong codes close pairing, and the right one no longer works", async () => {
@@ -137,6 +154,53 @@ describe("pairing", () => {
       const odd = await call(c.port, method, path, { headers: { authorization: "Bearer nope" } });
       expect(odd.status, `${method} ${path} with a malformed token`).toBe(401);
     }
+  });
+});
+
+// ---------------------------------------------------------------- disconnect
+
+describe("disconnect", () => {
+  test("DELETE /pair revokes the token and ends the bridge; the code pairs nothing again", async () => {
+    const repo = makeRepo();
+    const c = await bridge(repo, { pair: "AGAIN-7" });
+    const token = await pair(c, "AGAIN-7");
+    expect((await call(c.port, "GET", "/status", { token })).status).toBe(200);
+    const reply = await call(c.port, "DELETE", "/pair", { token });
+    expect(reply.status).toBe(200);
+    expect(reply.json()).toEqual({ ok: true });
+    expect(await c.exited).toBe(0);
+    await printed(c, "the dashboard disconnected.");
+    // Nothing answers any more: not the old token, not the old code.
+    for (const [method, path, options] of [
+      ["GET", "/status", { token }],
+      ["POST", "/pair", { body: { code: "AGAIN-7" } }],
+    ] as const)
+      await expect(call(c.port, method, path, options)).rejects.toMatchObject({
+        code: "ECONNREFUSED",
+      });
+  });
+
+  test("it ends the open streams, stops the runs and leaves no process behind", async () => {
+    const repo = makeRepo();
+    repo.behave(ISSUE, "hang");
+    const c = await bridge(repo);
+    const token = await pair(c);
+    const run = (await startRun(c, token)).json();
+    const pids = await until(() => {
+      const file = join(repo.agentDir, `${ISSUE}.pids`);
+      return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined;
+    });
+    const stream = readEvents(c.port, run.id, token);
+    const at = Date.now();
+    expect((await call(c.port, "DELETE", "/pair", { token })).status).toBe(200);
+    // The stream ends with the run's end, not with a cut connection, and soon.
+    const { events } = await stream;
+    expect(events.at(-1)).toMatchObject({ event: "exit", data: { status: "cancelled" } });
+    expect(Date.now() - at).toBeLessThan(3000);
+    expect(await c.exited).toBe(0);
+    expect(alive(pids.pid)).toBe(false);
+    expect(alive(pids.child)).toBe(false);
+    await printed(c, "stopping 1 run.");
   });
 });
 
@@ -185,7 +249,7 @@ describe("who may ask", () => {
       "http://evil.example.com",
       "null",
       "http://localhost:5178",
-      DASHBOARD + ".evil.io",
+      `${DASHBOARD}.evil.io`,
     ]) {
       const r = await call(b.port, "GET", "/status", { token, origin });
       expect(r.status, origin).toBe(403);
@@ -251,6 +315,34 @@ describe("who may ask", () => {
     expect(ok.headers["access-control-allow-origin"]).toBe("https://dash.example.com");
     const no = await call(c.port, "GET", "/status", { token: t, origin: DASHBOARD });
     expect(no.status).toBe(403);
+  });
+
+  test("a refused origin or host is logged once, with the way to allow it", async () => {
+    const c = await bridge(makeRepo());
+    const origin = "http://localhost:4173";
+    for (let i = 0; i < 3; i++) await call(c.port, "GET", "/status", { origin });
+    await call(c.port, "GET", "/status", { origin: "http://localhost:4174" });
+    for (let i = 0; i < 2; i++)
+      await call(c.port, "GET", "/status", { headers: { host: "rebind.example.com" } });
+    const lines = c.output().split("\n");
+    expect(lines.filter((l) => l.includes(`refused Origin ${origin}`))).toEqual([
+      `wf bridge: refused Origin ${origin}. If that is your dashboard, start the bridge with --origin ${origin}.`,
+    ]);
+    expect(lines.filter((l) => l.includes("refused Origin http://localhost:4174"))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("refused Host rebind.example.com"))).toEqual([
+      `wf bridge: refused Host rebind.example.com. The bridge answers 127.0.0.1:${c.port} and localhost:${c.port} only.`,
+    ]);
+    // A long name is cut, and the log holds only so many of them.
+    await call(c.port, "GET", "/status", { origin: `http://${"a".repeat(300)}` });
+    expect(c.output()).not.toContain("a".repeat(100));
+    for (let i = 0; i < 40; i++)
+      await call(c.port, "GET", "/status", { origin: `http://stranger${i}.example.com` });
+    expect(
+      c
+        .output()
+        .split("\n")
+        .filter((l) => l.includes("refused Origin")).length,
+    ).toBeLessThanOrEqual(20);
   });
 
   test("it listens on the loopback address only", async () => {
@@ -506,6 +598,22 @@ describe("runs", () => {
     await until(() => !alive(pids.child));
   }, 15_000);
 
+  test("cancel leaves nothing of the group alive, even a process that ignores SIGTERM", async () => {
+    // The leader ends on SIGTERM; its grandchild shares the group and ignores it.
+    repo.behave("wf-b1d7v", "straggler");
+    const run = (await startRun(b, token, "wf-b1d7v")).json();
+    const pids = await until(() => {
+      const file = join(repo.agentDir, "wf-b1d7v.pids");
+      return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined;
+    });
+    expect(alive(pids.child)).toBe(true);
+    const cancelled = await call(b.port, "DELETE", `/runs/${run.id}`, { token });
+    expect(cancelled.json()).toMatchObject({ id: run.id, status: "cancelled" });
+    // "Cancelled" is only said when the processes are gone, not a moment later.
+    expect(alive(pids.pid)).toBe(false);
+    expect(alive(pids.child)).toBe(false);
+  }, 15_000);
+
   test("an issue id that does not look like one is refused before anything is looked up", async () => {
     const bad = [
       "",
@@ -536,6 +644,8 @@ describe("runs", () => {
     const none = await startRun(b, token, "wf-00000");
     expect(none.status).toBe(404);
     expect(none.json().error).toBe("no_issue");
+    // It names the folder it searched.
+    expect(none.json().message).toBe("No issue wf-00000 in workspace.");
     const kind = await call(b.port, "POST", "/runs", {
       token,
       body: { issue: ISSUE, kind: "shell" },
@@ -589,6 +699,57 @@ describe("runs", () => {
       readFileSync(join(repo.dir, "workspace/issues/wf/shell/evil/changes.md"), "utf8"),
     ).toContain("fake agent");
   });
+
+  test("in this repository the 404 says where the prototype's issues are", async () => {
+    // Issues made in the browser are not files; the sample is a workspace on disk.
+    const proto = makeRepo("web/mock/workspace");
+    mkdirSync(join(proto.dir, "web/mock/sample"), { recursive: true });
+    writeFileSync(join(proto.dir, "web/mock/sample/workflow.toml"), 'wf_format = "1"\n');
+    const c = await bridge(proto);
+    const r = await startRun(c, await pair(c), "wf-00000");
+    expect(r.status).toBe(404);
+    expect(r.json().message).toBe(
+      "No issue wf-00000 in web/mock/workspace. Issues made in the prototype live in the browser; start the bridge with WF_ROOT=web/mock/sample to try the sample.",
+    );
+  });
+
+  test("a reader that does not read is dropped, and the run does not wait for it", async () => {
+    const flood = makeRepo();
+    flood.behave(ISSUE, "flood");
+    const c = await bridge(flood);
+    const t = await pair(c);
+    const run = (await startRun(c, t)).json();
+    // A stream whose socket is never read until the run is over.
+    const socket = net.connect({ host: "127.0.0.1", port: c.port });
+    await new Promise((resolve) => socket.once("connect", resolve));
+    socket.write(
+      `GET /runs/${run.id}/events HTTP/1.1\r\nHost: 127.0.0.1:${c.port}\r\nOrigin: ${DASHBOARD}\r\nAuthorization: Bearer ${t}\r\n\r\n`,
+    );
+    socket.pause();
+    await until(
+      async () =>
+        (await call(c.port, "GET", `/runs/${run.id}`, { token: t })).json().status === "done",
+      30_000,
+    );
+    let bytes = 0;
+    let tail = "";
+    socket.on("data", (d: Buffer) => {
+      bytes += d.length;
+      tail = (tail + d.toString("latin1")).slice(-300);
+    });
+    const closed = new Promise((resolve) => socket.once("close", resolve));
+    socket.resume();
+    await closed;
+    // 150000 lines of about 250 bytes (38 MB) went by. The reader got what the sockets and a
+    // megabyte of the bridge's could hold (about 4 MB); the rest was never queued, and the exit
+    // event never came.
+    expect(bytes).toBeLessThan(16 * 1024 * 1024);
+    expect(tail).not.toContain("event: exit");
+    // The bridge is fine, and a reader that comes back gets the lines the ring holds.
+    const back = await readEvents(c.port, run.id, t, { "last-event-id": "149000" });
+    expect(back.events.at(-1)?.event).toBe("exit");
+    expect(back.events.filter((e) => e.event === "line").length).toBeGreaterThan(400);
+  }, 60_000);
 
   test("the issue is found by the id in goal.md, not by its folder name", async () => {
     // Two goal.md with one id are ambiguous: the bridge does not guess.
@@ -655,6 +816,23 @@ describe("the agent's command line", () => {
     expect((await call(c.port, "GET", "/status", { token: t })).json().agent).toBe("claude");
   });
 
+  test("Claude Code in acceptEdits mode is told where to allow scripts and git commit", async () => {
+    const plain = await bridge(makeRepo(), { agent: "claude" });
+    await printed(plain, "Claude Code may not run scripts or git commit in this mode.");
+    expect(plain.output()).toContain('see "What it can do" in plugins/workflow/README.md');
+    // Codex has no such limit, and a person who chose the tools needs no reminder.
+    const codex = await bridge(makeRepo());
+    const chosen = await bridge(makeRepo(), {
+      agent: "claude",
+      extra: ["--allowedTools", "Bash(git commit *)"],
+    });
+    const mode = await bridge(makeRepo(), { agent: "claude", extra: ["--permission-mode=plan"] });
+    for (const quiet of [codex, chosen, mode]) await call(quiet.port, "GET", "/status");
+    await sleep(300);
+    for (const quiet of [codex, chosen, mode])
+      expect(quiet.output()).not.toContain("may not run scripts");
+  });
+
   test("--permission-mode in the extra arguments replaces the default for Claude Code", async () => {
     const repo = makeRepo();
     const c = await bridge(repo, { agent: "claude", extra: ["--permission-mode=plan"] });
@@ -687,6 +865,22 @@ describe("stopping", () => {
     await until(() => !alive(pids.child));
     await printed(c, "stopping 1 run.");
   });
+
+  test("Ctrl+C leaves nothing behind either, not even a process that ignores SIGTERM", async () => {
+    const repo = makeRepo();
+    repo.behave(ISSUE, "straggler");
+    const c = await bridge(repo);
+    const t = await pair(c);
+    await startRun(c, t);
+    const pids = await until(() => {
+      const file = join(repo.agentDir, `${ISSUE}.pids`);
+      return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined;
+    });
+    c.child.kill("SIGINT");
+    expect(await c.exited).toBe(0);
+    expect(alive(pids.pid)).toBe(false);
+    expect(alive(pids.child)).toBe(false);
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------- the command line
@@ -810,22 +1004,48 @@ describe("the dashboard's client against the real bridge", () => {
     expect(await polling).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  test("pair polling stops at the first refusal and can be cancelled", async () => {
+  test("pair polling does not fall for an old bridge: it waits for it to go, then pairs with the same code", async () => {
+    // Connect, then Switch (or Disconnect and Connect again) while the old bridge still runs: it
+    // answers the new code with 403 at once, before anyone has pasted the new command.
+    const oldRepo = makeRepo();
+    const old = await bridge(oldRepo, { pair: "OLD-111" });
+    const client = createBridgeClient({ url: old.url });
+    const told: (string | null)[] = [];
+    const polling = client.pollPair("NEW-222", {
+      intervalMs: 50,
+      onBlocked: (r) => told.push(r ? r.code : null),
+    });
+    await until(() => told.length > 0);
+    expect(told).toEqual(["wrong_code"]);
+    // Only the first look cost an attempt, however long the old bridge stays.
+    await sleep(400);
+    expect(old.output()).not.toContain("5 wrong pair codes");
+    expect((await call(old.port, "POST", "/pair", { body: { code: "OLD-111" } })).status).toBe(200);
+
+    // Ctrl+C the old one, run the new command: the same polling pairs, with no second code.
+    await old.stop();
+    const fresh = await bridge(makeRepo(), { port: old.port, pair: "NEW-222" });
+    expect(await polling).toMatch(/^[0-9a-f]{64}$/);
+    expect(told).toEqual(["wrong_code", null]);
+    expect(fresh.output()).not.toContain("wrong");
+  });
+
+  test("pair polling waits out a paired bridge, and can be cancelled", async () => {
     const repo = makeRepo();
     const b = await bridge(repo, { pair: "RIGHT-1" });
     const client = createBridgeClient({ url: b.url });
-    await expect(client.pollPair("WRONG-1", { intervalMs: 50 })).rejects.toMatchObject({
-      name: "BridgeError",
-      code: "wrong_code",
-    });
-    // One wrong code was spent, not five.
     expect(await client.pollPair("RIGHT-1", { intervalMs: 50 })).toMatch(/^[0-9a-f]{64}$/);
+    // Paired already: the bridge is waited out, not asked again, until the person stops waiting.
+    const controller = new AbortController();
+    const waiting = client.pollPair("RIGHT-1", { intervalMs: 20, signal: controller.signal });
+    setTimeout(() => controller.abort(), 150);
+    await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
 
     const gone = createBridgeClient({ url: `http://127.0.0.1:${await freePort()}` });
-    const controller = new AbortController();
-    const waiting = gone.pollPair("ANY-1", { intervalMs: 20, signal: controller.signal });
-    setTimeout(() => controller.abort(), 100);
-    await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+    const stop = new AbortController();
+    const idle = gone.pollPair("ANY-1", { intervalMs: 20, signal: stop.signal });
+    setTimeout(() => stop.abort(), 100);
+    await expect(idle).rejects.toMatchObject({ name: "AbortError" });
   });
 
   test("a bridge that is gone is an unreachable error", async () => {
