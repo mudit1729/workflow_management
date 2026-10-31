@@ -38,6 +38,17 @@ export interface SourceEditorProps {
   /** Wrap long lines (prose). Off: they scroll sideways (code, toml). */
   wrap?: boolean;
   onWrapChange?: (wrap: boolean) => void;
+  /**
+   * Saves the text. Default: the workspace-file write. A host with its own store (a library page
+   * of the personal library) passes its own, which also shows its own failures.
+   */
+  save?: (args: {
+    path: string;
+    text: string;
+    base_rev?: string;
+  }) => Promise<{ rev: string } | undefined>;
+  /** Skip the "Saved … the board re-read it" toast: the host confirms the save itself. */
+  quiet?: boolean;
   onSaved: (saved: { rev: string; before: string; after: string }) => void;
   onCancel: () => void;
   /** Take the file as it is on disk now and drop this draft. */
@@ -60,12 +71,15 @@ export function SourceEditor({
   variant,
   wrap = false,
   onWrapChange,
+  save: saveText,
+  quiet = false,
   onSaved,
   onCancel,
   onReload,
   onDirtyChange,
 }: SourceEditorProps) {
-  const write = useWriteWorkspaceFile();
+  const writeWorkspace = useWriteWorkspaceFile();
+  const write = saveText ?? writeWorkspace;
   const savedToast = useSavedToast();
   const [draft, setDraft] = useState(startText ?? initialText);
   const [saving, setSaving] = useState(false);
@@ -160,7 +174,7 @@ export function SourceEditor({
       });
       // The hook has already explained any other failure with a toast.
       if (!res) return;
-      savedToast({ verb: creating ? "Created" : "Saved", path, text: draft });
+      if (!quiet) savedToast({ verb: creating ? "Created" : "Saved", path, text: draft });
       onSaved({ rev: res.rev, before: initialText, after: draft });
     } catch (err) {
       if (isConflictError(err)) setRefused(true);

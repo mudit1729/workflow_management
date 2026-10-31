@@ -1,6 +1,6 @@
 // One 14 px glyph per kind of context: the library kind for a library item, a scale for a
-// decision, an open book for a glossary term, a page for a file.
-import { BookA, FileText } from "lucide-react";
+// decision, an open book for a glossary term, a page for a file, a book for a library page.
+import { BookA, BookOpen, FileText } from "lucide-react";
 import { KindIcon } from "@/components/common";
 import type { ContextKind } from "./links";
 import type { ContextItem } from "./types";
@@ -41,5 +41,7 @@ export function KindGlyph({
       return <BookA aria-hidden size={size} strokeWidth={1.75} className={className} />;
     case "file":
       return <FileText aria-hidden size={size} strokeWidth={1.75} className={className} />;
+    case "page":
+      return <BookOpen aria-hidden size={size} strokeWidth={1.75} className={className} />;
   }
 }

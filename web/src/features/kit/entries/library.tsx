@@ -1,40 +1,61 @@
 import { useState } from "react";
+import { MarkdownProse } from "@/components/common";
 import { Button } from "@/components/ui";
-import { GlossaryView, LibraryItemView, LibraryView, PromoteDialog } from "@/features/library";
-import { type FacetState, facetCounts, NO_FILTERS, topTags } from "@/features/library/filters";
-import { LibraryFacets, LibraryFilterChips } from "@/features/library/LibraryFacets";
-import { LibraryList } from "@/features/library/LibraryList";
-import { LibraryRow } from "@/features/library/LibraryRow";
-import type { DecisionEntry, LearningEntry, LibrarySummary } from "@/gen/types";
-import {
-  entry,
-  type KitEntry,
-  Row,
-  Sandbox,
-  V,
-  WhenVisible,
-  WithDetail,
-  WithLibrarySummary,
-  WithSnapshot,
-} from "../kit-ui";
-import { ISSUE, LIB } from "./data";
+import { GlossaryView, PromoteDialog } from "@/features/library";
+import { LibraryHome } from "@/features/library/LibraryHome";
+import { WikiView } from "@/features/library/WikiView";
+import type { DecisionEntry, LearningEntry } from "@/gen/types";
+import { entry, type KitEntry, Row, Sandbox, V, WhenVisible, WithDetail } from "../kit-ui";
+import { ISSUE } from "./data";
 
 const SRC = "src/features/library";
 
-// ---------------------------------------------------------------- LibraryView
+const PLAYBOOK = "playbooks/write-criteria-as-ears.md";
 
-function LibraryViewBody() {
+// ---------------------------------------------------------------- WikiView
+
+function WikiViewBody() {
   return (
     <>
-      <V label="items · facets, search, list" fill height={620}>
-        <Sandbox quiet path="/lib">
-          <LibraryView />
+      <V
+        label="a page · tree, document, right rail (from 1280 px)"
+        note="The workspace library, its playbook page. The tree is the folders of library/; On this page, Linked from, Used in issues and the page facts are on the right."
+        fill
+        height={680}
+      >
+        <Sandbox quiet path={`/lib/t/wf/${PLAYBOOK}`}>
+          <WikiView alias="wf" path={PLAYBOOK} />
         </Sandbox>
       </V>
-      <V label="item open (the detail pane docks from 1100 px)" fill height={620}>
+      <V label="the Glossary page" fill height={620}>
         <WhenVisible>
-          <Sandbox quiet path={`/lib/${LIB.reviewed}`}>
-            <LibraryView selectedId={LIB.reviewed} />
+          <Sandbox quiet path="/lib/t/wf/glossary.md">
+            <WikiView alias="wf" path="glossary.md" />
+          </Sandbox>
+        </WhenVisible>
+      </V>
+      <V
+        label="a library without a home page · the overview is drawn from the tree"
+        fill
+        height={560}
+      >
+        <WhenVisible>
+          <Sandbox quiet path="/lib/t/wf">
+            <WikiView alias="wf" path="" />
+          </Sandbox>
+        </WhenVisible>
+      </V>
+      <V label="search results" fill height={520}>
+        <WhenVisible>
+          <Sandbox quiet path="/lib/t/wf?q=criteria">
+            <WikiView alias="wf" path={PLAYBOOK} />
+          </Sandbox>
+        </WhenVisible>
+      </V>
+      <V label="phone: the document alone, the tree is a sheet" width={390} height={640}>
+        <WhenVisible>
+          <Sandbox quiet path={`/lib/t/wf/${PLAYBOOK}`}>
+            <WikiView alias="wf" path={PLAYBOOK} />
           </Sandbox>
         </WhenVisible>
       </V>
@@ -42,49 +63,68 @@ function LibraryViewBody() {
   );
 }
 
-// ---------------------------------------------------------------- LibraryItemView
+// ---------------------------------------------------------------- LibraryHome
 
-function Item({ id, label, note }: { id: string; label: string; note?: string }) {
+function LibraryHomeBody() {
   return (
-    <V label={label} note={note} width={560} height={640}>
-      <Sandbox quiet>
-        <LibraryItemView id={id} onClose={() => undefined} />
+    <V label="cards for each library, then the pages opened last" fill height={560}>
+      <Sandbox quiet path="/lib">
+        <LibraryHome />
       </Sandbox>
     </V>
   );
 }
 
-function LibraryItemViewBody() {
+// ---------------------------------------------------------------- MarkdownProse, wiki
+
+const WIKI_MD = `## Callouts
+
+> [!NOTE]
+> A note: neutral, quiet.
+
+> [!TIP]
+> A tip.
+
+> [!IMPORTANT]
+> Important: the indigo accent.
+
+> [!WARNING]
+> A warning is amber.
+
+> [!CAUTION]
+> Caution is red.
+
+## Links and code
+
+A [[playbooks/write-criteria-as-ears]] link, a [[playbooks/gone]] link that goes nowhere, and \`inline code\`.
+
+\`\`\`sh
+git pull --ff-only
+\`\`\`
+
+## A video link
+
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+`;
+
+function ProseWikiBody() {
   return (
-    <>
-      <Item
-        id={LIB.reviewed}
-        label="rendered · lib-4tz7c (gotcha)"
-        note="The page is the rendered markdown file: frontmatter as properties, then every section in file order. Point at a block to see its line."
-      />
-      <V
-        label="source · lib-4tz7c"
-        note="The same file as text, with its lint markers. Edit opens the inline editor."
-        width={560}
-        height={640}
-      >
-        <Sandbox quiet>
-          <LibraryItemView id={LIB.reviewed} defaultView="source" onClose={() => undefined} />
-        </Sandbox>
-      </V>
-      <Item
-        id={LIB.draft}
-        label="draft · lib-7nq3d"
-        note="Banner: not injected into agent context until reviewed. Approve writes to the mock data."
-      />
-      <Item id={LIB.overdue} label="reviewed, review overdue · lib-2hq6n" />
-      <Item id={LIB.retired} label="retired · lib-0rt4e" />
-      <V label="small-screen variant (screen)" width={420} height={560}>
-        <Sandbox quiet>
-          <LibraryItemView id={LIB.reviewed} onClose={() => undefined} variant="screen" />
-        </Sandbox>
-      </V>
-    </>
+    <V
+      label="wiki typography, callouts, a video card"
+      note="Body 15 to 16 px at about 1.65, headings 22 / 18. The video card loads its player only when clicked."
+      width={720}
+      height={720}
+    >
+      <Sandbox quiet>
+        <div className="h-full overflow-y-auto px-8 py-6">
+          <MarkdownProse
+            document="wiki"
+            md={WIKI_MD}
+            wiki={{ alias: "wf", path: "x.md", links: [], media: {} }}
+          />
+        </div>
+      </Sandbox>
+    </V>
   );
 }
 
@@ -156,199 +196,40 @@ function PromoteDialogBody() {
   );
 }
 
-// ---------------------------------------------------------------- LibraryRow, LibraryList
-
-function RowDemo({ item, selected }: { item: LibrarySummary; selected?: boolean }) {
-  return (
-    <ul className="overflow-hidden rounded-md border border-border">
-      <LibraryRow item={item} selected={Boolean(selected)} onSelect={() => undefined} />
-    </ul>
-  );
-}
-
-function LibraryRowBody() {
-  const rows: [string, string, boolean?][] = [
-    [LIB.reviewed, "reviewed", false],
-    [LIB.draft, "draft", false],
-    [LIB.overdue, "review overdue", false],
-    [LIB.retired, "retired (struck through)", false],
-    [LIB.reviewed, "selected", true],
-  ];
-  return (
-    <>
-      {rows.map(([id, label, selected]) => (
-        <V key={label} label={label} width={560}>
-          <WithLibrarySummary id={id}>
-            {(item) => <RowDemo item={item} selected={selected} />}
-          </WithLibrarySummary>
-        </V>
-      ))}
-    </>
-  );
-}
-
-function LibraryListBody() {
-  const noop = () => undefined;
-  return (
-    <>
-      <V label="items" width={560} height={420}>
-        <WithSnapshot>
-          {(snap) => (
-            <LibraryList
-              items={snap.library}
-              onSelect={noop}
-              query=""
-              loading={false}
-              busy={false}
-              total={snap.library.length}
-              filtered={false}
-              onClearFilters={noop}
-            />
-          )}
-        </WithSnapshot>
-      </V>
-      <V label="nothing matches the filters" width={560} height={300}>
-        <WithSnapshot>
-          {(snap) => (
-            <LibraryList
-              items={[]}
-              onSelect={noop}
-              query=""
-              loading={false}
-              busy={false}
-              total={snap.library.length}
-              filtered
-              onClearFilters={noop}
-            />
-          )}
-        </WithSnapshot>
-      </V>
-      <V label="empty library" width={560} height={300}>
-        <LibraryList
-          items={[]}
-          onSelect={noop}
-          query=""
-          loading={false}
-          busy={false}
-          total={0}
-          filtered={false}
-          onClearFilters={noop}
-        />
-      </V>
-      <V label="loading" width={560} height={300}>
-        <LibraryList
-          items={[]}
-          onSelect={noop}
-          query=""
-          loading
-          busy={false}
-          total={0}
-          filtered={false}
-          onClearFilters={noop}
-        />
-      </V>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------- LibraryFacets
-
-function FacetsDemo({ chips }: { chips?: boolean }) {
-  const [filters, setFilters] = useState<FacetState>(NO_FILTERS);
-  return (
-    <WithSnapshot>
-      {(snap) => {
-        const counts = facetCounts(snap.library, filters);
-        const handlers = {
-          onKind: (kind: FacetState["kind"]) => setFilters((f) => ({ ...f, kind })),
-          onStatus: (status: FacetState["status"]) => setFilters((f) => ({ ...f, status })),
-          onOverdue: (overdue: boolean) => setFilters((f) => ({ ...f, overdue })),
-        };
-        if (chips) return <LibraryFilterChips filters={filters} counts={counts} {...handlers} />;
-        return (
-          <LibraryFacets
-            filters={filters}
-            counts={counts}
-            tags={topTags(snap.library, filters.tags)}
-            active={Boolean(
-              filters.kind || filters.status || filters.overdue || filters.tags.length,
-            )}
-            onTag={(tag) =>
-              setFilters((f) => ({
-                ...f,
-                tags: f.tags.includes(tag) ? f.tags.filter((t) => t !== tag) : [...f.tags, tag],
-              }))
-            }
-            onClear={() => setFilters(NO_FILTERS)}
-            {...handlers}
-          />
-        );
-      }}
-    </WithSnapshot>
-  );
-}
-
-function LibraryFacetsBody() {
-  return (
-    <>
-      <V label="facets column" width={200} height={560}>
-        <FacetsDemo />
-      </V>
-      <V label="chips (narrow screens)" width={560}>
-        <FacetsDemo chips />
-      </V>
-    </>
-  );
-}
-
 export const libraryEntries: KitEntry[] = [
   entry(
-    "Workdatabase",
-    "LibraryView",
-    `${SRC}/LibraryView.tsx`,
-    "The library is what the team has learned, organized by kind and status; faceted browsing and server search find an item fast, and the detail pane docks beside the list.",
-    LibraryViewBody,
+    "Library",
+    "WikiView",
+    `${SRC}/WikiView.tsx`,
+    "A library reads as a calm document wiki: the page tree on the left, the page in the middle at a comfortable measure, and what links to it and where it is used on the right.",
+    WikiViewBody,
   ),
   entry(
-    "Workdatabase",
-    "LibraryItemView",
-    `${SRC}/LibraryItemView.tsx`,
-    "An item shows its rule, when to use it, where it came from and who relies on it, and makes the one decision a reviewer owns (approve) impossible to miss.",
-    LibraryItemViewBody,
+    "Library",
+    "LibraryHome",
+    `${SRC}/LibraryHome.tsx`,
+    "The Library home shows every library as a card, yours first, and the pages you opened last, so the way back to work in progress is one click.",
+    LibraryHomeBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
+    "MarkdownProse (wiki)",
+    "src/components/common/MarkdownProse.tsx",
+    "The same renderer as the issue views, with document typography, anchors on headings, GitHub callouts, wiki links that go dashed when broken, and media that never loads before it is asked for.",
+    ProseWikiBody,
+  ),
+  entry(
+    "Library",
     "GlossaryView",
     `${SRC}/GlossaryView.tsx`,
     "The glossary fixes one word per idea and lists the words to avoid, which is what the S09 lint enforces in every issue.",
     GlossaryViewBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "PromoteDialog",
     `${SRC}/PromoteDialog.tsx`,
     "Promotion turns an issue's learning or decision into a reusable draft; the dialog previews it and warns about near-duplicates before a reviewer sees it.",
     PromoteDialogBody,
-  ),
-  entry(
-    "Workdatabase",
-    "LibraryRow",
-    `${SRC}/LibraryRow.tsx`,
-    "A row carries the title, the 'use when' line, status and how many issues rely on it, so scanning the list is enough to pick an item.",
-    LibraryRowBody,
-  ),
-  entry(
-    "Workdatabase",
-    "LibraryList",
-    `${SRC}/LibraryList.tsx`,
-    "The list owns the quiet states (loading, empty library, nothing matches) so a filter that hides everything never looks like a bug.",
-    LibraryListBody,
-  ),
-  entry(
-    "Workdatabase",
-    "LibraryFacets",
-    `${SRC}/LibraryFacets.tsx`,
-    "Kind, status, tag and overdue facets show counts that ignore their own selection, so you can see what the next click would give.",
-    LibraryFacetsBody,
   ),
 ];

@@ -38,6 +38,8 @@ interface ShellState {
   /** The Agent panel (plan D11) is open. It shares `agentStart`: the run waits there too. */
   agentPanelOpen: boolean;
   agentStart?: AgentStart;
+  /** The Add team library flow (spec 4.1) is open. */
+  addLibraryOpen: boolean;
   devPanelOpen: boolean;
   mobileNavOpen: boolean;
   /** 768–1099 px: the rail is an icon rail; this is the person asking to see it open (an overlay). */
@@ -47,6 +49,7 @@ interface ShellState {
   setAddWorkOpen: (open: boolean, start?: AddWorkStart) => void;
   setAgentOpen: (open: boolean, start?: AgentStart) => void;
   setAgentPanelOpen: (open: boolean, start?: Pick<AgentStart, "then">) => void;
+  setAddLibraryOpen: (open: boolean) => void;
   setDevPanelOpen: (open: boolean) => void;
   setMobileNavOpen: (open: boolean) => void;
   setNarrowNavOpen: (open: boolean) => void;
@@ -60,6 +63,7 @@ export const useShell = create<ShellState>()((set) => ({
   agentOpen: false,
   agentPanelOpen: false,
   agentStart: undefined,
+  addLibraryOpen: false,
   devPanelOpen: false,
   mobileNavOpen: false,
   narrowNavOpen: false,
@@ -74,6 +78,7 @@ export const useShell = create<ShellState>()((set) => ({
     set(
       agentPanelOpen ? { agentPanelOpen, agentOpen: false, agentStart: start } : { agentPanelOpen },
     ),
+  setAddLibraryOpen: (addLibraryOpen) => set({ addLibraryOpen }),
   setDevPanelOpen: (devPanelOpen) => set({ devPanelOpen }),
   setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
   setNarrowNavOpen: (narrowNavOpen) => set({ narrowNavOpen }),
@@ -95,6 +100,11 @@ export function openAgent(start?: AgentStart) {
 /** Open the Agent panel: what is connected, the recent runs, Switch and Disconnect. */
 export function openAgentPanel(start?: Pick<AgentStart, "then">) {
   useShell.getState().setAgentPanelOpen(true, start);
+}
+
+/** Open the Add team library flow: paste a GitHub link, read the library. */
+export function openAddLibrary() {
+  useShell.getState().setAddLibraryOpen(true);
 }
 
 /** Open the command palette. */

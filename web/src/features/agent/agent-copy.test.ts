@@ -161,8 +161,8 @@ describe("skillsLine", () => {
   it("is ok when every skill is installed", () => {
     expect(skillsLine(codex.skills, "codex")).toEqual({
       ok: true,
-      text: "All 8 skills installed",
-      value: "All 8 installed",
+      text: "All 12 skills installed",
+      value: "All 12 installed",
       partial: false,
     });
   });
@@ -180,8 +180,8 @@ describe("skillsLine", () => {
     const skills = { installed: WF_SKILL_NAMES.slice(0, 5), missing: WF_SKILL_NAMES.slice(5) };
     expect(skillsLine(skills, "codex")).toEqual({
       ok: false,
-      text: "3 of 8 skills not installed for Codex",
-      value: "5 of 8 installed",
+      text: "7 of 12 skills not installed for Codex",
+      value: "5 of 12 installed",
       partial: true,
     });
   });

@@ -121,7 +121,16 @@ describe("the repository's own catalog", () => {
     const workflow = catalog.plugins.find((p) => p.name === "workflow");
     expect(workflow?.path).toBe("plugins/workflow");
     expect(workflow?.version).toBeTruthy();
-    expect(workflow?.skills.length).toBeGreaterThanOrEqual(8);
+    // The eight issue-flow skills and the four library skills.
+    expect(workflow?.skills.length).toBeGreaterThanOrEqual(12);
+    const names = workflow?.skills.map((s) => s.name) ?? [];
+    for (const name of [
+      "keeping-a-library",
+      "summarizing-codebase",
+      "summarizing-work",
+      "querying-library",
+    ])
+      expect(names).toContain(name);
   });
 
   test("gives every skill its file, a Use when sentence and a line count", () => {

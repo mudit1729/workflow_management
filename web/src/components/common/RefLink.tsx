@@ -1,8 +1,10 @@
-// [[ref]] links: issues, entries/criteria/tasks inside an issue, and library items.
+// [[ref]] links: issues, entries/criteria/tasks inside an issue, library items and library pages.
 // Titles come from the snapshot (and the issue detail for entries). Dangling refs get a
 // dashed underline and an F009 tooltip.
 import type { MouseEvent, ReactNode } from "react";
 import { Tooltip } from "@/components/ui";
+import { AddressLink } from "@/features/ask/AddressLink";
+import { isPageAddress } from "@/features/context/links";
 import type { IssueDetail, IssueStatus } from "@/gen/types";
 import { useIssue, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -85,8 +87,10 @@ function Dangling({ target, className }: { target: string; className?: string })
 
 export function RefLink({ target, issueId, className }: RefLinkProps) {
   const ref = parseRef(target, issueId);
+  // `[[platform:runbooks/x.md#rollback]]` is a page of a library, not an entry of an issue.
+  const page = isPageAddress(target);
   const snap = useSnapshot().data;
-  const detail = useIssue(ref.kind === "entry" ? ref.issue : undefined).data as
+  const detail = useIssue(!page && ref.kind === "entry" ? ref.issue : undefined).data as
     | IssueDetail
     | undefined;
   const openIssue = useOpenIssue();
@@ -99,6 +103,9 @@ export function RefLink({ target, issueId, className }: RefLinkProps) {
     e.preventDefault();
     action();
   };
+
+  // ---- page of a team, personal or workspace library
+  if (page) return <AddressLink target={target} className={className} />;
 
   // ---- library item
   if (ref.kind === "library" && ref.library) {

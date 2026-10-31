@@ -1,0 +1,10 @@
+name = "Platform handbook"
+description = "How the platform team builds, ships and runs things."
+root = "docs"
+home = "README.md"
+
+[nav]
+order = ["getting-started", "runbooks", "architecture"]
+
+[owners]
+handles = ["@ana", "@li"]

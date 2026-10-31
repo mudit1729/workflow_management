@@ -1,4 +1,4 @@
-// "Context from Workdatabase": a field in the New file dialog that
+// "Context from the library": a field in the New file dialog that
 // collects library items, glossary terms, files and decisions an agent should read with the
 // issue. The Add button opens a command-style search right under the field, in the flow of the
 // form (a popover would cover the fields it adds context to); picks show as removable chips.
@@ -83,14 +83,14 @@ export function ContextPicker({
   return (
     <div data-wf="ContextPicker" className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <div className="flex min-h-7 items-center gap-2">
-        <span className="font-medium text-fg-muted text-sm">Context from Workdatabase</span>
+        <span className="font-medium text-fg-muted text-sm">Context from the library</span>
         {value.length > 0 && <span className="tabular text-fg-faint text-xs">{value.length}</span>}
         <Button
           ref={addButton}
           variant="secondary"
           size="sm"
           className="ml-auto"
-          aria-label={open ? "Close the Workdatabase list" : "Add context from the Workdatabase"}
+          aria-label={open ? "Close the library list" : "Add context from the library"}
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => {

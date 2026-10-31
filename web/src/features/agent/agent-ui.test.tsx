@@ -187,21 +187,21 @@ describe("the Agent panel's Skills section", () => {
     const html = body(bridge(claude));
     expect(html).toContain("Not installed");
     expect(html).not.toContain("Missing:");
-    expect(html).not.toContain("0 of 8");
+    expect(html).not.toContain("0 of 12");
     expect(html).not.toContain("Skills not installed for Claude Code");
   });
 
   it("names the missing skills when some are installed", () => {
     const skills = { installed: WF_SKILL_NAMES.slice(0, 5), missing: WF_SKILL_NAMES.slice(5) };
     const html = body(bridge({ ...codex, skills }));
-    expect(html).toContain("5 of 8 installed");
+    expect(html).toContain("5 of 12 installed");
     expect(html).toContain("Missing:");
     expect(html).toContain(WF_SKILL_NAMES[7]);
   });
 
   it("has no install commands once every skill is there", () => {
     const html = body(bridge(codex));
-    expect(html).toContain("All 8 installed");
+    expect(html).toContain("All 12 installed");
     expect(html).not.toContain('data-wf="InstallSkills"');
   });
 

@@ -19,6 +19,15 @@ import type {
   CodexRun,
   CodexRunKind,
   Delivery,
+  LibraryInfo,
+  LibraryMedia,
+  LibraryPage,
+  LibraryPassage,
+  LibraryScope,
+  LibrarySource,
+  LibraryTree,
+  PageRef,
+  ResolvedAddress,
   SearchScope,
   SplitInput,
   SplitResult,
@@ -31,7 +40,9 @@ import { type Codex, type CodexEvent, createCodex } from "./codex";
 import { contextBundle } from "./context";
 import { createEventPlayer } from "./events";
 import { listFiles, readFile } from "./files";
+import { createLibraries, type Libraries } from "./libraries";
 import { applyOp } from "./ops";
+import { PERSONAL, PERSONAL_SAMPLE } from "./personal-files";
 import { search as searchCorpus } from "./search";
 import { skillsCatalog } from "./skills";
 import {
@@ -44,7 +55,12 @@ import {
 } from "./store";
 import { byteLength, clone } from "./util";
 import { split } from "./work";
-import { onDiskChange, onSampleChange } from "./workspace-bus";
+import {
+  onDiskChange,
+  onPersonalChange,
+  onSampleChange,
+  type WorkspaceDisk,
+} from "./workspace-bus";
 
 export type { AgentEvent } from "./agent";
 export type { CodexEvent } from "./codex";
@@ -83,6 +99,10 @@ export interface MockControls {
 }
 
 export interface MockServerOptions extends StoreOptions {
+  /** The personal library's files. Default: the files under `mock/personal`. */
+  personal?: WorkspaceDisk;
+  /** More personal files, shown only while the sample is loaded. Default: `mock/personal-sample`. */
+  personalSample?: WorkspaceDisk;
   /** Response delay in ms: a fixed number, a [min, max] range, or 0 for none. Default 80–160. */
   latency?: number | [number, number];
   /** Play a scripted event every 20 s. Default false. */
@@ -120,6 +140,32 @@ export interface MockServer {
   subscribeAgent(fn: (e: AgentEvent) => void): () => void;
   /** The plugins and skills of the repository, read from its files (Workdatabase · Skills). */
   skills(): Promise<SkillsCatalog>;
+  /** The workspace library, the personal one and the team libraries, in that order. */
+  libraries(): Promise<LibraryInfo[]>;
+  libraryTree(alias: string): Promise<LibraryTree>;
+  /** One page; `path` may leave out `.md` or name a folder. 404 when there is none. */
+  libraryPage(alias: string, path: string): Promise<LibraryPage>;
+  /** Ranked passages (sections) for a query. */
+  librarySearch(query: string, scope?: LibraryScope, k?: number): Promise<LibraryPassage[]>;
+  /** The pages of any library that link to the page at `address` (`alias:path`). */
+  libraryBacklinks(address: string): Promise<PageRef[]>;
+  /** Where a link text or an address goes: `runbooks/x`, `platform:runbooks/x#rotate`, `lib-6pm4c`. */
+  libraryResolve(raw: string, from?: { alias: string; path: string }): Promise<ResolvedAddress>;
+  /** Write a page of the personal library (creates it). The bridge would commit and push it. */
+  savePage(args: {
+    alias: string;
+    path: string;
+    text: string;
+    base_rev?: string;
+  }): Promise<{ rev: string; commit: string }>;
+  deletePage(args: { alias: string; path: string }): Promise<void>;
+  /** Add a pasted or dropped image or video to the personal library. */
+  saveMedia(args: { alias: string; path: string; media: LibraryMedia }): Promise<void>;
+  /** Add a team library (its files are in `source`). Listed in the personal `libraries.toml`. */
+  addLibrary(source: LibrarySource): Promise<LibraryInfo>;
+  removeLibrary(alias: string): Promise<void>;
+  /** Hear every change that can alter a library answer. */
+  subscribeLibraries(fn: () => void): () => void;
   health(): Promise<Health>;
   /** Every file of the workspace, sorted by path. */
   files(): Promise<WorkspaceFileInfo[]>;
@@ -135,6 +181,7 @@ export interface MockServer {
   store: Store;
   codex: Codex;
   agent: AgentHost;
+  libraryRegistry: Libraries;
   /** Play the next scripted event now; returns its name, or undefined when none applies. */
   playNext(): string | undefined;
   dispose(): void;
@@ -147,6 +194,10 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
   const player = createEventPlayer(store, { autoplay: options.autoplay });
   const codex = createCodex(store, { phaseMs: options.codexPhaseMs });
   const agent = createAgentHost();
+  const libs = createLibraries(store, {
+    personal: options.personal ?? PERSONAL,
+    personalSample: options.personalSample ?? PERSONAL_SAMPLE,
+  });
   const latency = options.latency ?? [80, 160];
   let conflictNext = false;
   /** Holders of the sample that `controls.holdSample` handed out and that have not released yet. */
@@ -183,6 +234,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
       player.reset();
       codex.reset();
       store.reset();
+      libs.reset();
     },
     loadSample: () => {
       conflictNext = false;
@@ -255,7 +307,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     context: async (id, budget) => {
       await delay();
       if (!store.derived.details.has(id)) throw new NotFoundError(`Issue ${id}`);
-      return contextBundle(store.derived, id, budget, store.now(), store.delivery(id));
+      return contextBundle(store.derived, id, budget, store.now(), store.delivery(id), libs);
     },
     ops: async (op) => {
       await delay();
@@ -264,7 +316,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         conflictNext = false;
         throw simulatedConflict(store, op);
       }
-      return clone(applyOp(store, op));
+      return clone(applyOp(store, op, libs));
     },
     delivery: (issue) =>
       read(() => {
@@ -296,6 +348,38 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     },
     subscribeAgent: agent.subscribe,
     skills: () => read(skillsCatalog),
+    libraries: () => read(() => libs.list()),
+    libraryTree: (alias) => read(() => libs.tree(alias)),
+    libraryPage: (alias, path) => read(() => libs.page(alias, path)),
+    librarySearch: (query, scope, k) => read(() => libs.search(query, scope, k)),
+    libraryBacklinks: (address) => read(() => libs.backlinks(address)),
+    libraryResolve: (raw, from) => read(() => libs.resolve(raw, from)),
+    savePage: async (args) => {
+      await delay();
+      assertOnline();
+      return libs.savePage(args);
+    },
+    deletePage: async (args) => {
+      await delay();
+      assertOnline();
+      libs.deletePage(args);
+    },
+    saveMedia: async (args) => {
+      await delay();
+      assertOnline();
+      libs.saveMedia(args);
+    },
+    addLibrary: async (source) => {
+      await delay();
+      assertOnline();
+      return clone(libs.registerLibrary(source));
+    },
+    removeLibrary: async (alias) => {
+      await delay();
+      assertOnline();
+      libs.unregisterLibrary(alias);
+    },
+    subscribeLibraries: libs.subscribe,
     health: () =>
       read(() => ({
         version: "0.1.0-mock",
@@ -333,10 +417,12 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     store,
     codex,
     agent,
+    libraryRegistry: libs,
     playNext: () => player.playNext(),
     dispose: () => {
       player.dispose();
       codex.dispose();
+      libs.dispose();
     },
   };
 }
@@ -350,6 +436,8 @@ function targetFile(store: Store, op: WfOp): string {
     case "toggle_criterion":
     case "add_links":
       return store.filePath(op.issue, "goal.md");
+    case "add_learning":
+      return store.filePath(op.issue, "learnings.md");
     case "set_task_status":
     case "toggle_step":
       return store.filePath(op.issue, "plan.md");
@@ -422,6 +510,18 @@ export const cancelCodexRun = server.cancelCodexRun;
 export const subscribeCodex = server.subscribeCodex;
 export const subscribeAgent = server.subscribeAgent;
 export const skills = server.skills;
+export const libraries = server.libraries;
+export const libraryTree = server.libraryTree;
+export const libraryPage = server.libraryPage;
+export const librarySearch = server.librarySearch;
+export const libraryBacklinks = server.libraryBacklinks;
+export const libraryResolve = server.libraryResolve;
+export const savePage = server.savePage;
+export const deletePage = server.deletePage;
+export const saveMedia = server.saveMedia;
+export const addLibrary = server.addLibrary;
+export const removeLibrary = server.removeLibrary;
+export const subscribeLibraries = server.subscribeLibraries;
 export const health = server.health;
 export const files = server.files;
 export const file = server.file;
@@ -444,6 +544,9 @@ const stopWatching = isBrowser
   ? [
       onDiskChange((disk) => server.store.applyDisk(disk)),
       onSampleChange((disk) => server.store.applySample(disk)),
+      onPersonalChange((personal, sample) =>
+        server.libraryRegistry.applyPersonalDisk(personal, sample),
+      ),
     ]
   : undefined;
 

@@ -1,4 +1,4 @@
-// Kit entries of Workdatabase · Skills (src/features/skills).
+// Kit entries of Library · Skills (src/features/skills).
 import { InstallPanel, SkillItemView, SkillRow, SkillSource, SkillsView } from "@/features/skills";
 import { allSkills, type Skill, type SkillsCatalog, useSkills } from "@/lib/api";
 import { entry, type KitEntry, Loading, Sandbox, V } from "../kit-ui";
@@ -168,35 +168,35 @@ function SkillSourceBody() {
 
 export const skillsEntries: KitEntry[] = [
   entry(
-    "Workdatabase",
+    "Library",
     "SkillsView",
     `${SRC}/SkillsView.tsx`,
     "A team gets the same skills only if they can find them and install them in one step, so the repository's plugins, their skills and the install commands sit on one page, with the SKILL.md of the one you open beside them.",
     SkillsViewBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "InstallPanel",
     `${SRC}/InstallPanel.tsx`,
     "Installing is three commands for Claude Code and one for Codex; each has a copy button, and they are built from the plugin's own manifests so they never go stale.",
     InstallPanelBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "SkillRow",
     `${SRC}/SkillRow.tsx`,
     "A skill is chosen by when it applies, so the row leads with the name, then the “Use when” sentence, then the file it lives in.",
     SkillRowBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "SkillItemView",
     `${SRC}/SkillItemView.tsx`,
     "A skill is a markdown file, so it is read the way library items are: as a page, or as the source it was written in.",
     SkillItemViewBody,
   ),
   entry(
-    "Workdatabase",
+    "Library",
     "SkillSource",
     `${SRC}/SkillSource.tsx`,
     "The source of a SKILL.md keeps its line numbers true, so a tag on the rendered page can point at the line that produced it.",

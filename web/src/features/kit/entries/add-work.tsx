@@ -185,7 +185,7 @@ function AddWorkDialogBody() {
       <Screen label="5 · Size of the whole" step="size" draft={groupDraft} height={400} />
       <Screen label="6 · Priority" step="priority" draft={groupDraft} height={480} />
       <Screen
-        label="7 · Context from the Workdatabase: toggle chips, Skip"
+        label="7 · Context from the library: toggle chips, Skip"
         note="Library items and glossary terms found by a search on the outcome."
         step="context"
         draft={groupDraft}

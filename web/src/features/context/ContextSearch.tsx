@@ -86,7 +86,7 @@ export function ContextSearch({
       data-wf="ContextSearch"
       shouldFilter={false}
       loop
-      label="Search the Workdatabase"
+      label="Search the library"
       value={highlight}
       onValueChange={setHighlight}
       className={cn("h-auto", className)}
@@ -96,7 +96,7 @@ export function ContextSearch({
         onValueChange={setQuery}
         autoFocus={autoFocus}
         placeholder="Search library, glossary, files, decisions"
-        aria-label="Search the Workdatabase"
+        aria-label="Search the library"
       />
       <CommandList className={cn("max-h-[min(340px,46dvh)]", listClassName)}>
         {db.loading && groups.length === 0 ? (

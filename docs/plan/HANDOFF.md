@@ -16,7 +16,7 @@ integrated; this file says what exists, what was decided and what is open.
 
 1. **Distribute skills and plugins across the team.** The plugin `plugins/workflow/` (Claude marketplace
    `.claude-plugin/marketplace.json`; `scripts/install-skills.sh --codex` copies the skills to `.agents/skills/`) and the
-   Workdatabase · Skills view (`/skills`, `g s`) that lists them with their install commands.
+   Library · Skills view (`/skills`, `g s`) that lists them with their install commands.
 2. **Hand anyone the full context of an issue.** Eight issue tabs (Now, Goal, Criteria, Plan, Log, Git, CI, Files), the
    **Open in Codex** button (copies a `codex "Work on wf-xxxxx …"` command and shows the exact prompt), **Copy context** (copies the context bundle as markdown, the text the
    `handing-off` skill prints, and shows it, with a prompt that asks Codex or Claude to do the same hand-off), and the `handing-off` skill. Handing an issue over hands over
@@ -32,8 +32,8 @@ with a set of skills without coming to the ui and the ui should be able to work 
 
 ## What exists now
 
-- **Naming.** Workspace → **Workflow** (Board, with a Needs you filter) and **Workdatabase** (Library · Glossary · Files · Skills). Shortcuts
-  `g w`, `g d` or `g l`, `g g`, `g f`, `g s`, `g k`; `n` opens Add work. There is **no inbox**: `/inbox` redirects to `/w?needs=me`.
+- **Naming.** Workspace → **Workflow** (Board, with a Needs you filter) and **Library** (Personal · Team libraries · Files · Skills; it was Workdatabase, see "Libraries" below). Shortcuts
+  `g w`, `g d` or `g l`, `g p`, `g t`, `g g`, `g f`, `g s`, `g k`; `n` opens Add work. There is **no inbox**: `/inbox` redirects to `/w?needs=me`.
 - **Board.** Toolbar with **Needs you** (a toggle with the count of open requests; `?needs=me`) and the primary **+ Add work**. One set of columns: **no swimlanes** (round 2).
   A card shows the agent's mark while a run goes on its issue; its menu has Open in <agent> and Do next step.
 - **+ Add work** (`web/src/features/add-work`). One question per screen. Group path: What → Where → Outcome (the one typed line) → Name → Size →
@@ -44,14 +44,14 @@ with a set of skills without coming to the ui and the ui should be able to work 
   Criteria moved out of Goal into its own tab; `[[#SC-n]]` links go to it. Keys 1 to 8 work in every layout (on the wide page a section scrolls into view and takes focus).
   **Traceability runs both ways:** the Git tab's `T-n` pill opens the task, a Log entry's commit chip opens the commit in Git, and a task's detail lists its commits and CI runs, each a link.
 - **Empty states and hints** (`features/issue/skill-hint.tsx`): a button first (Do next step, Write the context), then one real skill of the workflow plugin linked to its page in
-  Workdatabase · Skills, and the prompt with a copy button for `codex '…'`. No invented skill names and no `wf …` command shown as runnable (there is no CLI); see "UI hints" in `web/UI_BUILD.md`.
+  Library · Skills, and the prompt with a copy button for `codex '…'`. No invented skill names and no `wf …` command shown as runnable (there is no CLI); see "UI hints" in `web/UI_BUILD.md`.
 - **Open in Codex / Do next step** (`web/src/features/codex`). Round 2: both follow the connected agent (see "Round 2"). The run is simulated in the prototype unless a real bridge is connected, but each simulated phase is a real markdown edit
   (claim the task, log a change, verify with a CI run, finish the task and `current_state.md`, add a commit). The same code path serves the
   issue header, the card menu and the palette. **One confirmation per event:** a run shown in the header's strip has no toast; one started from the card menu or the palette gives one toast when it ends;
   Open in Codex confirms in its popover line and has no toast; Copy context confirms in its popover (the palette gives one toast with View). While a run goes the
   Q005 "current_state is behind" signal is held back (the log is ahead of `current_state.md` on purpose), so the tabs do not move.
 - **Skills** (`web/src/features/skills`, `plugins/workflow/skills/*`): `using-wf`, `adding-work`, `planning-issues`, `doing-next-step`,
-  `logging-work`, `checking-status`, `handing-off`, `writing-readable-bulk-text`. They edit the same markdown, so Codex or Claude can run the
+  `logging-work`, `checking-status`, `handing-off`, `writing-readable-bulk-text`, and for libraries `keeping-a-library`, `summarizing-codebase`, `summarizing-work`, `querying-library`. They edit the same markdown, so Codex or Claude can run the
   whole flow without the UI and a UI edit is just a file for the next skill run. `pnpm wf:lint <workspace>` checks a workspace.
 - **Data layer** (`web/src/lib/api`, `web/mock`): `useDelivery`, `useSplitWork`, `useCreateWork`, `useCodexRuns`, `useStartCodexRun`, `codexCommand`,
   `useSkills`; see "Delivery, work, codex and skills" in `UI_BUILD.md`.
@@ -59,7 +59,7 @@ with a set of skills without coming to the ui and the ui should be able to work 
   `newIssueOpen`, `newGroupOpen`, `openNewIssue`, `openNewGroup` in the shell store. `features/inbox` and the `/inbox` page.
 - **Loading.** The issue views, the Add work dialog and the Skills view are lazy chunks (`web/src/app/lazy-views.tsx`) fetched when the browser is
   idle; the main chunk is 347 kB and the build has no chunk-size warning. Keep it that way.
-- **Kit** (`/kit`, 145 elements after round 2, no console errors): registers the issue-delivery, Add work, Codex and Skills entries; new groups Issue · Criteria,
+- **Kit** (`/kit`, 145 elements after round 2, plus the library entries; no console errors): registers the issue-delivery, Add work, Codex and Skills entries; new groups Issue · Criteria,
   Issue · Git, Issue · CI; the empty "Workflow · Inbox" group is gone.
 
 ## Decisions
@@ -70,7 +70,7 @@ unless a note says otherwise.
 1. **Markdown-first.** `web/mock/workspace/**` is the only source of mock content; the sample world is the fixture `web/mock/sample/`. The parser
    in `web/mock/md/` follows contract §1.3–1.7; every UI write and scripted event is a minimal text edit. Saving a file under `web/mock/workspace/`
    updates the board through HMR in the dev server. The one exception is git, PR and CI data (D2).
-2. **Naming.** Workspace → Workflow and Workdatabase (see above).
+2. **Naming.** Workspace → Workflow and Workdatabase (see above; the second was renamed Library on 2026-10-30).
 3. **Context from the Workdatabase.** Library items, glossary terms, files and decisions are linked under `## Links`. Add work's context step offers the
    matching library items and terms as toggle chips; the Goal tab's "Add context" adds more later; the `wf context` bundle puts linked items first.
 4. **Library is a markdown-grounded HTML viewer** (Rendered | Source, file:line on hover, inline Edit).
@@ -134,7 +134,7 @@ Fixed in `web/src/features/issue/**` (not `IssueHeader.tsx`), `RefLink`, the Kit
   A run claims goal.md too (`status: in_progress`, `claimed_by`, `lease_until`) unless another author holds a live coordinator lease, ticks a criterion only with a command's evidence, and ends a `verify: manual` task in `review` with an approval request in Needs you.
 - **Sample clock.** `WF_NOW=2026-10-22T16:27+05:30` on `web/mock/sample` gives the dashboard's answers in `wf-status.sh` (a live lease with 35 minutes left, T-4 ready, nothing stale); `node plugins/workflow/scripts/check-sample-clock.mjs` checks it. Run skill evals on a copy.
 - **Accept and Reject on a proposed decision are buttons** now (`set_decision_status` op, `useSetDecisionStatus`; the one in-place edit `logging-work` allows). The card changes its status chip; there is no toast.
-- **Hints name only real things.** The eight skills of `plugins/workflow/skills` and buttons; no `wf …` command is shown as runnable (the sample's own next steps were reworded too: "Verify SC-3 with its command."). `hints.test.ts` fails on an invented skill or command in `features/issue` and `features/kit`.
+- **Hints name only real things.** The twelve skills of `plugins/workflow/skills` and buttons; no `wf …` command is shown as runnable (the sample's own next steps were reworded too: "Verify SC-3 with its command."). `hints.test.ts` fails on an invented skill or command in `features/issue` and `features/kit`.
 - **One confirmation per event.** A run that ends while the header strip shows it has no toast; a run from the card menu or the palette gives one toast when it ends; Open in Codex in the header has the popover's line only; the palette's Open in Codex toasts once; a cancel has none.
 - **Install panel** has two audiences for Claude Code (just me / everyone on the repository) and two steps for Codex (`install-skills.sh --codex`, then `--print-agents-md >> AGENTS.md`), and says `mudit1729/workflow_management` is the team's repository. That is the repository's current name (GitHub redirects the old `workflow_maagement` there); it is `repository` in `plugins/workflow/.claude-plugin/plugin.json`, which `install-skills.sh --claude-plugin` reads, and a test keeps it equal to `SKILLS_REPO`. A clone made before the rename still has the old `origin`; `git remote set-url origin https://github.com/mudit1729/workflow_management` fixes it.
 - **Still open, small:** the Add work "Start in: Planned" writes `status: planned` without a `plan.md` (adding-work writes `backlog` only; planned is the result of planning-issues); a `verify: manual` criterion makes the first Do next step end in `review`
@@ -180,6 +180,63 @@ Open items for round 2 (and what this pass checked):
   Not applied: `web/biome.json` still covers `src` and `mock` only (the CLI run adds `scripts`; `plugins/workflow/scripts/wf-bridge.mjs` is not linted by `pnpm lint`; it was checked once with a broadened config); the contract is unchanged.
 - **Not committed, not published.** The review fixes and this verification are not committed (`git status` lists them); the artifact is still the 2026-10-22 build.
 - `docs/plan/workflows/*.js` and the plan's `parts/` and `diagrams/` were not touched.
+## Libraries: personal, team and Ask (2026-10-30, branch `library`)
+
+Spec: `docs/plan/proposals/libraries-spec.md`. Build contract: the library, personal, team and ask sections of `web/UI_BUILD.md`. The nav section **Workdatabase is now Library**: Personal, Team
+libraries, Files, Skills. Everything in a library is markdown; the viewer is a calm document wiki with GIFs, video files and click-to-load embed cards.
+
+### Decisions
+
+L1 to L4 were made by the user. L5 to L7 are the spec's defaults, built as written.
+
+- **L1 Where a personal library lives.** A private GitHub repo of the person's own, by default `github.com/<you>/wf-library`; the connected agent's bridge keeps a local clone and pushes edits.
+  Prototype: the fixture `web/mock/personal/` plus edits in the browser; the first visit shows two buttons (**Create github.com/<you>/wf-library (private)**, **Use a repo I already have**).
+- **L2 How private team repos are read.** Through the agent bridge, with the person's own git credentials. A public repo is read straight from GitHub (one tree call, files pinned to the commit).
+  Prototype: `mock/libraries/github.ts` reads real public repos from the browser and the fixture repo `acme/platform-handbook` offline; a private repo shows **Connect an agent to read private repos**.
+- **L3 Asking a library from an issue.** The connected agent answers with citations (the `querying-library` skill); **Link cited pages** and **Save to log** write to the issue; with no agent the five best passages are shown.
+  Prototype: the answer is extractive and labelled "Prototype answer".
+- **L4 The workspace's own Library and Glossary** are the first team library, "this workspace" (alias `wf`); the glossary is one of its pages. `[[lib-xxxxx]]`, Promote, Approve and the draft, retired and overdue banners keep working.
+- **L5 Group and issue summaries** are written by the agent on demand and are marked stale when the issue changed after the summary (`rev`). The `rev` is the first 7 hex characters of the SHA-256 of the wf files
+  of the folder with every time made neutral, so a lease renewal or a moved clock does not make a summary stale. **The dashboard and `summarizing-work/scripts/wf-rev.sh` compute it the same way**
+  (`node plugins/workflow/scripts/check-work-revs.mjs` checks it).
+- **L6 Editing.** The personal library is edited in the dashboard (`SourceEditor`, a leave guard, "Saved · pushed a1b2c3d"); team libraries are read-only with Open on GitHub. "Propose a change" comes later.
+- **L7 Media.** Pictures and GIFs are files in the repo, video is a file (`.mp4`, `.webm`) or a YouTube, Vimeo or Loom link on a line of its own. A GIF stills under reduced motion, a video never autoplays, an embed loads only
+  on click, a file over 25 MB is linked. See "Media rules" in `UI_BUILD.md`.
+- **Smaller calls made while building.** `_group.md` is a section's own page, so group summaries are section pages (the spec names only `index.md` and `README.md`). A group summary has Outcome, Groups, Issues, Risks, Next;
+  an issue summary has five fixed sections. `rev` and `commit` are quoted in the frontmatter (an unquoted `0123456` is a number). Blocked sorts after in progress and cancelled last. Aliases are `[a-z0-9][a-z0-9_-]*`;
+  `me`, `t` and the workspace alias are reserved. A team library's default alias is its repo name (`platform-handbook`). Libraries added in a session are lost on reload.
+
+### What exists
+
+- **Routes.** `/lib`, `/lib/me`, `/lib/me/$`, `/lib/t/$alias`, `/lib/t/$alias/$`; `/lib/t` redirects to the workspace library; `/lib/<lib-id>`, `/glossary` (`?q=<term>` opens at the heading) and `/lib?tab=glossary` redirect to the page.
+- **Palette.** Open personal library, Add team library…, Search the library, and (with an issue open) Ask the library about <id>. Shortcuts `g p`, `g t`; `[` and `]` between pages; `/` searches.
+- **Kit.** Groups Library, Library · Personal, Library · Team, Library · Ask: the wiki viewer's header, tree, rail, outline, callouts and media, the personal home sections, each Add team library screen, and the Ask panel's states.
+- **Skills.** Four more: `keeping-a-library`, `summarizing-codebase`, `summarizing-work`, `querying-library` (12 in all). They write the same files the dashboard writes.
+- **Tooling.** `scripts/sweep.mjs` has the library routes; a route under `/lib/t/platform-handbook` first adds the example library through the palette and the dialog (`scripts/goto.mjs`). `window.__wf.resetPersonal()` and `setUpPersonal()`,
+  `window.__wf.teams.moveRemote()` and `resetRemote()` (a newer commit on the fixture repo, so the footer offers Update), `window.__wf.setPrototypeAnswers(false)` (Ask as it is with no agent).
+
+### Seams for the other team (agent connection)
+
+Each is a registration function; until it is called the prototype simulates and says so ("Prototype").
+
+- `setAskAgent({ handle, ask(request, signal, onText) })` in `features/ask/agent.ts`: runs `querying-library` on exactly `request.pages`; the request carries the prompt text.
+- `setPersonalAgent({ summarize(request) })` in `features/library/personal/summarize.ts`: runs `summarizing-codebase` or `summarizing-work`; the dashboard shows "Summarizing…" while it runs and re-reads the pages.
+- `setConnectAgentHandler(fn)` in `features/library/team/connect-hook.ts`: the **Connect an agent to read private repos** button, and **Connect an agent for an answer** in the Ask panel.
+- The bridge endpoints of spec section 8 (`GET /libraries`, `POST /libraries`, `.../sync`, `.../tree`, `.../file`, `PUT /libraries/me/file`, `POST /ask`) are not implemented. The paths in `src/lib/api/client.ts` for the library calls are a guess.
+  `docs/plan/contract.md` does not yet name `add_learning`, `add_links` with `kind: "page"` or the library endpoints.
+
+### Open items
+
+- **Questions for the user.** (1) The codebase summary file is named `mudit1729-workflow_management.md`, as asked, but its `repo:` is the real remote `workflow_maagement`, so Open on GitHub works; rename the file to match, or change the URL?
+  (2) The `rev` rule above is the dashboard's and now also the script's; the earlier script hashed raw bytes, so a lease renewal made every active issue stale. Keep this? (3) The personal fixture's dates are fixed (the sample's are moved to the clock at every load), so
+  "summarized 10 hours ago" will age; shift them in the loader too?
+- **Not built.** Code highlighting in library pages (plain mono blocks) and diagram fences in them ("Diagram not found"); an oEmbed title or poster for embed cards; the palette does not search pages of the personal or team libraries (only the old items);
+  a startup read of `libraries.toml` (an entry listed there shows "Not loaded" with a one-click read); the footer shows the commit but "Updated by" of a team page comes only from its frontmatter; a blob link to a page outside the chosen root opens the home;
+  the Add team library dialog never offers the whole repo as a root when several folders hold markdown; the Pick pages tree in Ask is checkboxes, not an ARIA tree.
+- **Limits of the public reader.** GitHub allows 60 unauthenticated calls an hour per IP and a lookup costs 3 (a repeat is free through the ETag). At most 500 pages, none over 1 MB; the rest are listed under Other files. `mock/libraries/github.ts` lives in `mock/` for the prototype and belongs in the product code.
+- **Lint.** `mock/md/refs.ts` does not read `[[alias:path]]` under `## Links`, so such a bullet is not validated (no F009 for a page that was deleted); the Links row shows it dashed.
+- **Merge into the other checkout.** The branch touches the shell the other team is changing: `AppShell.tsx`, `NavRail.tsx`, `router.tsx`, `shell-store.ts`, `CommandPalette.tsx`, `shortcuts.tsx`, `lib/nav.ts`, `lib/api/*`, `mock/server.ts`, `gen/types.ts`, `IssueHeader.tsx`
+  (one button), `vite.config.ts` (chunk groups), `web/UI_BUILD.md` and this file. Re-run the checks below after the merge; the mock server chunk was 310 kB, and the markdown of the mock is its own chunk (`mock-files`).
 
 ## How the user gives feedback
 
@@ -190,10 +247,10 @@ component, keep the Kit in sync, re-screenshot, and republish.
 ## How to run and verify
 
 - `pnpm --dir web install`, `pnpm --dir web dev` (port 5177). The checks, in this order, all clean at the end of this pass:
-  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1110 tests in 50 files after the final verification of round 2, the bridge's 54 included) `&& pnpm -s build` (no chunk warning; the entry chunk `index-*.js` is 269 kB, the largest chunk is the lazy mock server at 449 kB); also `pnpm -s wf:lint mock/workspace` (only the 18 known F009 warnings) and `node plugins/workflow/scripts/check-skills.mjs` (8 skills ok).
+  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1503 tests in 64 files after merging round 2's final fixes with the libraries, the bridge's 54 included) `&& pnpm -s build` (no chunk warning); also `pnpm -s wf:lint mock/workspace` (only the 18 known F009 warnings), `node plugins/workflow/scripts/check-skills.mjs` (12 skills ok) and `node plugins/workflow/scripts/check-work-revs.mjs`. With a dev server up: `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-library.mjs` (the library smoke, zero console errors).
 - Screenshots: `node web/scripts/shot.mjs <route> <png> [--w 1440|1680|390] [--theme dark] [--sample] [--agent codex|claude] [--click "<sel>"]` (one page, clicks; Do next step needs `--agent`, or it opens the connect flow) and
   `node web/scripts/sweep.mjs --out <dir> --sample --sheets` (every route × width × theme, with contact sheets; the routes now include `/w?needs=me`,
-  `/skills`, `/skills?skill=adding-work` and `tab=criteria`, `git`, `ci` of `wf-3k9x2`; `/inbox` is gone). Both fall back to the system Chromium at
+  `/skills`, `/skills?skill=adding-work` and `tab=criteria`, `git`, `ci` of `wf-3k9x2`, and the library routes; `/inbox` is gone). A route under `/lib/t/platform-handbook` adds the example library first (`scripts/goto.mjs`). Both fall back to the system Chromium at
   `/opt/pw-browsers/chromium` in cloud containers.
 - The Playwright smoke that closed this pass: empty board → **+ Add work** group path (8 clicks, 1 typed line) → 4 issues on the board; **Load sample data** →
   `wf-3k9x2` → keys 1 to 8 → **Do next step** → the strip shows the phases ("Claiming T-4" … "Done: T-4"), no toast beside it, and the task (Plan 2/5), the log (19), Git (7) and a new CI run show it; a second run started from a card menu is cancelled with no toast, and one that ends gives one toast; `/kit` renders

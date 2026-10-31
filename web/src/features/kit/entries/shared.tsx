@@ -465,7 +465,7 @@ function SkillHintBody() {
     <>
       <V
         label="centered"
-        note="The skill name links to its page in Workdatabase · Skills; Copy puts the whole codex command on the clipboard."
+        note="The skill name links to its page in Library · Skills; Copy puts the whole codex command on the clipboard."
         width={420}
       >
         <SkillHint skill="planning-issues" prompt={ASK.plan("wf-3k9x2")} />

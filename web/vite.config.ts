@@ -12,6 +12,9 @@ const REPO = fileURLToPath(new URL("..", import.meta.url));
 /** The shipped workspace (groups, library, glossary, no issues) and the sample world (a fixture). */
 const WORKSPACE = `${ROOT}mock/workspace/`;
 const SAMPLE = `${ROOT}mock/sample/`;
+/** The personal library (always) and the part of it that shows only with the sample loaded. */
+const PERSONAL = `${ROOT}mock/personal/`;
+const PERSONAL_SAMPLE = `${ROOT}mock/personal-sample/`;
 
 /** Matches `/node_modules/<package>/` in a module id, whether or not pnpm nested it under `.pnpm`. */
 const pkg = (names: string[]) => new RegExp(`/node_modules/(?:${names.join("|")})/`);
@@ -86,7 +89,8 @@ function workspaceAssets(): Plugin {
  * The mock "watcher". A file added, changed or removed under `mock/workspace` re-runs
  * `mock/workspace-files.ts`, which accepts its own update and hands the new file set to the
  * store (`mock/workspace-bus.ts`); a file under `mock/sample` does the same through
- * `mock/sample-files.ts`. An edit keeps the file's own `?raw` module in the update
+ * `mock/sample-files.ts`, and the personal library (`mock/personal`, `mock/personal-sample`)
+ * through `mock/personal-files.ts`. An edit keeps the file's own `?raw` module in the update
  * (so the watcher imports the new text) and adds the watcher itself. An add or a remove is
  * the watcher alone: by default Vite also puts every module that ever failed to resolve into
  * the update of an added file, and one dead end there reloads the page and drops the
@@ -96,6 +100,8 @@ function workspaceHot(): Plugin {
   const WATCHERS = [
     { folder: WORKSPACE, module: `${ROOT}mock/workspace-files.ts` },
     { folder: SAMPLE, module: `${ROOT}mock/sample-files.ts` },
+    { folder: PERSONAL, module: `${ROOT}mock/personal-files.ts` },
+    { folder: PERSONAL_SAMPLE, module: `${ROOT}mock/personal-files.ts` },
   ];
   return {
     name: "wf:workspace-hot",
@@ -206,6 +212,17 @@ export default defineConfig({
             { name: "radix", test: pkg(RADIX), priority: 40 },
             { name: "tanstack", test: pkg(TANSTACK), priority: 30 },
             { name: "markdown", test: pkg(MARKDOWN), priority: 20 },
+            // The library model of the mock (trees, links, the search index): a chunk of its own, so
+            // the mock server stays under the 500 kB warning. The GitHub reader is left out: only
+            // the Add team library dialog loads it.
+            { name: "mock-libraries", test: /\/mock\/libraries\/(?!github)/, priority: 25 },
+            // The markdown the mock reads (workspace, sample world, personal library): text that
+            // changes on its own schedule, so it caches apart from the mock's code.
+            {
+              name: "mock-files",
+              test: /\/mock\/(?:workspace|sample|personal|personal-sample)\//,
+              priority: 26,
+            },
             { name: "vendor", test: /\/node_modules\//, priority: 10 },
           ],
         },

@@ -534,9 +534,11 @@ export interface Health {
  * - `term`: `- Glossary: <target> — <label>`; `target` is the term, `label` what it means.
  * - `file`: `- [<label>](<path relative to the issue folder>)`; `target` is the
  *   workspace-relative path of the file.
+ * - `page`: `- [[platform:runbooks/x.md]]: <label>`; `target` is the page address of a team or
+ *   personal library (`alias:path`, a workspace page that is a library item is `library`).
  */
 export interface ContextLink {
-  kind: "library" | "entry" | "term" | "file";
+  kind: "library" | "entry" | "term" | "file" | "page";
   target: string;
   label: string;
 }
@@ -587,7 +589,22 @@ export type Op =
     }
   | { op: "approve_library"; base_rev: Rev; id: LibId }
   /** Append Workdatabase items to `## Links` of goal.md. Items already linked are skipped. */
-  | { op: "add_links"; base_rev: Rev; issue: IssueId; links: ContextLink[] };
+  | { op: "add_links"; base_rev: Rev; issue: IssueId; links: ContextLink[] }
+  /**
+   * Append a learning to `learnings.md` (the format of `logging-work`): the title is the question
+   * of an Ask library answer, `rule` its summary, `sources` the pages it was read from
+   * (`alias:path`, with `#anchor` for a section). The result's `created` is the new `L-` id.
+   */
+  | {
+      op: "add_learning";
+      base_rev: Rev;
+      issue: IssueId;
+      title: string;
+      rule: string;
+      kind?: LearningKind;
+      tags?: string[];
+      sources?: string[];
+    };
 
 export type OpName = Op["op"];
 
@@ -595,7 +612,7 @@ export interface OpResult {
   rev: Rev; // workspace rev after the write
   file_rev: Rev; // rev of the written file
   issue?: IssueSummary;
-  /** Present for promote / new_issue / new_group: the created id. */
+  /** Present for promote / new_issue / new_group / add_learning: the created id. */
   created?: string;
 }
 

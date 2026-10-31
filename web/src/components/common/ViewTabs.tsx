@@ -1,23 +1,24 @@
-// The sub-view tabs of one view, as real links: Workflow (Board) and Workdatabase (Library ·
-// Glossary · Files · Skills). Every page puts them at the left of its one 44 px top bar, after
-// the view's name. The active tab follows the route, so the board, its drawer and the full issue
+// The sub-view tabs of one view, as real links: Workflow (Board) and Library (Personal · Team
+// libraries · Files · Skills; the view's id is still `workdatabase`). Every page puts them at the
+// left of its one 44 px top bar, after the view's name. The active tab follows the route, so the board, its drawer and the full issue
 // page all count as Board. Underline style, like Tabs, so the page's own filters (pills,
 // segmented controls) stay visually secondary.
 import { Link } from "@tanstack/react-router";
-import { Database, LayoutGrid, type LucideIcon } from "lucide-react";
-import { allSkills, useGlossary, useSkills, useSnapshot, useWorkspaceFiles } from "@/lib/api";
+import { BookOpen, LayoutGrid, type LucideIcon } from "lucide-react";
+import { allSkills, useLibraries, useSkills, useWorkspaceFiles } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { usePathname } from "@/lib/nav";
 import { LintBadge } from "./LintBadge";
 
 export type WfView = "workflow" | "workdatabase";
-export type WfSubView = "board" | "library" | "glossary" | "files" | "skills";
+export type WfSubView = "board" | "library" | "personal" | "team" | "files" | "skills";
 
 export interface ViewDef {
   label: string;
   icon: LucideIcon;
   /** The sub-view a click on the view itself opens. */
   home: WfSubView;
+  /** The tabs, in order. The home is one of them unless it is a page of its own (the Library home). */
   subs: WfSubView[];
   /** The shortcut that opens `home`. */
   shortcut: string;
@@ -26,12 +27,12 @@ export interface ViewDef {
 export interface SubViewDef {
   view: WfView;
   label: string;
-  to: "/w" | "/lib" | "/glossary" | "/files" | "/skills";
+  to: "/w" | "/lib" | "/lib/me" | "/lib/t" | "/files" | "/skills";
   /** Two-key sequence, as `useHotkey` and `Kbd` take it. */
   shortcut: string;
 }
 
-/** Workspace > Workflow (work in motion) and Workdatabase (everything stored). */
+/** Workspace > Workflow (work in motion) and Library (everything stored). */
 export const VIEWS: Record<WfView, ViewDef> = {
   workflow: {
     label: "Workflow",
@@ -41,18 +42,19 @@ export const VIEWS: Record<WfView, ViewDef> = {
     shortcut: "g w",
   },
   workdatabase: {
-    label: "Workdatabase",
-    icon: Database,
+    label: "Library",
+    icon: BookOpen,
     home: "library",
-    subs: ["library", "glossary", "files", "skills"],
-    shortcut: "g d",
+    subs: ["personal", "team", "files", "skills"],
+    shortcut: "g l",
   },
 };
 
 export const SUBVIEWS: Record<WfSubView, SubViewDef> = {
   board: { view: "workflow", label: "Board", to: "/w", shortcut: "g w" },
   library: { view: "workdatabase", label: "Library", to: "/lib", shortcut: "g l" },
-  glossary: { view: "workdatabase", label: "Glossary", to: "/glossary", shortcut: "g g" },
+  personal: { view: "workdatabase", label: "Personal", to: "/lib/me", shortcut: "g p" },
+  team: { view: "workdatabase", label: "Team libraries", to: "/lib/t", shortcut: "g t" },
   files: { view: "workdatabase", label: "Files", to: "/files", shortcut: "g f" },
   skills: { view: "workdatabase", label: "Skills", to: "/skills", shortcut: "g s" },
 };
@@ -63,8 +65,11 @@ export const SUBVIEWS: Record<WfSubView, SubViewDef> = {
  */
 export function subViewForPath(path: string): WfSubView | undefined {
   if (path === "/w" || path.startsWith("/w/") || path.startsWith("/i/")) return "board";
+  if (path === "/lib/me" || path.startsWith("/lib/me/")) return "personal";
+  // The old /glossary lands on a page of the workspace library, which is a team library.
+  if (path === "/lib/t" || path.startsWith("/lib/t/")) return "team";
+  if (path === "/glossary" || path.startsWith("/glossary/")) return "team";
   if (path === "/lib" || path.startsWith("/lib/")) return "library";
-  if (path === "/glossary" || path.startsWith("/glossary/")) return "glossary";
   if (path === "/files" || path.startsWith("/files/")) return "files";
   if (path === "/skills" || path.startsWith("/skills/")) return "skills";
   return undefined;
@@ -76,10 +81,10 @@ export function useActiveSubView(): WfSubView | undefined {
 }
 
 export interface ViewCounts {
-  /** Library items (every status). */
-  library?: number;
-  /** Glossary terms. */
-  glossary?: number;
+  /** Pages of the personal library. */
+  personal?: number;
+  /** Team libraries, the workspace's included. */
+  team?: number;
   /** Workdatabase · Files. */
   files?: number;
   /** Skills across the repository's plugins. */
@@ -90,13 +95,12 @@ export interface ViewCounts {
 
 /** The counts shown after the tabs and in the nav. Undefined while a list is still loading. */
 export function useViewCounts(): ViewCounts {
-  const library = useSnapshot().data?.library.length;
-  const glossary = useGlossary().data?.length;
+  const libraries = useLibraries().data;
   const files = useWorkspaceFiles().data;
   const catalog = useSkills().data;
   return {
-    library,
-    glossary,
+    personal: libraries?.find((l) => l.kind === "personal")?.pages,
+    team: libraries?.filter((l) => l.kind !== "personal").length,
     files: files?.length,
     skills: catalog ? allSkills(catalog).length : undefined,
     fileErrors: files?.reduce((n, f) => n + f.errors, 0) ?? 0,
@@ -165,15 +169,15 @@ function ViewTab({
 }
 
 /** What a sub-view's count counts, for a screen reader. */
-const COUNT_NOUN: Record<Exclude<WfSubView, "board">, string> = {
-  library: " items",
-  glossary: " terms",
+const COUNT_NOUN: Partial<Record<WfSubView, string>> = {
+  personal: " pages",
+  team: " libraries",
   files: " files",
   skills: " skills",
 };
 
 function TabCount({ sub, counts }: { sub: WfSubView; counts: ViewCounts }) {
-  if (sub === "board") return null;
+  if (sub === "board" || sub === "library") return null;
   const n = counts[sub];
   if (n === undefined) return null;
   return (
