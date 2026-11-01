@@ -69,7 +69,7 @@ Writers use ` — ` (parser also accepts ` - `). Entries are appended at the bot
 
 Type notation: `str`, `int`, `date`, `ts`, `@h` (handle), `[T]` (list), `enum(a|b)`. ✱ means required. Unknown keys are kept (F006 info).
 
-**workflow.toml:** `wf_format✱ int = 1`; `[workspace] name, issues_dir="issues", library_dir="library", id_prefix="wf"`; `[leases] minutes=60`; `[staleness] issue_hours=24, task_hours=4`; `[context] budget_tokens=6000, changes=5, library=3`; `[archify] home="~/.claude/skills/archify", quality="showcase", concurrency=2, timeout_s=90`; `[lint] disable=[], severity={}`; `[server] port=7777, author`.
+**workflow.toml:** `wf_format✱ int = 1`; `[workspace] name, issues_dir="issues", library_dir="library", id_prefix="wf"`; `[leases] minutes=60`; `[staleness] issue_hours=24, task_hours=4`; `[context] budget_tokens=6000, changes=5, library=3`; `[archify] home="~/.claude/skills/archify", quality="showcase", concurrency=2, timeout_s=90`; `[flow.<step>] skill, <option>` for the steps `add plan do log handoff status style` and `[flow.custom.<id>] after✱ skill✱ label required=false order=1` (the skills flow, scalars only; see `docs/plan/proposals/skills-flow-spec.md`); `[lint] disable=[], severity={}`; `[server] port=7777, author`.
 
 **_group.md**
 
@@ -560,6 +560,10 @@ Lint never blocks display. `wf lint` exits 1 on any error and 0 otherwise (`--st
   - F014 overlapping `owns` inside one plan (warn)
   - F016 entry without an author (error)
   - F017 meta list after a blank line (warn)
+  - F018 unknown step or key under `[flow]` in workflow.toml; wf keeps it and ignores it (warn)
+  - F019 a `[flow]` value the flow cannot use: an option value it does not take, a custom step with a bad id, `after` or no skill, a skill that is not a reference, a step that names the built-in skill of another step (warn)
+  - F020 a `[flow]` reference to a built-in or `ws:` skill that does not exist; the step runs its built-in skill (warn). References into a library are checked by the dashboard and `wf-env.sh flow`
+  - F021 a skill of the workspace's `skills/<name>/SKILL.md` that breaks the rules of `check-skills.mjs` (warn)
   - F015 log entry body changed versus git HEAD (warn, v1.1)
 - **Q (workflow, from wf-index):**
   - Q001 done but criteria not met

@@ -197,6 +197,61 @@ Each is a registration function; until it is called the prototype simulates and 
 - **Merge into the other checkout.** The branch touches the shell the other team is changing: `AppShell.tsx`, `NavRail.tsx`, `router.tsx`, `shell-store.ts`, `CommandPalette.tsx`, `shortcuts.tsx`, `lib/nav.ts`, `lib/api/*`, `mock/server.ts`, `gen/types.ts`, `IssueHeader.tsx`
   (one button), `vite.config.ts` (chunk groups), `web/UI_BUILD.md` and this file. Re-run the checks below after the merge; the mock server chunk was 310 kB, and the markdown of the mock is its own chunk (`mock-files`).
 
+## Settings: the skills flow (2026-10-31, branch `library`)
+
+The user's ask: "a settings pane where the entire flow of skills is mentioned and is clickable to change it, like goal skill, plan skill". Spec: `docs/plan/proposals/skills-flow-spec.md` (copied here from the
+other checkout, identical). Build contract: the "skills flow" data layer, "features/settings" and the Routes table of `web/UI_BUILD.md`. Three workstreams built it (skills side, data layer, Settings UI) and
+one integration pass joined them. The three goals map like this: skills and plugins reach the team through `ws:`, library and `me:` skills plus `install-skills.sh --from` (goal 1); the bundle carries a
+`skills flow:` line (goal 2); each custom step and each choice is a line in a markdown file, with Undo (goal 3).
+
+### Decisions
+
+F1 to F4 are the user's answers (2026-10-30); F5 and F6 are the spec's defaults, built as written. The spec numbers them.
+
+- **F1 Clicking a step** swaps the skill, sets options and edits it (a copy when it is a built-in or a team library's). **F2** the team default lives in `workflow.toml` `[flow]`, a personal override in the personal library's
+  `library.toml`, and the page shows which is in effect. **F3** custom steps after Add work, Plan, Do next step or Hand off; no new built-in steps. **F4** `/settings` with the tabs Skills flow, Agent and Workspace, opened by a gear.
+  **F5** one resolution rule for the skills, `wf-env.sh`, the hints and prompts, the bundle, the run and (later) the agent bridge. **F6** each click saves at once as a minimal edit, with one confirmation: a "Saved to workflow.toml · Undo" line, no toast.
+- **Smaller calls made while building**, in case the user wants them the other way:
+  - **`max_tasks` defaults to 8 and caps a phase.** The old text allowed 10 tasks a phase (the linter flags 11); the spec's default is 8. Every other default equals what the skills did before.
+  - **`finish = review`** (defined by the skills side): every task whose verify passed goes to `review` with a Needs you approval request; criteria are ticked only once a person sets the tasks to `done`; the issue goes to `review` when every task is `done` or `review`. The prototype's run does the same.
+  - **A quoted number or `true` is a string** (the integration pass made `wf-env.sh` as strict as the TypeScript side): `max_tasks = "9"`, `order = "5"` and `required = "true"` are skipped, as is a `skill = 5`. Table names must be bare keys (`[flow.plan]`); a comment after a header or a value is fine.
+  - **Aliases resolve only through the personal `libraries.toml`.** A team library added in the dashboard gets its repo name as alias (`platform-handbook`), so the reference a click writes is `platform-handbook:checking-security`; the fixture and the spec's examples say `platform`.
+  - **A step may name the built-in skill of another step** (`wf-env.sh` resolves any sibling of `using-wf`); the dashboard never offers it and the linter says so (F019). The four library skills are offered as custom steps only.
+  - **The derived "Fix:" hints and the scripted `current_state` lines name the team flow's skills only**, because the mock server has no person. Everything on screen (hints, links, the resume line, the hand-off prompt, the bundle, runs) uses my override.
+  - **The Add work option `then`** is read by the skill and by the board's Add work hint (`ASK.addWork` adds "Then plan every new issue." or "Do not offer to plan them."). The Add work dialog itself writes the issues and offers no Plan step, so the option has no effect there.
+  - **Team-only options** (`budget_tokens`, `changes`, `issue_hours`, `task_hours`) are written to `[context]` and `[staleness]`, where they already lived. They are shown, disabled, under Just me.
+  - **Numbers are buttons** (three each, plus the value in the file when it is another number); there is no field to type one.
+
+### What exists
+
+- **Settings** (`web/src/features/settings`): the flow as cards with a **+** between them, the step panel (contract, Apply to Everyone or Just me, numbered skill cards by source, option buttons, actions), custom steps, Edit a copy (two screens of buttons, then an editor with the
+  `check-skills` rules beside it), the Agent tab (connect button, the skills the flow needs and their install commands) and the Workspace tab (leases, disabled lint rules). Routes `/settings/flow[?step=…]`, `/settings/flow/edit`, `/settings/agent`, `/settings/workspace`; gear in the nav footer, palette
+  ("Open settings", "Skills flow", "Change the <step> skill" while typing), shortcut `mod+,`; Kit group **Settings** (16 entries).
+- **Skills view** is grouped by source (plugins, this workspace, each team library, yours), every skill is keyed by its reference, and the install panel has the `--from` commands for your own skills.
+- **Headless side** (`plugins/workflow`): `wf-env.sh flow` (`flow`, `flow <step>`, `flow <step> <option>`, `flow custom <step>`, `flow path <ref>`), a section "The skills flow" in `using-wf`, every hand-off in the built-in skills names the step and its skill in effect, `format.md` section 3 documents `[flow]`, the options and the bundle's flow line,
+  `install-skills.sh --from DIR` (repeatable; refuses a built-in name), `check-skills.mjs --with-builtins DIR`, and the team skill `checking-security` in the Platform handbook fixture (`web/mock/teams/acme-platform-handbook/docs/skills/`).
+- **Parity.** `web/scripts/flow-parity.test.ts` runs `wf-env.sh flow` and `resolveFlow` over `web/mock/flow-fixture/` and over edited copies of it, and holds both to `expected.json` (spec acceptance 5). It found two kinds of disagreement, both from the shell reader dropping quotes: a number or `true` in quotes, and a skill or label that is not a string. `wf-env.sh` was made strict.
+- **Smoke.** `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-settings.mjs [--out <dir>]` walks acceptance 2, 3 and 4 by clicks, with Undo after each, and fails on a console error (41 checks, zero errors on 2026-10-31).
+- **Scripts for the Kit and for you:** `window.__wf.setFlow(step, ref, scope?)`, `resetFlow()`, `failCustomStep(id, fail?)`.
+
+### Seams for the other team (agent connection)
+
+- The Agent tab's **Connect an agent** goes through `openConnectAgent` (`features/library/team/connect-hook.ts`); until a handler is registered it says the connection arrives with round 2. When it does: show the connection (agent, host, repo, version, Switch agent, Disconnect) there, and let the skills check list the skills the connected agent lacks (`flowSkillRefs(flow, { builtin: false })` is the list, `installFromCommand` the command).
+- **The bridge reads `workflow.toml` and the person's `library.toml` itself and names the skill in the prompt it builds** (spec 4.3); the browser still never sends a skill or a prompt. The bridge runs `wf-env.sh flow` or the TypeScript resolver; both give the same answer (the parity test).
+- `Api` gained `personalConfig()`, `savePersonalConfig()`, `skills()` and `skillFiles(ref)`. Their paths in `src/lib/api/client.ts` are guesses (`GET|PUT /api/libraries/me/config`, `GET /api/skills`, `GET /api/skills/files?ref=`), like the library calls before them.
+
+### Open items
+
+- **Spec acceptance 6 (the agent eval) is not run:** an agent that follows `using-wf` and `doing-next-step` on a temporary copy of the sample with a swapped Plan skill and a required custom step should use the configured Plan skill and run the step at its point. The skills say so; nobody has watched an agent do it.
+- **Not wired:** the Add work dialog does not read `then`; the Agent tab has no real connection state; `wf:lint` (the CLI loads `.md` and `.toml` only) cannot see `scripts/` paths inside a workspace skill (F021 treats them as present) or `<alias>:` and `me:` references (F020 skips them; the dashboard and `wf-env.sh flow` report them).
+- **Small:** two custom steps after one step can tie on `order` after "Runs after" moves one (ties break by id, as the resolver says); the editor edits `SKILL.md` only, not `scripts/` or `references/`; Open on GitHub for a team skill links to `HEAD`, not a commit; a table header with a quoted key (`[flow."plan"]`) is valid TOML that `wf-env.sh` does not read (the dashboard does).
+- **Merge into the other checkout** (it removes swimlanes and task lanes and adds the agent connection). Expect conflicts in:
+  - `plugins/workflow/skills/planning-issues/SKILL.md` step 8 (the other team changed `M lanes` to `M areas`; mine names the Log step's skill on the same line: keep both) and its step 9 or Example if lanes were removed there;
+  - `web/src/features/issue/PlanLanes.tsx`, `PlanList.tsx`, `tabs/PlanTab.tsx`, `NowTab.tsx` and the other issue views, where `SkillHint`/`SkillLink` now take a `step` and the prompts a skill;
+  - `web/src/app/NavRail.tsx`, `router.tsx`, `CommandPalette.tsx`, `shortcuts.tsx`, `lazy-views.tsx`, `tab-title.ts`, `web/src/lib/api/*`, `web/mock/server.ts`, `src/gen/types.ts`, `web/UI_BUILD.md` and this file.
+  After the merge, re-run the checks below, `node web/scripts/smoke-settings.mjs` and `scripts/flow-parity.test.ts`. The README's hunks are far from the "Connect an agent" section and should merge cleanly. If lanes are gone from `planning-issues` step 5, only the bullet I left alone is affected.
+- **Clock-dependent test fixed:** `features/library/team/screens.test.tsx` read the real date for "2 days ago"; it now pins the date, so it passes on any day.
+
 ## How the user gives feedback
 
 Every component root carries `data-wf="<ComponentName>"`; the Kit (`/kit`) shows each element with its
@@ -206,7 +261,7 @@ component, keep the Kit in sync, re-screenshot, and republish.
 ## How to run and verify
 
 - `pnpm --dir web install`, `pnpm --dir web dev` (port 5177). The checks, in this order, all clean at the end of this pass:
-  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1239 tests in 55 files) `&& pnpm -s build` (no chunk warning; the mock server chunk is 310 kB); also `pnpm -s wf:lint mock/workspace` (only the known F009 warnings), `node plugins/workflow/scripts/check-skills.mjs` (12 skills ok) and `node plugins/workflow/scripts/check-work-revs.mjs`. With a dev server up: `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-library.mjs` (the library smoke, zero console errors).
+  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1513 tests in 66 files, about a minute) `&& pnpm -s build` (no chunk warning); also `pnpm -s wf:lint mock/workspace` (only the 18 known F009 warnings), `node plugins/workflow/scripts/check-skills.mjs` (12 skills ok), `node plugins/workflow/scripts/check-work-revs.mjs` and `node plugins/workflow/scripts/check-sample-clock.mjs`. With a dev server up: `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-library.mjs` (the library smoke) and `node web/scripts/smoke-settings.mjs` (the Settings smoke), both with zero console errors.
 - Screenshots: `node web/scripts/shot.mjs <route> <png> [--w 1440|1680|390] [--theme dark] [--sample] [--click "<sel>"]` (one page, clicks) and
   `node web/scripts/sweep.mjs --out <dir> --sample --sheets` (every route × width × theme, with contact sheets; the routes now include `/w?needs=me`,
   `/skills`, `/skills?skill=adding-work` and `tab=criteria`, `git`, `ci` of `wf-3k9x2`, and the library routes; `/inbox` is gone). A route under `/lib/t/platform-handbook` adds the example library first (`scripts/goto.mjs`). Both fall back to the system Chromium at
