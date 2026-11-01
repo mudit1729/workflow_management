@@ -74,7 +74,7 @@ order = 1
   | Step | Option | Values | Effect |
   |---|---|---|---|
   | `add` | `then` | `offer`, `plan`, `stop` | after writing the issues: offer the Plan step for the first one, plan every new issue, or stop |
-  | `plan` | `max_tasks` | `8`, `5`, `12` | the most tasks in a phase before the plan is split into phases or issues |
+  | `plan` | `max_tasks` | `8`, `5`, `10` | the most tasks in a phase before the plan is split into phases or issues |
   | `do` | `finish` | `verify`, `review` | a task whose `verify` passed goes to `done`, or every task goes to `review` for a person |
   | `do` | `commit` | `task`, `none` | commit after each task with the `Issue:` trailer, or leave the changes for a person to commit |
   | `handoff` | `budget_tokens` | `6000`, `4000`, `10000` | stored in `[context] budget_tokens` (team only) |
