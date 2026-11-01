@@ -136,7 +136,7 @@ export function ChangesTimeline({
           icon={<Logs strokeWidth={1.75} />}
           title="No changes logged"
           hint="Agents append one change after each step of work, with its task, files and commit."
-          action={<SkillHint skill="logging-work" prompt={ASK.change(issueId)} />}
+          action={<SkillHint step="log" prompt={(skill) => ASK.change(issueId, skill)} />}
         />
       </div>
     );

@@ -759,7 +759,7 @@ function ClaimedHint({
         A tick from the board is a claim. A criterion is verified when its verify command passes and
         the evidence is written beside it.
       </p>
-      <SkillHint skill="doing-next-step" prompt={ASK.verify(issueId, c.id)} align="start" />
+      <SkillHint step="do" prompt={(skill) => ASK.verify(issueId, c.id, skill)} align="start" />
       <div className="flex justify-end">
         <Button size="sm" variant="ghost" onClick={onDone}>
           Got it

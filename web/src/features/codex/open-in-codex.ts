@@ -3,7 +3,7 @@
 import { toast } from "sonner";
 import { copyText } from "@/components/common";
 import type { IssueSummary } from "@/gen/types";
-import { codexCommand } from "@/lib/api";
+import { codexCommand, currentFlow } from "@/lib/api";
 
 /** What the codex actions need of an issue. An `IssueSummary` fits. */
 export type CodexIssue = Pick<IssueSummary, "id" | "title" | "path"> &
@@ -19,6 +19,8 @@ export interface CopyCodexCommandOptions {
    * copied" is the confirmation, and one event is announced once.
    */
   toast?: boolean;
+  /** The Do next step skill in effect. Default: read from the flow the app has loaded. */
+  skill?: string;
 }
 
 /**
@@ -30,7 +32,8 @@ export async function copyCodexCommand(
   issue: CodexIssue,
   options: CopyCodexCommandOptions = {},
 ): Promise<boolean> {
-  const ok = await copyText(codexCommand(issue).command);
+  const skill = options.skill ?? currentFlow().steps.do.skill;
+  const ok = await copyText(codexCommand(issue, skill).command);
   if (options.toast === false) return ok;
   if (ok)
     toast("Copied the Codex command", { description: "Paste it in a terminal at the repo root." });

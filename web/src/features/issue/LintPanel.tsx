@@ -269,7 +269,7 @@ const RULE_TITLES: Record<string, string> = {
   Q011: "Secret detected",
   Q012: "Author not in authors.md",
   Q013: "Library item past its review date",
-  Q014: "Plan too long, or a phase with more than 10 tasks",
+  Q014: "Plan too long, or a phase over the Plan step's task limit",
   S01: "Sentence too long",
   S02: "Paragraph over 6 sentences",
   S03: "Passive voice",

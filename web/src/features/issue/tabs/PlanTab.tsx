@@ -127,7 +127,7 @@ function NoPlan({ detail }: { detail: IssueDetail }) {
               <Play size={14} strokeWidth={1.75} className="fill-current" />
               {nextStep.busy ? "Codex is working" : "Do next step"}
             </Button>
-            <SkillHint skill="planning-issues" prompt={ASK.plan(id)} />
+            <SkillHint step="plan" prompt={(skill) => ASK.plan(id, skill)} />
           </div>
         }
       />

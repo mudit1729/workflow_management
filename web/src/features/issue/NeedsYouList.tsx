@@ -353,8 +353,7 @@ function AnsweredState({ answer }: { answer: LocalAnswer }) {
         <TimeAgo ts={answer.at} />
       </p>
       <p className="text-sm text-fg-faint">
-        Waiting for the agent to pick the answer up. <SkillLink skill="doing-next-step" /> resolves
-        it first.
+        Waiting for the agent to pick the answer up. <SkillLink step="do" /> resolves it first.
       </p>
     </div>
   );

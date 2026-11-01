@@ -1,5 +1,7 @@
 // Workspace-relative path helpers: names, validation for a new file, and what each well-known
 // file drives in the UI. Pure, so the dialog, the tree and the tests share one set of rules.
+import type { FlowStepId } from "@/gen/types";
+import { BUILTIN_SKILLS } from "@/lib/api/flow";
 import type { IssueTab, LogView } from "@/lib/nav";
 
 export const ISSUE_FILE_NAMES = [
@@ -134,7 +136,7 @@ const ROLE: Record<string, string> = {
   "decisions.md": "Each entry shows as a decision card in the Log tab.",
   "learnings.md": "Each entry shows as a learning card in the Log tab.",
   "_group.md": "Defines a group: its title, color and owner.",
-  "workflow.toml": "Workspace settings: name, leases and staleness.",
+  "workflow.toml": "Workspace settings: name, leases, staleness and the skills flow.",
   "authors.md": "The roster behind every @handle.",
   "glossary.md": "One term, one meaning. The S09 rule reads it.",
 };
@@ -148,12 +150,21 @@ export function roleHint(path: string, libraryDir = "library"): string | undefin
   return undefined;
 }
 
-/** The skill of the workflow plugin that writes each issue file (a hint next to "Create"). */
-export const ISSUE_FILE_SKILL: Record<IssueFileName, string> = {
-  "goal.md": "adding-work",
-  "plan.md": "planning-issues",
-  "current_state.md": "handing-off",
-  "changes.md": "logging-work",
-  "decisions.md": "logging-work",
-  "learnings.md": "logging-work",
+/** The step of the skills flow whose skill writes each issue file (a hint next to "Create"). */
+export const ISSUE_FILE_STEP: Record<IssueFileName, FlowStepId> = {
+  "goal.md": "add",
+  "plan.md": "plan",
+  "current_state.md": "handoff",
+  "changes.md": "log",
+  "decisions.md": "log",
+  "learnings.md": "log",
 };
+
+/**
+ * The built-in skill that writes each issue file. The skill in effect is
+ * `flow.steps[ISSUE_FILE_STEP[file]].skill` (`useFlow()`); this is what it is when the flow
+ * changes nothing.
+ */
+export const ISSUE_FILE_SKILL: Record<IssueFileName, string> = Object.fromEntries(
+  Object.entries(ISSUE_FILE_STEP).map(([file, step]) => [file, BUILTIN_SKILLS[step]]),
+) as Record<IssueFileName, string>;

@@ -536,8 +536,7 @@ function IssueSignals({ detail }: { detail: IssueDetail }) {
       ruleTitle: "In progress without a plan",
       text: (
         <>
-          In progress without a plan. Do next step writes it with{" "}
-          <SkillLink skill="planning-issues" />
+          In progress without a plan. Do next step writes it with <SkillLink step="plan" />
         </>
       ),
     });

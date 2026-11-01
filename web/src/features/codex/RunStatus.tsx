@@ -34,7 +34,7 @@ export function RunProgress({ run, className }: { run: CodexRun; className?: str
         <span
           key={p.id}
           aria-hidden
-          title={p.label}
+          title={p.skill ? `${p.label} · ${p.skill}` : p.label}
           className={cn(
             "h-1 w-3 rounded-full transition-colors duration-200 ease-wf",
             p.state === "done" && "bg-accent",

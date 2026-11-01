@@ -26,7 +26,7 @@ export function NowTab({ detail, variant }: NowTabProps) {
               ? "The next agent reads this first. Write a snapshot at the end of each session."
               : "An agent writes a short snapshot here at the end of each session."
           }
-          action={<SkillHint skill="handing-off" prompt={ASK.state(summary.id)} />}
+          action={<SkillHint step="handoff" prompt={(skill) => ASK.state(summary.id, skill)} />}
         />
       )}
     </div>

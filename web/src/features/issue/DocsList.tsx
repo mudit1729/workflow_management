@@ -3,10 +3,10 @@ import { ChevronRight, File, FileCode, FileImage, FileText, Plus } from "lucide-
 import { type ReactNode, useEffect, useRef } from "react";
 import { LintBadge, RelativeTime } from "@/components/common";
 import { Button } from "@/components/ui";
-import type { Diagnostic, DocFile, IssueDetail, LintCounts } from "@/gen/types";
+import type { Diagnostic, DocFile, FlowStepId, IssueDetail, LintCounts } from "@/gen/types";
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
-import { SkillLink, type WfSkill } from "./skill-hint";
+import { SkillLink } from "./skill-hint";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -18,14 +18,14 @@ export type IssueFileName =
   | "decisions.md"
   | "learnings.md";
 
-/** Each file with the skill of the workflow plugin that writes it. */
-const ISSUE_FILES: { name: IssueFileName; role: string; skill: WfSkill }[] = [
-  { name: "goal.md", role: "Why, and the success criteria", skill: "adding-work" },
-  { name: "plan.md", role: "How: approach, phases and tasks", skill: "planning-issues" },
-  { name: "current_state.md", role: "Where the work stands now", skill: "handing-off" },
-  { name: "changes.md", role: "What changed, one entry each", skill: "logging-work" },
-  { name: "decisions.md", role: "Decisions and the reasons", skill: "logging-work" },
-  { name: "learnings.md", role: "Lessons worth keeping", skill: "logging-work" },
+/** Each file with the step of the flow whose skill writes it (the skill in effect is named at the row). */
+const ISSUE_FILES: { name: IssueFileName; role: string; step: FlowStepId }[] = [
+  { name: "goal.md", role: "Why, and the success criteria", step: "add" },
+  { name: "plan.md", role: "How: approach, phases and tasks", step: "plan" },
+  { name: "current_state.md", role: "Where the work stands now", step: "handoff" },
+  { name: "changes.md", role: "What changed, one entry each", step: "log" },
+  { name: "decisions.md", role: "Decisions and the reasons", step: "log" },
+  { name: "learnings.md", role: "Lessons worth keeping", step: "log" },
 ];
 
 interface DocsListProps {
@@ -109,7 +109,7 @@ export function DocsList({
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
                           Not created
-                          <SkillLink skill={f.skill} className="text-fg-muted text-xs" />
+                          <SkillLink step={f.step} className="text-fg-muted text-xs" />
                         </span>
                       )
                     }

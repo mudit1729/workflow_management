@@ -54,6 +54,8 @@ export interface SourceEditorProps {
   /** Take the file as it is on disk now and drop this draft. */
   onReload: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Hears the text as it is typed, for a host that checks it beside the editor. */
+  onDraftChange?: (text: string) => void;
 }
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -77,6 +79,7 @@ export function SourceEditor({
   onCancel,
   onReload,
   onDirtyChange,
+  onDraftChange,
 }: SourceEditorProps) {
   const writeWorkspace = useWriteWorkspaceFile();
   const write = saveText ?? writeWorkspace;
@@ -108,6 +111,10 @@ export function SourceEditor({
     onDirtyChange?.(edited);
     return () => onDirtyChange?.(false);
   }, [edited, onDirtyChange]);
+
+  useLayoutEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
 
   // Focus on open. A placeholder (a new entry's title) is selected and brought into view.
   useLayoutEffect(() => {

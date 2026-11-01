@@ -88,8 +88,8 @@ describe("pasting a link", () => {
     expect(c.getState()).toMatchObject({
       screen: "preview",
       alias: "platform-handbook",
-      choice: { root: "docs", pages: 10, media: 2, by: "manifest" },
-      preview: { name: "Platform handbook", pages: 10, page: "README.md" },
+      choice: { root: "docs", pages: 11, media: 2, by: "manifest" },
+      preview: { name: "Platform handbook", pages: 11, page: "README.md" },
     });
     expect(c.getState().failure).toBeUndefined();
   });
@@ -256,7 +256,7 @@ describe("adding the library", () => {
 
     expect(h.added).toHaveLength(1);
     expect(h.added[0]).toMatchObject({
-      info: { alias: "platform-handbook", pages: 10 },
+      info: { alias: "platform-handbook", pages: 11 },
       skipped: 0,
     });
     expect(h.added[0]?.page).toBeUndefined();
@@ -272,7 +272,7 @@ describe("adding the library", () => {
       root: "docs",
       commit: "a1b2c3d",
       access: "public",
-      pages: 10,
+      pages: 11,
       media: 2,
       others: 1,
       home: "README.md",

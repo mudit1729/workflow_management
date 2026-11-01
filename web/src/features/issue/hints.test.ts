@@ -2,7 +2,9 @@
 // buttons. There is no `wf` binary and the plugin has no `write-plan` skill, so neither may appear
 // as something to run. These tests read the skill folders and the source of the views.
 import { describe, expect, test } from "vitest";
-import { ASK, codexAsk, WF_SKILLS } from "./skill-hint";
+import { skillHref } from "@/features/skills/search";
+import { resolveFlow } from "@/lib/api/flow";
+import { ASK, addThen, codexAsk, WF_SKILLS } from "./skill-hint";
 
 const skillFiles = import.meta.glob("../../../../plugins/workflow/skills/*/SKILL.md", {
   query: "?raw",
@@ -27,6 +29,8 @@ describe("the skill names", () => {
 
   test("every prompt names a real skill, and only real ones", () => {
     const prompts = [
+      ASK.addWork(),
+      ASK.addWork("Platform"),
       ASK.plan("wf-3k9x2"),
       ASK.moreTasks("wf-3k9x2"),
       ASK.state("wf-3k9x2"),
@@ -43,6 +47,58 @@ describe("the skill names", () => {
       expect(named.length, prompt).toBeGreaterThan(0);
       for (const name of named) expect(WF_SKILLS, prompt).toContain(name);
     }
+  });
+});
+
+describe("the prompts follow the flow", () => {
+  test("named after the built-in skill of their step, as before", () => {
+    expect(ASK.plan("wf-3k9x2")).toBe("Plan wf-3k9x2 with the planning-issues skill.");
+    expect(ASK.addWork()).toBe("Add work with the adding-work skill. Ask me for the outcome.");
+    expect(ASK.addWork("Platform")).toBe(
+      "Add work to Platform with the adding-work skill. Ask me for the outcome.",
+    );
+    expect(ASK.state("wf-3k9x2")).toBe(
+      "Write current_state.md for wf-3k9x2 with the handing-off skill.",
+    );
+    expect(ASK.verify("wf-3k9x2", "SC-3")).toContain("with the doing-next-step skill.");
+    expect(ASK.decision("wf-3k9x2")).toBe(
+      "Log the decision on wf-3k9x2 with the logging-work skill.",
+    );
+  });
+
+  test("name the skill in effect when the caller gives one", () => {
+    expect(ASK.plan("wf-3k9x2", "ws:acme-planning")).toBe(
+      "Plan wf-3k9x2 with the ws:acme-planning skill.",
+    );
+    expect(ASK.moreTasks("wf-3k9x2", "me:planning-small")).toBe(
+      "Add the missing tasks to the plan of wf-3k9x2 with the me:planning-small skill.",
+    );
+    expect(ASK.verify("wf-3k9x2", "SC-3", "platform:verifying")).toContain(
+      "with the platform:verifying skill.",
+    );
+    expect(ASK.change("wf-3k9x2", "ws:our-logging")).toContain("with the ws:our-logging skill.");
+    // The formats are the bootstrap skill's: nothing swaps it.
+    expect(ASK.goal("wf-3k9x2")).toContain("the using-wf skill");
+  });
+
+  test("Add work says what happens after adding when the flow changes it", () => {
+    const asked = (then: "offer" | "plan" | "stop") =>
+      ASK.addWork(
+        "Platform",
+        "adding-work",
+        addThen(resolveFlow({ team: { steps: { add: { then } }, custom: {} } })),
+      );
+    expect(asked("offer")).toBe(ASK.addWork("Platform"));
+    expect(asked("plan")).toBe(
+      "Add work to Platform with the adding-work skill. Ask me for the outcome. Then plan every new issue.",
+    );
+    expect(asked("stop")).toContain("Do not offer to plan them.");
+  });
+
+  test("a link goes by the reference, so two skills of one name never collide", () => {
+    expect(skillHref("ws:acme-planning")).not.toBe(skillHref("me:acme-planning"));
+    expect(skillHref("ws:acme-planning")).toContain("ws");
+    expect(skillHref("planning-issues")).toBe("/skills?skill=planning-issues");
   });
 });
 

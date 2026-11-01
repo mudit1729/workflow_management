@@ -6,14 +6,17 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 import { copyText } from "@/components/common";
-import { api, qk, queryClient } from "@/lib/api";
+import { api, BUILTIN_SKILLS, currentFlow, qk, queryClient } from "@/lib/api";
 
-/** `[context] budget_tokens` of the prototype workspace. */
+/** `[context] budget_tokens` when the workspace sets none. */
 export const HANDOFF_BUDGET = 6000;
 
-/** The prompt that asks Codex or Claude to do the same hand-off headlessly. */
-export function handoffPrompt(id: string): string {
-  return `Hand ${id} over: use the handing-off skill.`;
+/**
+ * The prompt that asks Codex or Claude to do the same hand-off headlessly. `skill` is the Hand off
+ * step's skill in effect (`useFlowSkill("handoff")`); left out, the built-in one.
+ */
+export function handoffPrompt(id: string, skill: string = BUILTIN_SKILLS.handoff): string {
+  return `Hand ${id} over: use the ${skill} skill.`;
 }
 
 /** The rule of thumb the bundle itself uses: four characters per token. */
@@ -73,7 +76,7 @@ export interface CopiedContext extends ContextFacts {
  */
 export async function copyContext(
   id: string,
-  budget = HANDOFF_BUDGET,
+  budget: number = currentFlow().steps.handoff.options.budget_tokens?.value as number,
 ): Promise<CopiedContext | undefined> {
   let markdown: string;
   try {

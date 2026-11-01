@@ -73,7 +73,11 @@ export function PlanList({ plan, issueId, highlightReady = false, criteria }: Pl
             </>
           }
           action={
-            <SkillHint skill="planning-issues" prompt={ASK.moreTasks(issueId)} align="start" />
+            <SkillHint
+              step="plan"
+              prompt={(skill) => ASK.moreTasks(issueId, skill)}
+              align="start"
+            />
           }
         />
       </div>

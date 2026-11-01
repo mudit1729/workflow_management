@@ -5,7 +5,7 @@ import { ChevronRight, Layers } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
 import { Button, Skeleton, Tooltip } from "@/components/ui";
-import { SkillHint } from "@/features/issue/skill-hint";
+import { ASK, addThen, SkillHint } from "@/features/issue/skill-hint";
 import type { GroupId, GroupNode, GroupRollup, IssueStatus } from "@/gen/types";
 import { useGroupTree, useSnapshot } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -266,8 +266,8 @@ function GroupTreeLoaded({
                   Add work
                 </Button>
                 <SkillHint
-                  skill="adding-work"
-                  prompt="Add work with the adding-work skill. Ask me for the outcome."
+                  step="add"
+                  prompt={(skill, flow) => ASK.addWork(undefined, skill, addThen(flow))}
                   align="start"
                 />
               </div>

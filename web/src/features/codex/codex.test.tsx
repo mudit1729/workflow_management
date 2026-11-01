@@ -150,6 +150,50 @@ describe("runProgress, activeRun", () => {
   });
 });
 
+/** A run under a flow: a custom step after Do next step, skills on every phase. */
+function flowRun(phase: CodexPhaseId, extra: Partial<CodexRun> = {}): CodexRun {
+  const list: CodexPhaseId[] = ["claim", "log", "verify", "custom:security-check", "done"];
+  const labels: Record<string, string> = {
+    "custom:security-check": "Security check",
+    claim: "Claim T-3",
+    log: "Log the change",
+    verify: "Run CI",
+    done: "Finish T-3",
+  };
+  const skills: Record<string, string> = {
+    "custom:security-check": "platform:checking-security",
+    log: "logging-work",
+  };
+  return {
+    ...run("running", phase, { task: "T-3", ...extra }),
+    phases: list.map((id, i) => ({
+      id,
+      label: labels[id] as string,
+      skill: skills[id] ?? "doing-next-step",
+      state: i < list.indexOf(phase) ? "done" : i === list.indexOf(phase) ? "running" : "pending",
+    })),
+  };
+}
+
+describe("a run with a custom step", () => {
+  it("is named by the label of the step while it runs", () => {
+    expect(runLine(flowRun("custom:security-check"))).toBe("Running Security check");
+    expect(runWord(flowRun("custom:security-check"))).toBe("Running");
+    expect(runLine(flowRun("done"))).toBe("Finishing T-3");
+  });
+
+  it("counts the custom phase in the progress", () => {
+    expect(runProgress(flowRun("custom:security-check"))).toEqual({ done: 3, total: 5 });
+  });
+
+  it("shows the skill that ran each phase in the tooltip of its segment", () => {
+    const html = renderToStaticMarkup(<RunProgress run={flowRun("custom:security-check")} />);
+    expect(html).toContain('title="Security check · platform:checking-security"');
+    expect(html).toContain('title="Log the change · logging-work"');
+    expect(html).toContain('aria-valuemax="5"');
+  });
+});
+
 describe("RunProgress", () => {
   it("is a progress bar with one segment per phase", () => {
     const html = renderToStaticMarkup(<RunProgress run={run("running", "verify")} />);
@@ -216,6 +260,16 @@ describe("OpenInCodexPanel", () => {
     expect(html).toContain("Command copied. Paste it in a terminal at the repo root.");
     expect(html).toContain("Copy command");
     expect(html).toContain("Copy prompt");
+  });
+
+  it("names the Do next step skill the flow runs", () => {
+    const html = renderToStaticMarkup(
+      <OpenInCodexPanel issue={issue} copied skill="ws:acme-doing" />,
+    );
+    expect(html).toContain("use the wf skills (ws:acme-doing).");
+    expect(renderToStaticMarkup(<OpenInCodexPanel issue={issue} copied />)).toContain(
+      "use the wf skills (doing-next-step).",
+    );
   });
 
   it("says so when the clipboard is blocked", () => {

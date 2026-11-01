@@ -2,8 +2,9 @@
 // toasts all read a run through these, so one phase never gets two names.
 //
 // Shape of every line: the state first, then the task ("Claiming T-3", "Done: T-3"). Live phases
-// are continuous, finished runs name how they ended. Fixed order: claim, log, verify, done.
-import type { CodexPhaseId, CodexRun } from "@/lib/api";
+// are continuous, finished runs name how they ended. Order: claim, log, verify (when the flow
+// commits), a phase for each custom step after Do next step, done.
+import type { CodexRun } from "@/lib/api";
 import type { IssueTab } from "@/lib/nav";
 
 /**
@@ -16,27 +17,39 @@ export function plansFirst(run: CodexRun): boolean {
 }
 
 /** What Codex is doing, for the strip in the issue header. */
-const LIVE: Record<CodexPhaseId, (task: string, plans: boolean) => string> = {
-  claim: (task, plans) => (plans ? `Planning, claiming ${task}` : `Claiming ${task}`),
+const LIVE = {
+  claim: (task: string, plans: boolean) =>
+    plans ? `Planning, claiming ${task}` : `Claiming ${task}`,
   log: () => "Logging the change",
   verify: () => "Verifying: CI running",
-  done: (task) => `Finishing ${task}`,
+  done: (task: string) => `Finishing ${task}`,
 };
 
 /** One word for the card, where the task id already sits next to it. */
-const SHORT: Record<CodexPhaseId, string> = {
+const SHORT = {
   claim: "Claiming",
   log: "Logging",
   verify: "Verifying",
   done: "Finishing",
 };
 
+/** A custom step after Do next step has no fixed words: it is named by its label. */
+const customLabel = (run: CodexRun): string =>
+  run.phases.find((p) => p.id === run.phase)?.label ?? "a custom step";
+
+/** The words of the phase a running run is in. */
+function liveLine(run: CodexRun, task: string): string {
+  const phase = run.phase ?? "claim";
+  if (phase.startsWith("custom:")) return `Running ${customLabel(run)}`;
+  return LIVE[phase as keyof typeof LIVE](task, plansFirst(run));
+}
+
 /** The line for a run: what it is doing now, or how it ended. */
 export function runLine(run: CodexRun): string {
   const task = run.task ?? "the task";
   switch (run.status) {
     case "running":
-      return LIVE[run.phase ?? "claim"](task, plansFirst(run));
+      return liveLine(run, task);
     case "done":
       // A task that waits for a hand check is not done: say what the run did and what is left.
       return run.review ? `Done: ${task}, waiting for a check` : `Done: ${task}`;
@@ -53,7 +66,10 @@ export function runLine(run: CodexRun): string {
 export function runWord(run: CodexRun): string {
   switch (run.status) {
     case "running":
-      return run.phase === "claim" && plansFirst(run) ? "Planning" : SHORT[run.phase ?? "claim"];
+      if (run.phase?.startsWith("custom:")) return "Running";
+      return run.phase === "claim" && plansFirst(run)
+        ? "Planning"
+        : SHORT[(run.phase ?? "claim") as keyof typeof SHORT];
     case "done":
       return "Done";
     case "cancelled":

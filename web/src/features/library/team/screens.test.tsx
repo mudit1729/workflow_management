@@ -16,6 +16,13 @@ const offline: Partial<GithubDeps> = {
   now: () => Date.parse("2026-10-30T12:00:00Z"),
 };
 
+// RelativeTime reads the clock when its module loads, so the date is pinned before the imports run:
+// "2 days ago" is then the same on any day the tests run.
+vi.hoisted(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.parse("2026-10-30T12:00:00Z"));
+});
+
 const deps = (over: Partial<Deps> = {}): Deps => ({
   find: (raw) => findLibrary(raw, offline),
   preview: async (found, choice) =>
@@ -172,7 +179,7 @@ describe("the preview", () => {
     expect(out).toContain("Platform handbook");
     expect(out).toContain("How the platform team builds, ships and runs things.");
     expect(out).toContain("Public");
-    expect(out).toContain("10 pages · 2 media files · 1 other file");
+    expect(out).toContain("11 pages · 2 media files · 1 other file");
     expect(out).toContain("acme/platform-handbook · main · docs/");
     expect(out).toContain("Last commit");
     expect(out).toContain("a1b2c3d");

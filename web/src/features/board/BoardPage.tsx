@@ -5,7 +5,7 @@ import { type ReactNode, useMemo } from "react";
 import { openAddWork } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
-import { SkillHint } from "@/features/issue/skill-hint";
+import { ASK, addThen, SkillHint } from "@/features/issue/skill-hint";
 import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
 import { issuesInGroup, useInbox, useMe, useSnapshot } from "@/lib/api";
 import { type BoardSearch, useBoardSearch } from "@/lib/nav";
@@ -172,10 +172,7 @@ export function BoardPage() {
           Add one issue
         </Button>
       </div>
-      <SkillHint
-        skill="adding-work"
-        prompt={`Add work${scope ? ` to ${scope}` : ""} with the adding-work skill. Ask me for the outcome.`}
-      />
+      <SkillHint step="add" prompt={(skill, flow) => ASK.addWork(scope, skill, addThen(flow))} />
     </div>
   );
 

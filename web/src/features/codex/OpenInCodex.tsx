@@ -4,7 +4,7 @@ import { Check, Copy, Terminal, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { copyText } from "@/components/common";
 import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from "@/components/ui";
-import { codexCommand } from "@/lib/api";
+import { codexCommand, useFlowSkill } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { type CodexIssue, copyCodexCommand, OPEN_IN_CODEX_HINT } from "./open-in-codex";
 
@@ -16,11 +16,13 @@ export interface OpenInCodexPanelProps {
   issue: CodexIssue;
   /** The click already copied the command: true when the clipboard took it, false when it did not. */
   copied?: boolean;
+  /** The Do next step skill in effect (a reference); the built-in one when left out. */
+  skill?: string;
 }
 
 /** The prompt, the command, two Copy buttons and a line on what a local daemon would change. */
-export function OpenInCodexPanel({ issue, copied }: OpenInCodexPanelProps) {
-  const { prompt, command } = codexCommand(issue);
+export function OpenInCodexPanel({ issue, copied, skill }: OpenInCodexPanelProps) {
+  const { prompt, command } = codexCommand(issue, skill);
   return (
     <div data-wf="OpenInCodexPanel" className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -108,13 +110,15 @@ export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
   // The tooltip is controlled for its whole life (a boolean from the first render): flipping
   // `disabled` made it switch between uncontrolled and controlled, which Radix warns about.
   const [hint, setHint] = useState(false);
+  // The prompt names the Do next step skill in effect (Settings · Skills flow).
+  const skill = useFlowSkill("do");
 
   const onClick = () => {
     // A click that closes the popover is not a second copy.
     if (open) return;
     setCopied(undefined);
     // The popover's line says "Command copied" (or that the clipboard was blocked): no toast.
-    void copyCodexCommand(issue, { toast: false }).then(setCopied);
+    void copyCodexCommand(issue, { toast: false, skill }).then(setCopied);
   };
 
   return (
@@ -149,7 +153,7 @@ export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
         aria-label="Open in Codex"
         className="w-[min(380px,calc(100vw-24px))]"
       >
-        <OpenInCodexPanel issue={issue} copied={copied} />
+        <OpenInCodexPanel issue={issue} copied={copied} skill={skill} />
       </PopoverContent>
     </Popover>
   );

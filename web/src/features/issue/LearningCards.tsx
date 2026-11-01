@@ -57,7 +57,7 @@ export function LearningCards({
           icon={<Lightbulb strokeWidth={1.75} />}
           title="No learnings yet"
           hint="Agents log a learning when something surprised them: a tip, a gotcha or a pattern worth reusing."
-          action={<SkillHint skill="logging-work" prompt={ASK.learning(issueId)} />}
+          action={<SkillHint step="log" prompt={(skill) => ASK.learning(issueId, skill)} />}
         />
       </div>
     );

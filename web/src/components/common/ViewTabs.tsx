@@ -1,17 +1,27 @@
-// The sub-view tabs of one view, as real links: Workflow (Board) and Library (Personal · Team
-// libraries · Files · Skills; the view's id is still `workdatabase`). Every page puts them at the
-// left of its one 44 px top bar, after the view's name. The active tab follows the route, so the board, its drawer and the full issue
-// page all count as Board. Underline style, like Tabs, so the page's own filters (pills,
-// segmented controls) stay visually secondary.
+// The sub-view tabs of one view, as real links: Workflow (Board), Library (Personal · Team
+// libraries · Files · Skills; the view's id is still `workdatabase`) and Settings (Skills flow ·
+// Agent · Workspace; opened by the gear in the nav footer, so it has no row in the nav). Every page
+// puts them at the left of its one 44 px top bar, after the view's name. The active tab follows
+// the route, so the board, its drawer and the full issue page all count as Board. Underline
+// style, like Tabs, so the page's own filters (pills, segmented controls) stay visually secondary.
 import { Link } from "@tanstack/react-router";
-import { BookOpen, LayoutGrid, type LucideIcon } from "lucide-react";
+import { BookOpen, LayoutGrid, type LucideIcon, Settings } from "lucide-react";
 import { allSkills, useLibraries, useSkills, useWorkspaceFiles } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { usePathname } from "@/lib/nav";
 import { LintBadge } from "./LintBadge";
 
-export type WfView = "workflow" | "workdatabase";
-export type WfSubView = "board" | "library" | "personal" | "team" | "files" | "skills";
+export type WfView = "workflow" | "workdatabase" | "settings";
+export type WfSubView =
+  | "board"
+  | "library"
+  | "personal"
+  | "team"
+  | "files"
+  | "skills"
+  | "flow"
+  | "agent"
+  | "workspace";
 
 export interface ViewDef {
   label: string;
@@ -27,12 +37,21 @@ export interface ViewDef {
 export interface SubViewDef {
   view: WfView;
   label: string;
-  to: "/w" | "/lib" | "/lib/me" | "/lib/t" | "/files" | "/skills";
-  /** Two-key sequence, as `useHotkey` and `Kbd` take it. */
-  shortcut: string;
+  to:
+    | "/w"
+    | "/lib"
+    | "/lib/me"
+    | "/lib/t"
+    | "/files"
+    | "/skills"
+    | "/settings/flow"
+    | "/settings/agent"
+    | "/settings/workspace";
+  /** Two-key sequence or chord, as `useHotkey` and `Kbd` take it. Not every tab has one. */
+  shortcut?: string;
 }
 
-/** Workspace > Workflow (work in motion) and Library (everything stored). */
+/** Workspace > Workflow (work in motion), Library (everything stored) and Settings (how the work runs). */
 export const VIEWS: Record<WfView, ViewDef> = {
   workflow: {
     label: "Workflow",
@@ -48,6 +67,13 @@ export const VIEWS: Record<WfView, ViewDef> = {
     subs: ["personal", "team", "files", "skills"],
     shortcut: "g l",
   },
+  settings: {
+    label: "Settings",
+    icon: Settings,
+    home: "flow",
+    subs: ["flow", "agent", "workspace"],
+    shortcut: "mod+,",
+  },
 };
 
 export const SUBVIEWS: Record<WfSubView, SubViewDef> = {
@@ -57,6 +83,9 @@ export const SUBVIEWS: Record<WfSubView, SubViewDef> = {
   team: { view: "workdatabase", label: "Team libraries", to: "/lib/t", shortcut: "g t" },
   files: { view: "workdatabase", label: "Files", to: "/files", shortcut: "g f" },
   skills: { view: "workdatabase", label: "Skills", to: "/skills", shortcut: "g s" },
+  flow: { view: "settings", label: "Skills flow", to: "/settings/flow", shortcut: "mod+," },
+  agent: { view: "settings", label: "Agent", to: "/settings/agent" },
+  workspace: { view: "settings", label: "Workspace", to: "/settings/workspace" },
 };
 
 /**
@@ -72,6 +101,10 @@ export function subViewForPath(path: string): WfSubView | undefined {
   if (path === "/lib" || path.startsWith("/lib/")) return "library";
   if (path === "/files" || path.startsWith("/files/")) return "files";
   if (path === "/skills" || path.startsWith("/skills/")) return "skills";
+  // /settings itself redirects to /settings/flow; the editor of a skill copy is part of the flow.
+  if (path === "/settings/flow" || path.startsWith("/settings/flow/")) return "flow";
+  if (path === "/settings/agent" || path.startsWith("/settings/agent/")) return "agent";
+  if (path === "/settings/workspace" || path.startsWith("/settings/workspace/")) return "workspace";
   return undefined;
 }
 
@@ -177,8 +210,8 @@ const COUNT_NOUN: Partial<Record<WfSubView, string>> = {
 };
 
 function TabCount({ sub, counts }: { sub: WfSubView; counts: ViewCounts }) {
-  if (sub === "board" || sub === "library") return null;
-  const n = counts[sub];
+  if (!(sub in COUNT_NOUN)) return null;
+  const n = counts[sub as "personal" | "team" | "files" | "skills"];
   if (n === undefined) return null;
   return (
     <>

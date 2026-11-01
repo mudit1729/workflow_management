@@ -73,7 +73,7 @@ export function DecisionCards({ decisions, issueId, className }: DecisionCardsPr
           icon={<Scale strokeWidth={1.75} />}
           title="No decisions logged"
           hint="Agents record each design choice as a decision, with the options they rejected and why."
-          action={<SkillHint skill="logging-work" prompt={ASK.decision(issueId)} />}
+          action={<SkillHint step="log" prompt={(skill) => ASK.decision(issueId, skill)} />}
         />
       </div>
     );

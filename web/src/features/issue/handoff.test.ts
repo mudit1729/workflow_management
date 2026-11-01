@@ -52,4 +52,10 @@ describe("handoffPrompt", () => {
   test("asks for the handing-off skill, which is a skill of the workflow plugin", () => {
     expect(handoffPrompt("wf-3k9x2")).toBe("Hand wf-3k9x2 over: use the handing-off skill.");
   });
+
+  test("names the Hand off skill in effect when the flow runs another", () => {
+    expect(handoffPrompt("wf-3k9x2", "ws:acme-handoff")).toBe(
+      "Hand wf-3k9x2 over: use the ws:acme-handoff skill.",
+    );
+  });
 });

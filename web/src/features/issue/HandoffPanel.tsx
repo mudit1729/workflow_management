@@ -16,7 +16,7 @@ import {
   Skeleton,
   Tooltip,
 } from "@/components/ui";
-import { useContextBundle } from "@/lib/api";
+import { useContextBundle, useFlowSkill } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
   type ContextFacts,
@@ -132,7 +132,7 @@ export function HandoffPanel({ issueId, copied, className }: HandoffPanelProps) 
   const markdown = bundle.data;
   const facts = markdown ? contextFacts(markdown) : undefined;
   const openView = useContextView((s) => s.open);
-  const prompt = handoffPrompt(issueId);
+  const prompt = handoffPrompt(issueId, useFlowSkill("handoff"));
   const cut = facts ? leftOutLine(facts) : undefined;
 
   return (
@@ -211,8 +211,8 @@ export function HandoffPanel({ issueId, copied, className }: HandoffPanelProps) 
       </div>
 
       <p className="text-fg-faint text-xs leading-snug">
-        The prompt asks Codex or Claude to use the <SkillLink skill="handing-off" /> skill: it
-        refreshes current_state.md first, then prints this bundle. With the wf CLI later:{" "}
+        The prompt asks Codex or Claude to use the <SkillLink step="handoff" /> skill: it refreshes
+        current_state.md first, then prints this bundle. With the wf CLI later:{" "}
         <code className="font-mono">wf context {issueId}</code>.
       </p>
     </div>
