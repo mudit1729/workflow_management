@@ -14,6 +14,7 @@ The user's ask: "a settings pane where the entire flow of skills is mentioned an
 | F4 | Where | A Settings page (`/settings`) opened by a gear in the nav footer, with tabs **Skills flow**, **Agent** and **Workspace**. |
 | F5 | Real, not a label | The skills, `wf-env.sh`, the dashboard's hints and prompts, the context bundle, the Do next step run and the agent bridge all resolve "the skill for step X" through one rule (section 4). Swapping a step changes what agents run. |
 | F6 | Writes | Each click saves at once, as a minimal edit that keeps every other key and comment. One confirmation: a "Saved to workflow.toml · Undo" line in the panel, no toast. |
+| F7 | Simpler picture (approved 2026-11-01) | The flow is drawn as the issue's five states on one line, **Backlog → Planned → In progress → Review → Done**, with the skill that moves an issue along on each arrow. Blocked and Cancelled are side states, off the line. Review → Done has no skill: a person approves. The helpers (Log, Writing style, Status) are not drawn; they are listed inside the arrow they run in. Hand off works at any state. Sections 1 and 5.2 describe this picture; the data model (section 3) is unchanged. |
 
 ## 1. The flow
 
@@ -27,7 +28,26 @@ The user's ask: "a settings pane where the entire flow of skills is mentioned an
 | `status` | Status (anywhere) | `checking-status` | Keep the output of `wf-status.sh` (other skills call it by path). |
 | `style` | Writing style (anywhere) | `writing-readable-bulk-text` | Shape titles and one-line entries for lists. |
 
-Order on screen: **Add work → Plan → Do next step → Hand off**, with **Log** drawn as part of Do next step ("runs inside Plan and Do next step"), and an **Anywhere** row with Status and Writing style.
+### 1.1 The picture: states and arrows (F7)
+
+```
+            Add work            Plan              Do next step            Do next step           you approve
+ (new) ─────────────▶ Backlog ─────────▶ Planned ─────────────▶ In progress ─────────────▶ Review ───────────▶ Done
+                                                                 ↺ Do next step             (last task done)
+                                                                   one task per run
+```
+
+| Arrow | Step | Built-in skill | Helpers listed inside the arrow |
+|---|---|---|---|
+| new → Backlog | `add` | `adding-work` | Writing style (titles) |
+| Backlog → Planned | `plan` | `planning-issues` | Log (the plan's change entry), Writing style |
+| Planned → In progress, In progress ↺, In progress → Review | `do` | `doing-next-step` | Plan (when there is no plan yet), Log, Status (finds the ready task) |
+| Review → Done | none | a person approves | none |
+
+- The three Do next step arrows are one step: clicking any of them opens the same panel.
+- Below the line, one quiet row: **Any state: Hand off** (`handing-off`), and the side states Blocked and Cancelled as plain labels.
+- A helper inside an arrow's panel is a row with its skill; clicking it opens that helper's own panel (`log`, `style`, `status`), so every step of section 1 can still be changed, but only four things are drawn.
+- A custom step attaches to an arrow: new → Backlog (`after = "add"`), Backlog → Planned (`after = "plan"`), the In progress arrows (`after = "do"`, runs after each task), or Hand off (`after = "handoff"`). It shows as a small dot-and-label on its arrow ("+ Security check"). Review → Done takes no custom step: no agent runs there.
 
 A built-in skill is offered only for its own step. The library skills (`summarizing-work`, `summarizing-codebase`, `keeping-a-library`, `querying-library`) are offered as custom steps only.
 
@@ -159,10 +179,12 @@ No personal library found is not an error: the team flow applies.
 ### 5.2 Skills flow tab
 
 - Header: "Skills flow", subline "Which skill runs each step of the work, for everyone in <workspace>. Change a step for the whole team or just for you." Right: a two-button switch **In effect for me | Team default**. Team default shows the workspace's values only.
-- The flow: four step cards in a row joined by arrows (Add work → Plan → Do next step → Hand off). Log hangs under Do next step as a smaller card. Between two steps, and after Hand off, a "+" button (always visible, quiet) inserts a custom step; custom steps are smaller cards with a dashed border between the steps they sit between. Below, a row "Anywhere" with Status and Writing style.
-- A step card: the step name; the skill reference in mono; a source chip (Built-in, This workspace, the team library's name, Yours); a dot and "Your override" when the person overrides the team; a one-line options summary ("Up to 8 tasks", "Tasks finish in review"); a warning line when the reference does not resolve.
-- 1440: the row fits; 1024: cards narrow, the options line truncates; under 640: the flow is a vertical list with down arrows and the "+" between items.
-- Keyboard: arrows move between cards, Enter opens, number keys pick inside the panel, Esc closes and returns focus to the card.
+- The picture of 1.1: five state pills on one line (Backlog, Planned, In progress, Review, Done, in their status colors) joined by arrows. Each arrow carries a small, clickable label: the step name over its skill in mono (`Plan` / `planning-issues`), a source chip only when it is not built-in, and "Your override" when the person overrides the team. In progress has the ↺ loop label. Review → Done reads "you approve" and is not clickable.
+- A custom step shows on its arrow as "+ Security check" under the skill; each arrow has a quiet "+" (visible on hover and focus, always on touch) to add one.
+- Below the line: "Any state: Hand off · handing-off" (clickable) and "Side states: Blocked, Cancelled" (plain text).
+- A warning dot on an arrow whose reference does not resolve.
+- 1440 and 1024: one line; under 640: the states stack vertically with the arrow labels between them.
+- Keyboard: Tab or the arrow keys move between the arrow labels, Enter opens, number keys pick inside the panel, Esc closes and returns focus to the label.
 
 ### 5.3 The step panel
 
@@ -172,6 +194,7 @@ A right panel (about 440 px, full width on a phone) that keeps the flow visible.
 2. **Apply to**: [Everyone] [Just me]. With Just me, a line shows the team's value ("The team uses planning-issues") and the actions write my `library.toml`.
 3. **Skill**: numbered choice cards (the Add work `ChoiceList` pattern), grouped: the built-in default, This workspace, each team library, Yours. A card shows the name, the first sentence of its "Use when", its source and "Not a valid skill: <first problem>" when it fails the `check-skills` rules. Picking a card saves.
 4. **Options**: one two- or three-button row per option (3.3). Team-only options are disabled under Just me ("A team setting").
+4b. **Helpers in this step** (F7): one row per helper of the arrow (1.1 table), "Log · logging-work", each opening that helper's panel; the custom steps on this arrow, with "+ Add a step here".
 5. **Actions**: View skill (the Skills view on it); Edit (a workspace or personal skill) or Edit a copy (a built-in or a team library's skill); Reset to the team's choice (Just me with an override); Reset to built-in (Everyone, when changed).
 6. Footer: "Saved to workflow.toml · Undo" (or "Saved to your library.toml · Undo") after each change.
 
