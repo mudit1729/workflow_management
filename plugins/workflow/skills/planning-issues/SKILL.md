@@ -26,8 +26,8 @@ A plan turns the criteria of `goal.md` into tasks that one agent can finish in o
    - Do not set `claimed_by` or `lease_until`. Set `assignee` only if the issue names one.
 6. **Write `plan.md`** from the template in `format.md` section 6. Frontmatter: `updated_at` is `wf-env.sh now`, `updated_by` is your quoted handle, `revision` is 1 (or the old one plus 1).
 7. **Move the issue.** In `goal.md` change only the `status:` line: `backlog` to `planned`. A revision leaves the status alone.
-8. **Leave a trail.** Append a change entry with the Log step's skill (`wf-env.sh flow log`; built-in `logging-work`): `kind: docs`, `plan.md` under `files`, title "Wrote the plan with N tasks in M lanes". If `current_state.md` is missing, create it with `summary` "Planned: N tasks in M lanes; <the ready ids> ready." (for example "T-1 and T-2 are ready.", ids from `wf-status.sh --ready`), `phase` the first phase, and `Next steps` 1 "Claim T-1 and start the first step."; if it exists, change only `summary`, `updated_at`, `updated_by` and `Next steps`.
-9. **Check.** `pnpm -s -C web wf:lint <root>`; fix findings in the files you touched (max 3 rounds). Then run `../checking-status/scripts/wf-status.sh --ready <id>` to confirm the first tasks are ready. Report the task count, the lanes and the ready tasks.
+8. **Leave a trail.** Append a change entry with the Log step's skill (`wf-env.sh flow log`; built-in `logging-work`): `kind: docs`, `plan.md` under `files`, title "Wrote the plan with N tasks in M areas". If `current_state.md` is missing, create it with `summary` "Planned: N tasks in M areas; <the ready ids> ready." (for example "T-1 and T-2 are ready.", ids from `wf-status.sh --ready`), `phase` the first phase, and `Next steps` 1 "Claim T-1 and start the first step."; if it exists, change only `summary`, `updated_at`, `updated_by` and `Next steps`.
+9. **Check.** `pnpm -s -C web wf:lint <root>`; fix findings in the files you touched (max 3 rounds). Then run `../checking-status/scripts/wf-status.sh --ready <id>` to confirm the first tasks are ready. Report the task count, the areas and the ready tasks.
 
 This skill does not run the custom steps after Plan (`wf-env.sh flow custom plan`), so they run once, whichever skill plans. When a person asked for the plan, run them yourself once step 9 is done, with the issue folder as input. When `adding-work` or `doing-next-step` sent you here, it runs them when you return (`../using-wf/SKILL.md` section 3).
 
@@ -35,7 +35,7 @@ An xs or s issue with one obvious step may skip the plan when a person only asks
 
 ## Example
 
-Issue `wf-3k9x2` (Push board updates over SSE) has 5 criteria. The plan has 3 phases and 5 tasks in 3 lanes. T-1 and T-2 own `crates/wf-index/src/delta.rs` and `watch.rs`, so both are ready on day one. T-3 depends on both, T-4 depends on none, T-5 depends on T-3 and T-4.
+Issue `wf-3k9x2` (Push board updates over SSE) has 5 criteria. The plan has 3 phases and 5 tasks in 3 areas. T-1 and T-2 own `crates/wf-index/src/delta.rs` and `watch.rs`, so both are ready on day one. T-3 depends on both, T-4 depends on none, T-5 depends on T-3 and T-4.
 
 ```markdown
 ### T-4: Elect one leader tab over BroadcastChannel

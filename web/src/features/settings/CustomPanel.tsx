@@ -210,11 +210,7 @@ export function CustomStepBody({
           <SkillChoicesSkeleton />
         )}
         {catalog && <MoreSkills catalog={catalog} groups={groups} />}
-        <InstallNote
-          skill={skill}
-          catalog={catalog}
-          who={custom.origin === "me" ? "Your agent" : "Everyone's agent"}
-        />
+        <InstallNote skill={skill} catalog={catalog} scope={custom.origin} />
       </PanelSection>
 
       <PanelSection title="Actions">
@@ -331,11 +327,7 @@ export function NewStepPanel({
           <SkillChoicesSkeleton />
         )}
         {catalog && <MoreSkills catalog={catalog} groups={groups} />}
-        <InstallNote
-          skill={picked}
-          catalog={catalog}
-          who={scope === "me" ? "Your agent" : "Everyone's agent"}
-        />
+        <InstallNote skill={picked} catalog={catalog} scope={scope} />
       </PanelSection>
 
       <PanelSection

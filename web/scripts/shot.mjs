@@ -1,9 +1,12 @@
 // Screenshot a route of the running dev server (default http://localhost:5177).
 // usage: node scripts/shot.mjs <route> <out.png> [--w 1440] [--h 900] [--theme light|dark]
 //          [--density comfy|compact] [--click "<css or text=…>"]… [--press "<key>"]… [--hover "<sel>"] [--wait 400] [--full] [--sample]
+//          [--agent codex|claude]
 // --press sends a key to the page after the clicks (Playwright names: "3", "Enter", "Shift+Tab"), for the keyboard paths
 // (keys 1 to 8 switch the issue tabs, Enter on Approve moves focus on). --click and --press run in the order of their kind: all clicks, then all presses.
 // --sample loads the sample world (26 issues) in the page first; the board itself starts empty.
+// --agent connects that agent before the route opens (window.__wf.connectAgent). Do next step needs one: without it the
+// button opens the connect flow instead of starting a run.
 // Prints console errors from the page so builders catch runtime crashes.
 import { chromium } from "@playwright/test";
 import { gotoRoute } from "./goto.mjs";
@@ -43,7 +46,7 @@ await page.addInitScript(
 const errors = [];
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
-await gotoRoute(page, base, route, { sample: args.includes("--sample") });
+await gotoRoute(page, base, route, { sample: args.includes("--sample"), agent: opt("agent") });
 await page.waitForTimeout(wait);
 for (const sel of all("click")) {
   await page.locator(sel).first().click({ timeout: 4000 }).catch((e) => errors.push(`click ${sel}: ${e.message.split("\n")[0]}`));

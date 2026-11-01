@@ -17,6 +17,7 @@ import { ApiError, NotFoundError } from "@/lib/api/error";
 import { parseSkillRef, type ResolvedFlow, resolveFlow } from "@/lib/api/flow";
 import { type SkillsCatalog, skillExists } from "@/lib/api/skills";
 import type {
+  AgentKind,
   CodexRun,
   CodexRunKind,
   Delivery,
@@ -38,6 +39,7 @@ import type {
   WorkspaceFile,
   WorkspaceFileInfo,
 } from "@/lib/api/types";
+import { type AgentEvent, type AgentHost, createAgentHost } from "./agent";
 import { type Codex, type CodexEvent, createCodex } from "./codex";
 import { contextBundle } from "./context";
 import { createEventPlayer } from "./events";
@@ -66,6 +68,7 @@ import {
   type WorkspaceDisk,
 } from "./workspace-bus";
 
+export type { AgentEvent } from "./agent";
 export type { CodexEvent } from "./codex";
 export type { Connection } from "./store";
 
@@ -102,6 +105,13 @@ export interface MockControls {
   resetFlow: () => void;
   /** Make the custom step `id` fail (or pass again) in the Do next step runs that reach it. */
   failCustomStep: (id: string, fail?: boolean) => void;
+  /**
+   * Connect the simulated agent, as the pairing flow would: the nav shows it connected and Do next
+   * step starts runs by it. `kind` is `"codex"` (default) or `"claude"`.
+   */
+  connectAgent: (kind?: AgentKind) => void;
+  /** End the agent connection. */
+  disconnectAgent: () => void;
 }
 
 export interface MockServerOptions extends StoreOptions {
@@ -134,11 +144,16 @@ export interface MockServer {
   splitWork(input: SplitInput, onStep?: (step: number) => void): Promise<SplitResult>;
   /** Codex runs of one issue, or of all, newest first. */
   codexRuns(issue?: string): Promise<CodexRun[]>;
-  /** Start a run. A run with nothing to do comes back as `nothing_ready`, not as an error. */
-  startCodexRun(issue: string, kind: CodexRunKind): Promise<CodexRun>;
+  /**
+   * Start a run by `agent` (default Codex). A run with nothing to do comes back as `nothing_ready`,
+   * not as an error.
+   */
+  startCodexRun(issue: string, kind: CodexRunKind, agent?: AgentKind): Promise<CodexRun>;
   cancelCodexRun(id: string): Promise<CodexRun>;
   /** Hear every move of a Codex run and every change of an issue's git and CI data. */
   subscribeCodex(fn: (e: CodexEvent) => void): () => void;
+  /** Hear a script connect or disconnect the simulated agent (`controls.connectAgent`). */
+  subscribeAgent(fn: (e: AgentEvent) => void): () => void;
   /**
    * The plugins and skills of the repository, read from its files (Workdatabase · Skills), then
    * the shelves of this workspace's `skills/` folder, the loaded team libraries and the personal
@@ -194,6 +209,7 @@ export interface MockServer {
   /** Direct access for tests and tools. */
   store: Store;
   codex: Codex;
+  agent: AgentHost;
   libraryRegistry: Libraries;
   /** Play the next scripted event now; returns its name, or undefined when none applies. */
   playNext(): string | undefined;
@@ -205,6 +221,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function createMockServer(options: MockServerOptions = {}): MockServer {
   const store = createStore(options);
   const player = createEventPlayer(store, { autoplay: options.autoplay });
+  const agent = createAgentHost();
   const libs = createLibraries(store, {
     personal: options.personal ?? PERSONAL,
     personalSample: options.personalSample ?? PERSONAL_SAMPLE,
@@ -311,6 +328,8 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         );
     },
     failCustomStep: (id, fail) => codex.failCustomStep(id, fail),
+    connectAgent: (kind) => void agent.connect(kind),
+    disconnectAgent: () => agent.disconnect(),
   };
 
   /** What a context id (library item, glossary term, file) is called in a list. */
@@ -407,10 +426,10 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
       return split(input, { onStep, resolve: nameOf });
     },
     codexRuns: (issue) => read(() => codex.runs(issue)),
-    startCodexRun: async (issue, kind) => {
+    startCodexRun: async (issue, kind, who) => {
       await delay();
       assertOnline();
-      return clone(codex.start(issue, kind));
+      return clone(codex.start(issue, kind, who));
     },
     cancelCodexRun: async (id) => {
       await delay();
@@ -425,6 +444,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         offDelivery();
       };
     },
+    subscribeAgent: agent.subscribe,
     skills: () => read(catalog),
     skillFiles: async (ref) => {
       await delay();
@@ -524,6 +544,7 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     controls,
     store,
     codex,
+    agent,
     libraryRegistry: libs,
     playNext: () => player.playNext(),
     dispose: () => {
@@ -615,6 +636,7 @@ export const codexRuns = server.codexRuns;
 export const startCodexRun = server.startCodexRun;
 export const cancelCodexRun = server.cancelCodexRun;
 export const subscribeCodex = server.subscribeCodex;
+export const subscribeAgent = server.subscribeAgent;
 export const skills = server.skills;
 export const skillFiles = server.skillFiles;
 export const personalConfig = server.personalConfig;

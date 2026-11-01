@@ -396,7 +396,7 @@ export interface Task {
   steps: Step[];
   ready: boolean; // contract 1.5 "ready"
   stale: boolean;
-  level: number; // dependency depth (0 = no deps); PlanLanes column
+  level: number; // dependency depth (0 = no deps)
   edit: EditRef;
 }
 

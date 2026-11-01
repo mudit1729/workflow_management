@@ -1,11 +1,11 @@
 // The "Do next step" run (plan D4). Real: the daemon runs `codex exec` with the `doing-next-step`
-// skill on the next ready task. Prototype: a simulated background run whose phases are real
+// skill on the next ready task (or `claude -p`, through the bridge: plan D9). Prototype: a simulated background run whose phases are real
 // markdown edits through the store, about two seconds apart, so the board, the Files view and
 // the file watcher see each one. The skill is the spec; each phase does the steps it names:
 //
 //   claim   plan.md       an issue without a plan is planned first (`planning-issues`: plan.md
 //                         from the criteria, status `planned`); then the task is `in_progress`,
-//                         `claimed_by: @codex`, with a lease. goal.md: status `in_progress` and,
+//                         `claimed_by: @codex` (the agent that runs: `@claude` for Claude Code), with a lease. goal.md: status `in_progress` and,
 //                         unless another author's coordinator lease is live, `claimed_by` and
 //                         `lease_until` (steps 3 and 4)
 //   log     plan.md       the work, verified (steps 5 to 9): the steps are ticked and the task is
@@ -40,9 +40,11 @@ import type {
   TaskStatus,
   Ts,
 } from "@/gen/types";
+import { agentName } from "@/lib/api/agent-info";
 import { ApiError, NotFoundError } from "@/lib/api/error";
 import { customAfter, type ResolvedCustom, type ResolvedFlow, resolveFlow } from "@/lib/api/flow";
 import type {
+  AgentKind,
   CodexPhase,
   CodexPhaseId,
   CodexRun,
@@ -72,6 +74,7 @@ import type { Draft, Store, Touch } from "./store";
 import { toTs, tsMs } from "./time";
 import { randomId, slugify } from "./util";
 
+/** The author of a run that names no agent. A run by `claude` writes as `claude`. */
 export const CODEX_HANDLE: Handle = "codex";
 
 /** Time between two phases. */
@@ -120,8 +123,11 @@ export interface CodexOptions {
 export interface Codex {
   /** Runs of one issue, or of all, newest first. */
   runs(issue?: IssueId): CodexRun[];
-  /** Start a run. A 422 when the issue already has an active run. */
-  start(issue: IssueId, kind: CodexRunKind): CodexRun;
+  /**
+   * Start a run by `agent` (default Codex): the claim, the change entries and the words of the run
+   * name it. A 422 when the issue already has an active run.
+   */
+  start(issue: IssueId, kind: CodexRunKind, agent?: AgentKind): CodexRun;
   /** Stop an active run and release its claim. */
   cancel(id: string): CodexRun;
   subscribe(fn: (e: CodexRunEvent) => void): () => void;
@@ -147,10 +153,10 @@ const tasksOf = (src: IssueSrc): TaskSrc[] => src.plan?.phases.flatMap((p) => p.
 /** What `pickTask` found: a task (to plan first when the issue has no plan), or why there is none. */
 type Pick = { task: TaskId; plan: boolean } | { reason: string };
 
-/** Another author holds a live coordinator lease on the issue. */
-function foreignCoordinator(src: IssueSrc, now: number): Handle | undefined {
+/** Another author than `by` holds a live coordinator lease on the issue. */
+function foreignCoordinator(src: IssueSrc, now: number, by: Handle): Handle | undefined {
   const { claimed_by: holder, lease_until: until } = src.goal;
-  return holder && holder !== CODEX_HANDLE && until && tsMs(until) > now ? holder : undefined;
+  return holder && holder !== by && until && tsMs(until) > now ? holder : undefined;
 }
 
 /**
@@ -159,7 +165,7 @@ function foreignCoordinator(src: IssueSrc, now: number): Handle | undefined {
  * next task; an issue without a plan is planned first, and then T-1 is next; otherwise the first
  * ready task in plan order (the rule of the plan view, `Task.ready`).
  */
-function pickTask(store: Store, issue: IssueId): Pick {
+function pickTask(store: Store, issue: IssueId, by: Handle): Pick {
   const detail = store.derived.details.get(issue);
   const src = store.issueSrc(issue);
   if (!detail || !src) return { reason: NOTHING_READY.finished };
@@ -176,7 +182,7 @@ function pickTask(store: Store, issue: IssueId): Pick {
   const plan = tasks.length === 0;
   if (plan) {
     if (src.criteria.length === 0) return { reason: NOTHING_READY.noCriteria };
-    const holder = foreignCoordinator(src, store.now());
+    const holder = foreignCoordinator(src, store.now(), by);
     if (holder) return { reason: NOTHING_READY.coordinator(holder) };
     next = { id: "T-1", satisfies: ["SC-1"] };
   } else {
@@ -406,7 +412,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     return src && tasksOf(src).find((t) => t.id === a.run.task);
   };
   const leaseUntil = (): Ts => toTs(store.now() + store.world.config.leases_minutes * MIN);
-  const authorModel = () => store.world.authors.find((x) => x.handle === CODEX_HANDLE)?.model;
+  const authorModel = (by: Handle) => store.world.authors.find((x) => x.handle === by)?.model;
 
   // ---- the phases
 
@@ -419,22 +425,22 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const group = store.summary(issue)?.group_path.at(-1) ?? "main";
     const draft = draftPlan(src, {
       at: store.stamp(),
-      by: CODEX_HANDLE,
+      by: a.run.by,
       lane: slugify(group) || "main",
       maxTasks: Number(a.flow.steps.plan.options.max_tasks?.value),
     });
     const tasks = draft.phases.flatMap((p) => p.tasks);
-    const lanes = new Set(tasks.map((t) => t.lane));
+    const areas = new Set(tasks.map((t) => t.lane));
     w.write(planFile, renderPlan(draft));
 
     const entry: ChangeSrc = {
       id: store.newId("C-"),
       ts: store.stamp(),
-      author: CODEX_HANDLE,
-      title: `Wrote the plan with ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${lanes.size} lane${lanes.size === 1 ? "" : "s"}`,
+      author: a.run.by,
+      title: `Wrote the plan with ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${areas.size} area${areas.size === 1 ? "" : "s"}`,
       kind: "docs",
       files: ["plan.md"],
-      model: authorModel(),
+      model: authorModel(a.run.by),
       body: `Turned the ${src.criteria.length} criteri${src.criteria.length === 1 ? "on" : "a"} of goal.md into ${tasks.length} task${tasks.length === 1 ? "" : "s"}, one per criterion, in order.`,
     };
     w.write(changesFile, appendChange(w.read(changesFile), entry));
@@ -446,7 +452,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     // A worker under another author's lease never rewrites the state; a coordinator creates it, or
     // changes only the summary, the stamp and the next steps (planning-issues, step 8).
     if (a.coordinator) {
-      const summary = `Planned: ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${lanes.size} lane${lanes.size === 1 ? "" : "s"}; T-1 is ready.`;
+      const summary = `Planned: ${tasks.length} task${tasks.length === 1 ? "" : "s"} in ${areas.size} area${areas.size === 1 ? "" : "s"}; T-1 is ready.`;
       const existing = w.read(stateFile);
       const current = src.state;
       if (existing === undefined || !current)
@@ -455,7 +461,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
           createState({
             summary,
             updated_at: store.stamp(),
-            updated_by: CODEX_HANDLE,
+            updated_by: a.run.by,
             phase: draft.phases[0].name,
             needs_you: [],
             next_steps: ["Claim [[#T-1]] and start the first step."],
@@ -467,7 +473,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
           overwriteState(existing, {
             summary,
             updated_at: store.stamp(),
-            updated_by: CODEX_HANDLE,
+            updated_by: a.run.by,
             next_steps: ["Claim [[#T-1]] and start the first step."],
           }),
         );
@@ -483,8 +489,8 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     if (!src) throw new Error(`${issue} is gone.`);
     const planFile = store.filePath(issue, "plan.md");
     const goalFile = store.filePath(issue, "goal.md");
-    a.coordinator = !foreignCoordinator(src, store.now());
-    store.mutate(CODEX_HANDLE, issue, (w) => {
+    a.coordinator = !foreignCoordinator(src, store.now(), a.run.by);
+    store.mutate(a.run.by, issue, (w) => {
       const touches: Touch[] = [];
       const activity: {
         issue_id: IssueId;
@@ -499,7 +505,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         activity.push({
           issue_id: issue,
           kind: "change",
-          author: CODEX_HANDLE,
+          author: a.run.by,
           title: planned.title,
         });
         // planning-issues step 7: only the `status:` line, `backlog` to `planned`.
@@ -515,7 +521,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         claimTask(
           setTaskStatus(text(w, planFile), task, "in_progress"),
           task,
-          CODEX_HANDLE,
+          a.run.by,
           leaseUntil(),
         ),
       );
@@ -528,22 +534,22 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
           a.statusBefore = status;
           goal = setIssueStatus(goal, "in_progress");
         }
-        w.write(goalFile, claimIssue(goal, CODEX_HANDLE, leaseUntil()));
+        w.write(goalFile, claimIssue(goal, a.run.by, leaseUntil()));
         if (!touches.some((t) => t.file === goalFile))
           touches.push({ file: goalFile, anchors: ["status", "lease_until"] });
       }
       if (a.coordinator && !a.plans) {
-        const resolved = resolveAnswered(src, w);
+        const resolved = resolveAnswered(src, w, a.run.by);
         touches.push(...resolved.touches);
         for (const title of resolved.titles)
-          activity.push({ issue_id: issue, kind: "change", author: CODEX_HANDLE, title });
+          activity.push({ issue_id: issue, kind: "change", author: a.run.by, title });
       }
       const title = `Claimed ${task}`;
-      activity.push({ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title });
+      activity.push({ issue_id: issue, kind: "lease", author: a.run.by, title });
       return {
         touches,
         activity,
-        log: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
+        log: [{ issue_id: issue, kind: "lease", author: a.run.by, title }],
       };
     });
   }
@@ -553,7 +559,11 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
    * before the work starts. Its item leaves `## Needs you`, and a `kind: answer` entry holds the
    * question and the answer (`logging-work`).
    */
-  function resolveAnswered(src: IssueSrc, w: Draft): { touches: Touch[]; titles: string[] } {
+  function resolveAnswered(
+    src: IssueSrc,
+    w: Draft,
+    by: Handle,
+  ): { touches: Touch[]; titles: string[] } {
     const answered = (src.state?.needs_you ?? []).filter((r) => r.answered);
     if (!src.state || answered.length === 0) return { touches: [], titles: [] };
     const changesFile = store.filePath(src.goal.id, "changes.md");
@@ -561,10 +571,10 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const entries = answered.map<ChangeSrc>((r) => ({
       id: store.newId("C-"),
       ts: store.stamp(),
-      author: CODEX_HANDLE,
+      author: by,
       title: `Resolved ${r.id}`,
       kind: "answer",
-      model: authorModel(),
+      model: authorModel(by),
       body: `**Q:** ${r.question}\n**A:** ${r.answer ?? ""} (@${r.answered_by ?? r.to})`,
     }));
     w.write(
@@ -652,7 +662,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const entry: ChangeSrc = {
       id: store.newId("C-"),
       ts: store.stamp(),
-      author: CODEX_HANDLE,
+      author: a.run.by,
       title: pastTense(live.title),
       kind: "progress",
       task,
@@ -665,11 +675,11 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
           : `\`${command}\` passed`,
       commit: a.commits ? a.sha : undefined,
       files: files.length > 0 ? files : undefined,
-      model: authorModel(),
+      model: authorModel(a.run.by),
       body: sentences.join(" "),
     };
 
-    store.mutate(CODEX_HANDLE, issue, (w) => {
+    store.mutate(a.run.by, issue, (w) => {
       let plan = text(w, planFile);
       const touched: string[] = [task];
       (live.steps ?? []).forEach((step, i) => {
@@ -686,7 +696,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         for (const t of ticks)
           goal = verifyCriterion(goal, t.id, {
             evidence: `\`${t.command}\` passed${a.commits ? ` at \`${a.sha}\`` : ""}, see [[#${entry.id}]]`,
-            by: CODEX_HANDLE,
+            by: a.run.by,
           });
         w.write(goalFile, goal);
         touches.push({ file: goalFile, anchors: ticks.map((t) => t.id) });
@@ -698,7 +708,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       a.run.review = toReview || undefined;
       return {
         touches,
-        activity: [{ issue_id: issue, kind: "change", author: CODEX_HANDLE, title: entry.title }],
+        activity: [{ issue_id: issue, kind: "change", author: a.run.by, title: entry.title }],
       };
     });
     a.entry = entry.id;
@@ -714,7 +724,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         {
           sha: a.sha,
           subject: live.title,
-          author: CODEX_HANDLE,
+          author: a.run.by,
           at: toTsSec(store.now()),
           branch: a.branch,
           task,
@@ -775,12 +785,12 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
   }
 
   /** The request that asks a person to check a task whose verify is `manual`. */
-  function checkRequest(src: IssueSrc, finished: TaskSrc): RequestSrc {
+  function checkRequest(src: IssueSrc, finished: TaskSrc, by: Handle): RequestSrc {
     const blocks = tasksOf(src).some((t) => t.depends_on?.includes(finished.id));
     return {
       id: store.newId("Q-"),
       question: `Check ${finished.id} by hand: ${finished.title}?`,
-      from: CODEX_HANDLE,
+      from: by,
       to: src.goal.owner ?? store.me,
       kind: "approval",
       urgency: blocks ? "blocking" : "fyi",
@@ -844,13 +854,13 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const nextSteps = [
       ...new Set([first, ...asks, ...(current?.next_steps ?? []).filter((l) => !mentions(l))]),
     ].slice(0, 4);
-    const requests = inReview ? [checkRequest(src, finished)] : [];
+    const requests = inReview ? [checkRequest(src, finished, a.run.by)] : [];
 
     if (!current || !exists)
       return createState({
         summary,
         updated_at: store.stamp(),
-        updated_by: CODEX_HANDLE,
+        updated_by: a.run.by,
         needs_you: requests,
         done: done.length ? done : undefined,
         blocked: blocked.length ? blocked : undefined,
@@ -859,7 +869,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const patch: Partial<StateSrc> = {
       summary,
       updated_at: store.stamp(),
-      updated_by: CODEX_HANDLE,
+      updated_by: a.run.by,
       done: [...(current.done ?? []), ...done],
       in_flight: (current.in_flight ?? []).filter((l) => !mentions(l)),
       blocked: [...(current.blocked ?? []).filter((l) => !mentions(l)), ...blocked],
@@ -884,10 +894,10 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     if (!a.coordinator) return;
     const goalFile = store.filePath(issue, "goal.md");
     const stateFile = store.filePath(issue, "current_state.md");
-    store.mutate(CODEX_HANDLE, issue, (w) => {
+    store.mutate(a.run.by, issue, (w) => {
       const touches: Touch[] = [];
       let goal = text(w, goalFile);
-      if (src.goal.claimed_by === CODEX_HANDLE) goal = releaseIssue(goal);
+      if (src.goal.claimed_by === a.run.by) goal = releaseIssue(goal);
       const closed = tasksOf(src).every((t) => t.status === "done" || t.status === "cancelled");
       if (closed && src.goal.status === "in_progress") goal = setIssueStatus(goal, "review");
       w.write(goalFile, goal);
@@ -901,8 +911,8 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       const title = `Finished ${task}`;
       return {
         touches,
-        activity: [{ issue_id: issue, kind: "state", author: CODEX_HANDLE, title }],
-        log: [{ issue_id: issue, kind: "state", author: CODEX_HANDLE, title }],
+        activity: [{ issue_id: issue, kind: "state", author: a.run.by, title }],
+        log: [{ issue_id: issue, kind: "state", author: a.run.by, title }],
       };
     });
   }
@@ -924,25 +934,25 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const entry: ChangeSrc = {
       id: store.newId("C-"),
       ts: store.stamp(),
-      author: CODEX_HANDLE,
+      author: a.run.by,
       title: `${c.label} failed`,
       kind: "failure",
       task,
       result: "fail",
       evidence: `${c.skill} reported a failure for ${task}.`,
-      model: authorModel(),
+      model: authorModel(a.run.by),
       body: `The custom step ${c.id} (${c.skill}) failed after ${task}.${
         c.required ? " It must pass, so the run stopped." : " It is optional, so the run went on."
       }`,
     };
-    store.mutate(CODEX_HANDLE, issue, (w) => {
+    store.mutate(a.run.by, issue, (w) => {
       w.write(changesFile, appendChange(w.read(changesFile), entry));
       const touches: Touch[] = [{ file: changesFile, anchors: [entry.id] }];
       if (c.required) {
         const request: RequestSrc = {
           id: store.newId("Q-"),
-          question: `${c.label} failed on ${task}. Fix it, or tell Codex how to go on.`,
-          from: CODEX_HANDLE,
+          question: `${c.label} failed on ${task}. Fix it, or tell ${agentName(a.run.agent)} how to go on.`,
+          from: a.run.by,
           to: owner,
           kind: "input",
           urgency: "blocking",
@@ -954,7 +964,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
           addRequest(w.read(stateFile), request, {
             summary: `${c.label} failed on ${task}.`,
             updated_at: store.stamp(),
-            updated_by: CODEX_HANDLE,
+            updated_by: a.run.by,
             next_steps: [`Fix what ${c.label} found, then press Do next step.`],
           }),
         );
@@ -962,7 +972,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       }
       return {
         touches,
-        activity: [{ issue_id: issue, kind: "change", author: CODEX_HANDLE, title: entry.title }],
+        activity: [{ issue_id: issue, kind: "change", author: a.run.by, title: entry.title }],
       };
     });
     if (c.required) throw new Error(`${c.label} failed on ${task}: it must pass.`);
@@ -1003,11 +1013,11 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const live = taskOf(a);
     const holdsTask =
       !a.after &&
-      live?.claimed_by === CODEX_HANDLE &&
+      live?.claimed_by === a.run.by &&
       (live.status === "in_progress" || live.status === "review");
-    const holdsIssue = a.coordinator && src?.goal.claimed_by === CODEX_HANDLE;
+    const holdsIssue = a.coordinator && src?.goal.claimed_by === a.run.by;
     if (!holdsTask && !holdsIssue) return;
-    store.mutate(CODEX_HANDLE, issue, (w) => {
+    store.mutate(a.run.by, issue, (w) => {
       const touches: Touch[] = [];
       if (holdsTask) {
         const file = store.filePath(issue, "plan.md");
@@ -1025,8 +1035,8 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       const title = `Released ${task}`;
       return {
         touches,
-        activity: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
-        log: [{ issue_id: issue, kind: "lease", author: CODEX_HANDLE, title }],
+        activity: [{ issue_id: issue, kind: "lease", author: a.run.by, title }],
+        log: [{ issue_id: issue, kind: "lease", author: a.run.by, title }],
       };
     });
   }
@@ -1087,12 +1097,14 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     const live = taskOf(a);
     const task = a.run.task;
     if (!live) return `${task} is gone.`;
-    const mine = live.claimed_by === CODEX_HANDLE;
+    const mine = live.claimed_by === a.run.by;
     // Before the work phase the task is in flight; after it, it stays as the run left it.
     const expected = a.after
       ? live.status === a.after
       : live.status === "in_progress" || live.status === "review";
-    return mine && expected ? undefined : `${task} changed while Codex worked on it.`;
+    return mine && expected
+      ? undefined
+      : `${task} changed while ${agentName(a.run.agent)} worked on it.`;
   }
 
   function step(a: Active, id: CodexPhaseId) {
@@ -1147,13 +1159,13 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     return list.map<CodexPhase>((p) => ({ ...p, state: "pending" }));
   }
 
-  function start(issue: IssueId, kind: CodexRunKind): CodexRun {
-    if (kind !== "next_step") reject(`Codex does not know the run "${kind}".`);
+  function start(issue: IssueId, kind: CodexRunKind, agent: AgentKind = "codex"): CodexRun {
+    if (kind !== "next_step") reject(`${agentName(agent)} does not know the run "${kind}".`);
     if (!store.derived.details.has(issue)) throw new NotFoundError(`Issue ${issue}`);
-    if ([...active.values()].some((a) => a.run.issue === issue))
-      reject(`Codex is already working on ${issue}.`);
+    const going = [...active.values()].find((x) => x.run.issue === issue);
+    if (going) reject(`${agentName(going.run.agent)} is already working on ${issue}.`);
 
-    const picked = pickTask(store, issue);
+    const picked = pickTask(store, issue, agent);
     const startedAt = toTsSec(store.now());
     const id = randomId((x) => runs.some((r) => r.id === x), "run-");
     const base: CodexRun = {
@@ -1161,7 +1173,10 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       issue,
       kind,
       status: "running",
-      by: CODEX_HANDLE,
+      // The author is the agent's kind: `codex`, `claude`.
+      by: agent,
+      agent,
+      source: "simulated",
       phases: [],
       started_at: startedAt,
     };

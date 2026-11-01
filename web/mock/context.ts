@@ -529,7 +529,7 @@ export function contextBundle(
     .filter((l): l is string => l !== undefined)
     .join("\n");
 
-  const resume = `To resume: ${resumeCommand(s, flow.steps.do.skill)}`;
+  const resume = `To resume: ${resumeCommand(s, "codex", flow.steps.do.skill)}`;
   const sections = buildSections(detail, d, now, delivery, pages, flow);
   const keep = new Set<Section>();
   let used = tokens(header) + tokens(resume) + 60; // the footer, the resume line and the note

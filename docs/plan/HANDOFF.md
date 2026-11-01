@@ -1,15 +1,16 @@
-# Handoff: wf dashboard UI prototype (2026-10-30, Codex workflow integrated)
+# Handoff: wf dashboard UI prototype (2026-10-30, Codex workflow integrated; round 2: connect an agent, no swimlanes)
 
 The user asked for a clickable prototype of every UI element, on mock data, to review element by
 element. The prototype is now also a workflow manager for Codex. Four UI workstreams (issue
 sections, nav and skills, Add work, Codex buttons) were built against one data layer and have been
 integrated; this file says what exists, what was decided and what is open.
 
+- **Round 2 (connect an agent, swimlanes and task lanes removed) is built and integrated; see "Round 2" below** and the plan's "Round 2" section (D9 to D16).
 - Build contract and current architecture: `web/UI_BUILD.md`. Product contract: `docs/plan/contract.md`
   (not edited; see "Open items"). The plan this work follows: `docs/plan/proposals/codex-workflow-plan.md`.
 - The last published artifact (https://claude.ai/artifact/JBq4MmtyBHh3DxuNLVJgw9, private to the user) is the
   2026-10-22 build. **It has not been republished with any of the changes below.**
-- Screenshots of the earlier build: `docs/plan/mockups/shots/` (17 PNGs). None were regenerated in this pass.
+- Screenshots of the earlier build: `docs/plan/mockups/shots/` (17 PNGs). None of those were regenerated. The round-2 screenshots (19 PNGs: the board without lanes, the connect flow, the Agent panel, a run by the real bridge, the Plan list) are in `docs/plan/mockups/shots/agent/`.
 
 ## The user's three goals and where each one lives
 
@@ -33,8 +34,8 @@ with a set of skills without coming to the ui and the ui should be able to work 
 
 - **Naming.** Workspace → **Workflow** (Board, with a Needs you filter) and **Library** (Personal · Team libraries · Files · Skills; it was Workdatabase, see "Libraries" below). Shortcuts
   `g w`, `g d` or `g l`, `g p`, `g t`, `g g`, `g f`, `g s`, `g k`; `n` opens Add work. There is **no inbox**: `/inbox` redirects to `/w?needs=me`.
-- **Board.** Toolbar with **Needs you** (a toggle with the count of open requests; `?needs=me`) and the primary **+ Add work**. A card shows a
-  Codex mark while a run goes on its issue; its menu has Open in Codex and Do next step.
+- **Board.** Toolbar with **Needs you** (a toggle with the count of open requests; `?needs=me`) and the primary **+ Add work**. One set of columns: **no swimlanes** (round 2).
+  A card shows the agent's mark while a run goes on its issue; its menu has Open in <agent> and Do next step.
 - **+ Add work** (`web/src/features/add-work`). One question per screen. Group path: What → Where → Outcome (the one typed line) → Name → Size →
   Priority → Context → **Codex splits it**. The split screen also keeps or drops each proposal, asks **Backlog or Planned** (keys `1` and `2`) and its
   button adds the issues, so **a group takes 8 clicks, the opening click included, and one typed line** (checked with Playwright; a unit test pins the number).
@@ -44,7 +45,7 @@ with a set of skills without coming to the ui and the ui should be able to work 
   **Traceability runs both ways:** the Git tab's `T-n` pill opens the task, a Log entry's commit chip opens the commit in Git, and a task's detail lists its commits and CI runs, each a link.
 - **Empty states and hints** (`features/issue/skill-hint.tsx`): a button first (Do next step, Write the context), then one real skill of the workflow plugin linked to its page in
   Library · Skills, and the prompt with a copy button for `codex '…'`. No invented skill names and no `wf …` command shown as runnable (there is no CLI); see "UI hints" in `web/UI_BUILD.md`.
-- **Open in Codex / Do next step** (`web/src/features/codex`). The run is simulated in the prototype, but each phase is a real markdown edit
+- **Open in Codex / Do next step** (`web/src/features/codex`). Round 2: both follow the connected agent (see "Round 2"). The run is simulated in the prototype unless a real bridge is connected, but each simulated phase is a real markdown edit
   (claim the task, log a change, verify with a CI run, finish the task and `current_state.md`, add a commit). The same code path serves the
   issue header, the card menu and the palette. **One confirmation per event:** a run shown in the header's strip has no toast; one started from the card menu or the palette gives one toast when it ends;
   Open in Codex confirms in its popover line and has no toast; Copy context confirms in its popover (the palette gives one toast with View). While a run goes the
@@ -58,7 +59,7 @@ with a set of skills without coming to the ui and the ui should be able to work 
   `newIssueOpen`, `newGroupOpen`, `openNewIssue`, `openNewGroup` in the shell store. `features/inbox` and the `/inbox` page.
 - **Loading.** The issue views, the Add work dialog and the Skills view are lazy chunks (`web/src/app/lazy-views.tsx`) fetched when the browser is
   idle; the main chunk is 347 kB and the build has no chunk-size warning. Keep it that way.
-- **Kit** (`/kit`, 142 elements at that pass, 164 with the library entries; no console errors): registers the issue-delivery, Add work, Codex and Skills entries; new groups Issue · Criteria,
+- **Kit** (`/kit`, 145 elements after round 2, plus the library entries; no console errors): registers the issue-delivery, Add work, Codex and Skills entries; new groups Issue · Criteria,
   Issue · Git, Issue · CI; the empty "Workflow · Inbox" group is gone.
 
 ## Decisions
@@ -104,7 +105,7 @@ Smaller calls made while integrating, in case the user wants them the other way:
 - `docs/plan/proposals/contract-1.12-tokens.md`: the token changes the UI ships (contrast fixes, hues 6 and 8, scrim, z layers, text tokens), unapproved.
 - **Not done in this pass:** plan Phase 5 (a fresh agent given only the `SKILL.md` files drives adding work, the next step and a handoff on a copy of the sample, and
   `wf-lint` must show no new findings) and Phase 6 (commit per workstream, push, republish the static build, send screenshots). The screenshots and the artifact are the old ones.
-- **The prototype's seams to the product:** the daemon that starts Codex from the browser and runs `codex exec` (D3, D4); the `gh`-based derivation (D2); the `wf` CLI that the
+- **The prototype's seams to the product:** the daemon that starts Codex from the browser and runs `codex exec` (D3, D4; round 2 built it as the bridge, `plugins/workflow/scripts/wf-bridge.mjs`, but it has not been run against a real Codex or Claude Code); the `gh`-based derivation (D2); the `wf` CLI that the
   skills stand in for. `useNewIssue` and `useNewGroup` are still ops in the data layer but no screen calls them.
 - Three sample issues still mention an "inbox" in their own text (`command-palette/plan.md`, `tab-title-count/goal.md`, `build-v1/plan.md`): it is past work in the
   sample, left as written.
@@ -133,12 +134,52 @@ Fixed in `web/src/features/issue/**` (not `IssueHeader.tsx`), `RefLink`, the Kit
   A run claims goal.md too (`status: in_progress`, `claimed_by`, `lease_until`) unless another author holds a live coordinator lease, ticks a criterion only with a command's evidence, and ends a `verify: manual` task in `review` with an approval request in Needs you.
 - **Sample clock.** `WF_NOW=2026-10-22T16:27+05:30` on `web/mock/sample` gives the dashboard's answers in `wf-status.sh` (a live lease with 35 minutes left, T-4 ready, nothing stale); `node plugins/workflow/scripts/check-sample-clock.mjs` checks it. Run skill evals on a copy.
 - **Accept and Reject on a proposed decision are buttons** now (`set_decision_status` op, `useSetDecisionStatus`; the one in-place edit `logging-work` allows). The card changes its status chip; there is no toast.
-- **Hints name only real things.** The eight skills of `plugins/workflow/skills` and buttons; no `wf …` command is shown as runnable (the sample's own next steps were reworded too: "Verify SC-3 with its command."). `hints.test.ts` fails on an invented skill or command in `features/issue` and `features/kit`.
+- **Hints name only real things.** The twelve skills of `plugins/workflow/skills` and buttons; no `wf …` command is shown as runnable (the sample's own next steps were reworded too: "Verify SC-3 with its command."). `hints.test.ts` fails on an invented skill or command in `features/issue` and `features/kit`.
 - **One confirmation per event.** A run that ends while the header strip shows it has no toast; a run from the card menu or the palette gives one toast when it ends; Open in Codex in the header has the popover's line only; the palette's Open in Codex toasts once; a cancel has none.
-- **Install panel** has two audiences for Claude Code (just me / everyone on the repository) and two steps for Codex (`install-skills.sh --codex`, then `--print-agents-md >> AGENTS.md`), and says `mudit1729/workflow_management` is the team's repository.
+- **Install panel** has two audiences for Claude Code (just me / everyone on the repository) and two steps for Codex (`install-skills.sh --codex`, then `--print-agents-md >> AGENTS.md`), and says `mudit1729/workflow_management` is the team's repository. That is the repository's current name (GitHub redirects the old `workflow_maagement` there); it is `repository` in `plugins/workflow/.claude-plugin/plugin.json`, which `install-skills.sh --claude-plugin` reads, and a test keeps it equal to `SKILLS_REPO`. A clone made before the rename still has the old `origin`; `git remote set-url origin https://github.com/mudit1729/workflow_management` fixes it.
 - **Still open, small:** the Add work "Start in: Planned" writes `status: planned` without a `plan.md` (adding-work writes `backlog` only; planned is the result of planning-issues); a `verify: manual` criterion makes the first Do next step end in `review`
   (the strip says "Done: T-1, waiting for a check"); the Kit's board entry counts every author's requests in `summarize(visible)`.
 
+## Round 2 (2026-10-30): connect an agent, no swimlanes
+
+The user's new asks: "in the dashboard have the ability to connect the agent, like codex or claude", "remove swimlanes" and "no need to have lanes in tasks. list is enough". Three workstreams built it (S: lanes, X: the agent data and the bridge, Y: the agent UI) and one pass integrated them.
+The decisions are the plan's (`docs/plan/proposals/codex-workflow-plan.md`, "Round 2"); all are defaults the user can change.
+
+- **D9 What connecting means.** A small bridge runs on the person's computer at the repo root: `node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92` (Node 18+, no dependencies). The dashboard pairs with it once by that code, then talks to it on `127.0.0.1:7457`. The bridge runs the agent
+  headless in the repo (`codex exec --full-auto …`, `claude -p … --permission-mode acceptEdits`; both overridable after `--`) with `WF_ROOT` and `WF_AUTHOR`; the agent edits the markdown and the board shows it as usual. One agent at a time. **Disconnect, Switch and Connect again end the bridge** (`DELETE /pair`: open streams get a final `cancelled`, runs are stopped, the process exits 0), so a code cannot pair twice and the next pairing finds the port free; the dashboard says so ("The Codex bridge on <host> stopped. Paste this at the repo root to start the new one"; the Disconnect and Switch tooltips; the palette rows). An old bridge that still runs when a new code is tried is no dead end: the screen shows a note and pairs by itself once it is stopped.
+- **D10 Connect flow.** Which agent? (two buttons) → Run this in the repo (one Copy button; the screen waits, then turns into Connected with host, repo, version and a skills check that offers the install commands) → Done. About 5 clicks with the opener.
+- **D11 Where it shows.** The nav's agent row (`Connect an agent`, `Codex · connected`, `Codex · pairing…`, `Codex · lost`) opens the connect flow or the Agent panel (status, host, repo, workspace, version, skills, recent runs, Switch, Disconnect, Check again, Reconnect). The palette has Connect an agent, Switch to, Disconnect and Agent status.
+- **D12 What changes when connected.** Do next step needs an agent: without one it opens the connect flow and starts the run when it is done (a lost agent opens the panel, where Reconnect is); nothing is toasted for that. Open in Codex follows the agent (**Open in Claude Code** copies `claude '…'`). The card menu, the palette, the Plan tab's busy
+  button, the skill hints, the toasts and a run's `claimed_by` and commit author use the agent's name. Add work's split still says Codex (unchanged this round, as D12 says).
+- **D13 Safety.** The bridge answers only after pairing (one-time code, then a bearer token; five wrong codes close pairing), only to the dashboard's origin and a loopback Host, binds 127.0.0.1 only, starts the agent without a shell and builds the prompt itself from a validated issue id. The browser never sends a prompt or a shell command.
+- **D14 Prototype.** The static artifact cannot reach `127.0.0.1`, so pairing is simulated there ("Prototype: the bridge answers by itself", 2.5 s). The dev server pairs with a real bridge, tested end to end with a fake agent binary (`web/scripts/wf-bridge.test.ts`, 54 tests); a small Simulate link is the dev escape hatch. `window.__wf.connectAgent("codex" | "claude")` and
+  `disconnectAgent()` connect from scripts; `shot.mjs` and `sweep.mjs` take `--agent codex|claude`.
+- **D15 Swimlanes removed.** The board is one set of columns; the group tree filters it, each card names its group. `?swim=` is dropped from old links (the address bar sheds it), the toolbar control and `Swimlane` are gone, drag works across the whole board.
+- **D16 Task lanes removed.** The Plan tab shows the phase list only (no Lanes view, no Lanes | List toggle; `planView` is gone from the prefs, an old stored value is ignored). The list keeps the Ready highlight, brings the task in progress into view and shows dependencies ("after T-3, T-4", wide enough rows only). The `lane` field stays in `plan.md` and
+  `authors.md` because the skills route work by it, but the UI calls it an **area** everywhere (the Plan list, the task detail, the author hover card: "Areas", "Any area"; the planning run's trail says "N tasks in M areas", in the skill, the mock and the sample).
+
+Integration choices made in this pass, in case the user wants them the other way:
+
+- The sample world lists `@claude` (Claude Code) in `mock/sample/authors.md`, so a simulated Claude Code run on the sample raises no Q012; `mock/world.test.ts` expects it next to the six authors the issues use.
+- `useStartCodexRun().start` rejects with `AgentNotConnectedError` when no agent is connected; the hooks that call it (`useNextStep`, `useCodexIssue`, `useResumeNextStep`) catch it and open the flow. A new caller must do the same.
+- Where the agent's name is not known yet (nothing connected, nothing chosen) every label says Codex, the default.
+- The connect flow has small copies of Add work's frame and progress dots (`Screen`, `StepDots`), because `StepFrame` and `ProgressDots` are typed to Add work's step ids. Generalize them in `features/add-work/parts.tsx` if the two flows should share one frame.
+
+Open items for round 2 (and what this pass checked):
+
+- **Run against a real agent only in part.** `codex exec --full-auto` is untested (Codex is not installed here). For Claude Code, the permission list was run against a real `claude -p` 2.1.314 (the helper scripts, `git add`, `git commit` and `pnpm` ran, `curl` stayed denied); a whole Do next step by a real Claude Code or Codex has not been made. Node 18 was not tried (22 here; only Node 18 APIs are used); Windows is refused with a message.
+- **The headless agent cannot run Bash by default, and the connect flow now says so.** `acceptEdits` lets Claude Code edit files but not run the helper scripts, `git add`, `git commit` or a verify command, and a headless run cannot answer a prompt. The Claude Code step shows one line ("Claude Code edits files, but does not run the helper scripts or commit.", with the pointer "What it can do: plugins/workflow/README.md") and a button, **Allow them**, that adds `claudeAllowFlags()` (`CLAUDE_ALLOWED_TOOLS`) to the command; it is off by default because each entry is a permission. The README and the bridge's start-up line say the same.
+- **A bridge run names no task** (the agent picks it): the strip, the card marker and the toast say "Running on <host>", "Done" and "Codex finished" with no T-n. Bridge runs live only in the browser (cached lists) and in the bridge's memory; after a reload the dashboard re-lists them and re-follows the running ones.
+- **The contract still describes swimlanes and PlanLanes** (`docs/plan/contract.md`: the top-level component list names `Swimlane` and `PlanLanes`, and the Plan tab entry describes the lanes view) and has no agent or bridge section; it is unchanged until approved. If D9 to D16 are approved, add the bridge's HTTP API (`POST /pair`, `DELETE /pair`, `GET /status`, `POST /runs`, `GET /runs`, `GET /runs/<id>/events`, `DELETE /runs/<id>`) and drop the two components.
+- **Checked in this pass:** the static build (built to a scratch folder with `VITE_STATIC=1`, not `dist-static`) pairs by itself after about 2.5 s, shows "Prototype: the bridge answers by itself", has no Simulate link and makes no request to `127.0.0.1`; in dev the real bridge paired with the dashboard through the connect flow, a run showed "Running on <host>" with the agent's last line and ended Done, with a fake agent binary.
+  The browser console shows `ERR_CONNECTION_REFUSED` for `127.0.0.1:7457` while a pairing waits for a bridge in dev: expected.
+- **Final verification of round 2 (this is the last pass).** Checks, all clean: `pnpm -s typecheck`, `biome check src mock scripts`, `vitest run` (1110 tests in 50 files), `pnpm -s build` (no chunk warning), `check-skills.mjs` (8 skills ok), `check-sample-clock.mjs`, `wf:lint mock/workspace` (the 18 known F009 warnings). The sweep over every route (`sweep.mjs --sample --sheets`: 198 pages, 3 widths, 2 themes) has 0 problems and no text under 11 px; a second sweep of the routes the last edits touched (Board, Kit Agent and EmptyState entries, Glossary) has 0 problems.
+  Playwright, with no console errors: (a) empty board, footer, Codex, Simulate, Done (5 clicks), the Agent panel says Connected; (b) sample, `wf-3k9x2`, Do next step with no agent opens the flow, Done starts the run (5 clicks), the strip goes Claiming T-4, Logging the change, Verifying, Done: T-4, and no toast; (c) Switch to Claude Code, **Open in Claude Code** copies `claude 'Work on wf-3k9x2 "…" in issues/…'` (single quotes outside, because the prompt holds double quotes, as `codex '…'` does), and a simulated run writes `claimed_by: @claude` in `plan.md`; (d) connected, reload, still connected; Disconnect (panel or palette), reload, still none, and the empty board names the last agent chosen; (e) `/w?swim=child` loads the plain board and sheds the parameter, a card dragged from In progress to Review (a column of three groups) moves with no dialog, `j k h l` move the focus, the Plan tab of `wf-3k9x2` is the list with no Lanes control and the Ready toggle lights T-4; (f) Add work's group path is 8 clicks and one typed line.
+  **Real bridge** (the dev server, `WF_ROOT=web/mock/sample`, `--agent codex --agent-bin <fake>`; the fake agent finds the issue, ticks T-4, appends a change entry, prints a few lines): the code on screen paired, the connect screen turned Connected, Do next step on `wf-3k9x2` showed the bridge's lines in the strip and ended Done, and without a reload Plan went 1/5 to 2/5 and Log 18 to 19. Stopping the bridge (Ctrl+C, exit 0) turned the footer to "lost" after about 21 s (the 15 s heartbeat). The sample was restored from a backup and `git status --short web/mock/sample` printed nothing; the dev server needs a few seconds after `rm -rf` and `cp -a` and **may keep serving the edited `plan.md` and `changes.md` until they are touched** (`touch` them; all 127 served files were then compared with the disk and equal). A run started three seconds after a restore saw the stale sample and a page reload.
+  Applied from the review hand-offs: `BLOCKED_NOTE` is exported from `@/lib/api` and the Kit uses it; the Kit's "board · no work yet" entry names the agent as the board does; Switch from a connected bridge says "The Codex bridge on <host> stopped. Paste this at the repo root to start the new one" (`endedBridgeLine`), and the Switch tooltip and the palette's Switch row say the bridge stops; the Claude Code step has the allowlist line and the **Allow them** button; the Open in <agent> popover no longer asks for an agent when one is connected; the glossary term `lane` is now **area** (`mock/workspace/glossary.md` and, deliberately after the restore check, `mock/sample/glossary.md`, with the term list in `mock/world.test.ts`), so `git status` shows `web/mock/sample/glossary.md` as modified.
+  Not applied: `web/biome.json` still covers `src` and `mock` only (the CLI run adds `scripts`; `plugins/workflow/scripts/wf-bridge.mjs` is not linted by `pnpm lint`; it was checked once with a broadened config); the contract is unchanged.
+- **Not committed, not published.** The review fixes and this verification are not committed (`git status` lists them); the artifact is still the 2026-10-22 build.
+- `docs/plan/workflows/*.js` and the plan's `parts/` and `diagrams/` were not touched.
 ## Libraries: personal, team and Ask (2026-10-30, branch `library`)
 
 Spec: `docs/plan/proposals/libraries-spec.md`. Build contract: the library, personal, team and ask sections of `web/UI_BUILD.md`. The nav section **Workdatabase is now Library**: Personal, Team
@@ -261,8 +302,8 @@ component, keep the Kit in sync, re-screenshot, and republish.
 ## How to run and verify
 
 - `pnpm --dir web install`, `pnpm --dir web dev` (port 5177). The checks, in this order, all clean at the end of this pass:
-  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1513 tests in 66 files, about a minute) `&& pnpm -s build` (no chunk warning); also `pnpm -s wf:lint mock/workspace` (only the 18 known F009 warnings), `node plugins/workflow/scripts/check-skills.mjs` (12 skills ok), `node plugins/workflow/scripts/check-work-revs.mjs` and `node plugins/workflow/scripts/check-sample-clock.mjs`. With a dev server up: `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-library.mjs` (the library smoke) and `node web/scripts/smoke-settings.mjs` (the Settings smoke), both with zero console errors.
-- Screenshots: `node web/scripts/shot.mjs <route> <png> [--w 1440|1680|390] [--theme dark] [--sample] [--click "<sel>"]` (one page, clicks) and
+  `pnpm -s typecheck && pnpm -s exec biome check src mock scripts && pnpm exec vitest run` (1803 tests in 75 files after merging the skills flow with main, the bridge's 54 included; about a minute) `&& pnpm -s build` (no chunk warning); also `pnpm -s wf:lint mock/workspace` (only the 18 known F009 warnings), `node plugins/workflow/scripts/check-skills.mjs` (12 skills ok), `node plugins/workflow/scripts/check-work-revs.mjs` and `node plugins/workflow/scripts/check-sample-clock.mjs`. With a dev server up: `SHOT_BASE=http://localhost:5177 node web/scripts/smoke-library.mjs` (the library smoke) and `node web/scripts/smoke-settings.mjs` (the Settings smoke), both with zero console errors.
+- Screenshots: `node web/scripts/shot.mjs <route> <png> [--w 1440|1680|390] [--theme dark] [--sample] [--agent codex|claude] [--click "<sel>"]` (one page, clicks; Do next step needs `--agent`, or it opens the connect flow) and
   `node web/scripts/sweep.mjs --out <dir> --sample --sheets` (every route × width × theme, with contact sheets; the routes now include `/w?needs=me`,
   `/skills`, `/skills?skill=adding-work` and `tab=criteria`, `git`, `ci` of `wf-3k9x2`, and the library routes; `/inbox` is gone). A route under `/lib/t/platform-handbook` adds the example library first (`scripts/goto.mjs`). Both fall back to the system Chromium at
   `/opt/pw-browsers/chromium` in cloud containers.

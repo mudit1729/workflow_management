@@ -29,7 +29,6 @@ export { LearningCards } from "./LearningCards";
 export { LintPanel } from "./LintPanel";
 export { MetaLine } from "./MetaLine";
 export { NeedsYouList } from "./NeedsYouList";
-export { PlanLanes } from "./PlanLanes";
 export { PlanList } from "./PlanList";
 export { StateSnapshot } from "./StateSnapshot";
 export { ASK, codexAsk, SkillHint, SkillLink, WF_SKILLS, type WfSkill } from "./skill-hint";

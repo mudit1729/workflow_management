@@ -50,11 +50,10 @@ function openIssueFromToast(id: string) {
   return router.navigate({
     to: "/w/i/$id",
     params: { id },
-    // Keep the board filters (group, swim, author, q, show) behind the drawer; drop tab and log.
+    // Keep the board filters (group, author, q, show) behind the drawer; drop tab and log.
     search: onBoard
       ? (prev) => ({
           group: prev.group,
-          swim: prev.swim,
           author: prev.author,
           q: prev.q,
           show: prev.show,

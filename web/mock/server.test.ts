@@ -128,6 +128,24 @@ describe("status moves", () => {
   });
 });
 
+describe("the agent", () => {
+  test("a run starts by the agent it is given, and by Codex without one", async () => {
+    const claude = await server.startCodexRun("wf-3k9x2", "next_step", "claude");
+    expect(claude).toMatchObject({ agent: "claude", by: "claude", source: "simulated" });
+    const codex = await server.startCodexRun("wf-ss0lo", "next_step");
+    expect(codex).toMatchObject({ agent: "codex", by: "codex", source: "simulated" });
+    expect((await server.codexRuns()).map((r) => r.agent)).toEqual(["codex", "claude"]);
+  });
+
+  test("connectAgent and disconnectAgent are announced on subscribeAgent", () => {
+    const heard: unknown[] = [];
+    server.subscribeAgent((e) => heard.push(e));
+    server.controls.connectAgent("claude");
+    server.controls.disconnectAgent();
+    expect(heard).toEqual([{ event: "connect", agent: "claude" }, { event: "disconnect" }]);
+  });
+});
+
 describe("conflicts", () => {
   test("conflictNextWrite rejects exactly the next op with the codex conflict", async () => {
     server.controls.conflictNextWrite();

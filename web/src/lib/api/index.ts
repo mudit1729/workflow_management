@@ -1,3 +1,35 @@
+export {
+  AGENT_KINDS,
+  AGENT_STORAGE_KEY,
+  type AgentControls,
+  AgentNotConnectedError,
+  agentCommand,
+  agentControls,
+  agentHandle,
+  agentName,
+  BLOCKED_NOTE,
+  isStaticBuild,
+  preferredAgent,
+  useAgent,
+  useAgentControls,
+  usePreferredAgent,
+} from "./agent";
+export {
+  CLAUDE_ALLOWED_TOOLS,
+  claudeAllowFlags,
+  makePairCode,
+  pairCommand,
+  simulatedConnection,
+  WF_SKILL_NAMES,
+} from "./agent-info";
+export {
+  BRIDGE_URL,
+  BridgeError,
+  type BridgeExit,
+  type BridgeRun,
+  type BridgeStatus,
+  BridgeUnreachableError,
+} from "./bridge-client";
 export { type Api, api } from "./client";
 export {
   type CodexRunControls,
@@ -190,6 +222,9 @@ export {
   useSkills,
 } from "./skills";
 export {
+  type AgentConnection,
+  type AgentKind,
+  type AgentSkills,
   type CodexPhase,
   type CodexPhaseId,
   type CodexRun,

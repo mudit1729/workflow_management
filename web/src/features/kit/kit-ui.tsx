@@ -48,6 +48,7 @@ export interface KitEntry {
 export const GROUPS = [
   "Foundations",
   "Shell",
+  "Agent",
   "Workflow · Board",
   "Issue · Header",
   "Issue · Now",

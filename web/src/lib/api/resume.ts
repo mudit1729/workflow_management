@@ -4,6 +4,7 @@
 // text, so the mock server (`mock/context.ts`) and the hooks share it.
 import type { IssueSummary } from "@/gen/types";
 import { BUILTIN_SKILLS } from "./flow";
+import type { AgentKind } from "./types";
 
 /** What the prompt needs of an issue. An `IssueSummary` fits. */
 export type ResumeIssue = Pick<IssueSummary, "id" | "title" | "path">;
@@ -21,7 +22,15 @@ export function resumePrompt(issue: ResumeIssue, skill: string = BUILTIN_SKILLS.
   return `Work on ${issue.id} "${issue.title}" in ${issue.path}. Read current_state.md first, then use the wf skills (${skill}).`;
 }
 
-/** `codex '<prompt>'`: the interactive form that "Open in Codex" copies. */
-export function resumeCommand(issue: ResumeIssue, skill?: string): string {
-  return `codex ${shellQuote(resumePrompt(issue, skill))}`;
+/**
+ * `codex '<prompt>'`: the interactive form that "Open in Codex" copies. For Claude Code it is
+ * `claude '<prompt>'`: the agent's kind is also the name of its command. `skill` is the Do next
+ * step skill in effect; left out, the built-in one.
+ */
+export function resumeCommand(
+  issue: ResumeIssue,
+  agent: AgentKind = "codex",
+  skill?: string,
+): string {
+  return `${agent} ${shellQuote(resumePrompt(issue, skill))}`;
 }

@@ -4,21 +4,18 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
 
 export type ThemePref = "system" | "light" | "dark";
 export type Density = "comfy" | "compact";
-export type PlanView = "lanes" | "list";
 
 interface Prefs {
   theme: ThemePref;
   density: Density;
   navCollapsed: boolean;
   drawerWidth: number; // px, clamped to --wf-drawer-w-min..max
-  planView: PlanView;
   foldedColumns: string[]; // statuses folded to a rail
   notifications: boolean; // opt-in browser notifications for blocking requests
   setTheme: (t: ThemePref) => void;
   setDensity: (d: Density) => void;
   toggleNav: () => void;
   setDrawerWidth: (w: number) => void;
-  setPlanView: (v: PlanView) => void;
   toggleColumnFold: (status: string) => void;
   setNotifications: (on: boolean) => void;
 }
@@ -49,6 +46,17 @@ const safeStorage: StateStorage = {
   },
 };
 
+/** Prefs that were stored once and are gone now (the Plan tab's Lanes view). */
+const RETIRED = ["planView"];
+
+/** Stored prefs without the retired keys, so an old value never comes back into the state. */
+export function withoutRetired(stored: unknown): Partial<Prefs> {
+  const out: Record<string, unknown> = {};
+  if (stored && typeof stored === "object")
+    for (const [k, v] of Object.entries(stored)) if (!RETIRED.includes(k)) out[k] = v;
+  return out as Partial<Prefs>;
+}
+
 export const usePrefs = create<Prefs>()(
   persist(
     (set) => ({
@@ -56,14 +64,12 @@ export const usePrefs = create<Prefs>()(
       density: "comfy",
       navCollapsed: false,
       drawerWidth: 560,
-      planView: "lanes",
       foldedColumns: ["backlog", "done"],
       notifications: false,
       setTheme: (theme) => set({ theme }),
       setDensity: (density) => set({ density }),
       toggleNav: () => set((s) => ({ navCollapsed: !s.navCollapsed })),
       setDrawerWidth: (w) => set({ drawerWidth: Math.max(440, Math.min(760, Math.round(w))) }),
-      setPlanView: (planView) => set({ planView }),
       toggleColumnFold: (status) =>
         set((s) => ({
           foldedColumns: s.foldedColumns.includes(status)
@@ -72,7 +78,11 @@ export const usePrefs = create<Prefs>()(
         })),
       setNotifications: (notifications) => set({ notifications }),
     }),
-    { name: "wf-prefs", storage: createJSONStorage(() => safeStorage) },
+    {
+      name: "wf-prefs",
+      storage: createJSONStorage(() => safeStorage),
+      merge: (stored, current) => ({ ...current, ...withoutRetired(stored) }),
+    },
   ),
 );
 

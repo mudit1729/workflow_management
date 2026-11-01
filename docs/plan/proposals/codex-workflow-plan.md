@@ -96,19 +96,20 @@ and the Skills view.
 
 | # | Decision | Default |
 |---|---|---|
-| D9 | What connecting means | A small **bridge** runs on the person's computer at the repo root: `node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92`. The dashboard pairs with it once by that code, then talks to it on `127.0.0.1:7457`. The bridge runs the agent headless in the repo (`codex exec --full-auto …` or `claude -p … --permission-mode acceptEdits`; both overridable). The agent edits the markdown, and the board shows the edits as usual. One agent at a time. |
+| D9 | What connecting means | A small **bridge** runs on the person's computer at the repo root: `node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92`. The dashboard pairs with it once by that code, then talks to it on `127.0.0.1:7457`. The bridge runs the agent headless in the repo (`codex exec --full-auto …` or `claude -p … --permission-mode acceptEdits`; both overridable). The agent edits the markdown, and the board shows the edits as usual. One agent at a time. Disconnect and Switch end the bridge (it stops with its runs), so the next pairing starts a new one. |
 | D10 | Connect flow | Same Typeform parts as Add work: **Which agent?** [Codex] [Claude Code] → **Run this in the repo** (one copy button; the screen waits and turns into "Connected" with host, repo, agent version and a skills check that offers the install command if skills are missing) → Done. About 4 clicks. |
 | D11 | Where it shows | A footer row in the nav (`Codex · connected` or `Connect an agent`) opens the Agent panel: status, host, repo, version, skills, recent runs, Switch agent, Disconnect. The palette has Connect, Switch and Disconnect. |
 | D12 | What changes when connected | **Do next step** needs an agent. Without one it opens the connect flow, then starts the run. **Open in Codex** follows the agent: "Open in Claude Code" copies `claude "…"`. Run labels, the card marker and `claimed_by` use the agent's name. Add work's split is unchanged this round. |
 | D13 | Safety | The bridge only answers after pairing (one-time code, then a token), only to the dashboard's origin, and builds the agent's prompt itself from a validated issue id. The browser never sends a prompt or a shell command. |
 | D14 | Prototype | The static artifact cannot reach `127.0.0.1`, so pairing is simulated there ("Prototype: the bridge answers by itself"). The dev server pairs with a real bridge; it is tested end to end with a fake agent binary. `window.__wf.connectAgent("codex")` connects from scripts. |
 | D15 | Swimlanes | Removed. The board is one set of columns; the group tree filters it, and each card already names its group. `?swim=` is dropped from URLs, the toolbar control and `Swimlane` go, and drag works across the whole board. |
+| D16 | Task lanes | Removed. The Plan tab shows tasks as the phase list only; the Lanes view and its Lanes \| List toggle go. The list keeps the Ready highlight, brings the task in progress into view and shows dependencies. The `lane` field stays in `plan.md`, because the skills route work by it, but the UI never calls it a lane. |
 
 ### Workstreams and ownership
 
 | Id | Workstream | Owns |
 |---|---|---|
-| S | Remove swimlanes | `src/features/board/**`, `src/lib/nav.ts`, `src/app/search.ts` (+test), `src/app/App.tsx` (swim lines only), `src/lib/prefs.ts`, `src/features/kit/entries/board.tsx`, board rows of `web/scripts/sweep.mjs` |
+| S | Remove swimlanes and task lanes | `src/features/board/**`, `src/lib/nav.ts`, `src/app/search.ts` (+test), `src/app/App.tsx` (swim lines only), `src/lib/prefs.ts`, `src/features/kit/entries/{board,issue-plan,primitives}.tsx`, board rows of `web/scripts/sweep.mjs`; for task lanes `src/features/issue/{PlanLanes,PlanList,TaskPill,TaskDetail,index}.tsx/ts` and `tabs/PlanTab.tsx` |
 | X | Agent data and bridge | `plugins/workflow/scripts/wf-bridge.mjs`, `web/scripts/wf-bridge.test.ts`, `web/mock/agent.ts` (+test), agent parts of `web/mock/{server,codex}.ts`, `src/lib/api/{agent,bridge-client}.ts`, agent parts of `src/lib/api/{types,client,keys,index,resume,codex}.ts`, the plugin README's bridge section |
 | Y | Agent UI | `src/features/agent/**`, `src/features/codex/**`, `src/app/{NavRail,CommandPalette,AppShell,lazy-views,shell-store}.tsx/ts`, `src/features/kit/entries/{agent,codex}.tsx`, `src/features/kit/registry.ts` |
 

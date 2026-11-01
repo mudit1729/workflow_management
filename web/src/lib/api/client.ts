@@ -15,6 +15,7 @@ import { ApiError, NotFoundError } from "./error";
 import { isRealApi, loadMock } from "./mock-bridge";
 import type { SkillsCatalog } from "./skills";
 import type {
+  AgentKind,
   CodexRun,
   CodexRunKind,
   Delivery,
@@ -66,7 +67,8 @@ export interface Api {
   splitWork(input: SplitInput, onStep?: (step: number) => void): Promise<SplitResult>;
   /** Codex runs of one issue, or of all, newest first. */
   codexRuns(issue?: string): Promise<CodexRun[]>;
-  startCodexRun(issue: string, kind: CodexRunKind): Promise<CodexRun>;
+  /** `agent` is the one that does the run (default Codex); it names the author of the edits. */
+  startCodexRun(issue: string, kind: CodexRunKind, agent?: AgentKind): Promise<CodexRun>;
   cancelCodexRun(id: string): Promise<CodexRun>;
   health(): Promise<Health>;
   /** Every file of the workspace, sorted by path. */
@@ -163,11 +165,11 @@ const real: Api = {
     });
   },
   codexRuns: (issue) => request(`/codex/runs${issue ? `?${new URLSearchParams({ issue })}` : ""}`),
-  startCodexRun: (issue, kind) =>
+  startCodexRun: (issue, kind, agent) =>
     request("/codex/runs", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ issue, kind }),
+      body: JSON.stringify({ issue, kind, agent }),
     }),
   cancelCodexRun: (id) => request(`/codex/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
   health: () => request("/health"),
@@ -242,7 +244,7 @@ const mock: Api = {
   delivery: async (issue) => (await loadMock()).delivery(issue),
   splitWork: async (input, onStep) => (await loadMock()).splitWork(input, onStep),
   codexRuns: async (issue) => (await loadMock()).codexRuns(issue),
-  startCodexRun: async (issue, kind) => (await loadMock()).startCodexRun(issue, kind),
+  startCodexRun: async (issue, kind, agent) => (await loadMock()).startCodexRun(issue, kind, agent),
   cancelCodexRun: async (id) => (await loadMock()).cancelCodexRun(id),
   health: async () => (await loadMock()).health(),
   files: async () => (await loadMock()).files(),

@@ -63,12 +63,12 @@
 - kind: noun
 - means: A `### T-n: <title>` unit of work in `plan.md`, sized for one agent context window.
 - avoid: subtask, work item
-- see: lane, lease, ready task
+- see: area, lease, ready task
 
-## lane
+## area
 - kind: noun
-- means: A named stream of tasks in `plan.md` (`lane:`, default `main`). Different lanes run in parallel on different agents.
-- avoid: workstream
+- means: The part of the work a task belongs to, written as `lane:` in `plan.md` (default `main`). Tasks in different areas run in parallel on different agents.
+- avoid: workstream, swimlane
 - see: task
 
 ## lease

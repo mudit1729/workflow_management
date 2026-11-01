@@ -4,9 +4,11 @@
 import { useNavigate } from "@tanstack/react-router";
 import { defaultFilter } from "cmdk";
 import {
+  ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   BookText,
+  Bot,
   ClipboardCopy,
   Component,
   Eye,
@@ -21,6 +23,7 @@ import {
   MessageCircleQuestionMark,
   PanelLeft,
   Play,
+  Plug,
   Replace,
   Rows3,
   ScrollText,
@@ -30,6 +33,7 @@ import {
   SquareTerminal,
   StepForward,
   SunMoon,
+  Unplug,
   UserRound,
   Workflow,
   Zap,
@@ -46,6 +50,7 @@ import {
   CommandList,
   Kbd,
 } from "@/components/ui";
+import { otherAgent } from "@/features/agent/agent-copy";
 import { openAskPanel } from "@/features/ask";
 import { copyCodexCommand, useNextStep } from "@/features/codex";
 import { useFilesNav } from "@/features/files";
@@ -57,14 +62,18 @@ import type {
   IssueSummary,
   LibrarySummary,
 } from "@/gen/types";
-import type { Skill, SkillsCatalog, WorkspaceFileInfo } from "@/lib/api";
+import type { AgentConnection, Skill, SkillsCatalog, WorkspaceFileInfo } from "@/lib/api";
 import {
+  agentControls,
+  agentName,
   allSkills,
   FLOW_STEPS,
+  useAgent,
   useGlossary,
   useGroupTree,
   useIssueMap,
   useMoveIssue,
+  usePreferredAgent,
   useSkills,
   useSnapshot,
   useWorkspaceFiles,
@@ -75,7 +84,7 @@ import { resolveTheme, usePrefs } from "@/lib/prefs";
 import { isLegalTransition, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { playNextEvent, withMockControls } from "./mock-controls";
 import { useReturnFocus } from "./return-focus";
-import { openAddLibrary, openAddWork, useShell } from "./shell-store";
+import { openAddLibrary, openAddWork, openAgent, openAgentPanel, useShell } from "./shell-store";
 import { useNavRail } from "./useNavRail";
 import { useSelectGroup } from "./useSelectGroup";
 
@@ -632,6 +641,10 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   const shell = useShell();
   // The same hook and the same copy as the header and the card menu: one toast per run.
   const nextStep = useNextStep(openIssue);
+  // The agent the buttons name (plan D12), and the one that is connected, if any.
+  const agent = useAgent();
+  const preferred = usePreferredAgent();
+  const busyName = agentName(nextStep.run?.agent ?? preferred);
 
   const dark = resolveTheme(theme) === "dark";
   const actions: Action[] = [
@@ -656,17 +669,19 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
   ];
 
   if (openIssue) {
-    // Codex first: it is what an open issue is most often opened for.
+    // The agent first: it is what an open issue is most often opened for.
     actions.push(
       {
         id: "open-codex",
-        label: `Open ${openIssue.id} in Codex`,
+        label: `Open ${openIssue.id} in ${agentName(preferred)}`,
         icon: <SquareTerminal {...ICON} />,
         hint: "Copies the command",
         inPlace: true,
         keywords: [
           "open in codex",
+          "open in claude",
           "codex",
+          "claude",
           "agent",
           "terminal",
           "cli",
@@ -679,9 +694,14 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         id: "next-step",
         label: `Do the next step of ${openIssue.id}`,
         icon: <StepForward {...ICON} />,
-        hint: nextStep.busy ? "Codex is working on it" : "Codex, in the background",
+        hint: nextStep.busy
+          ? `${busyName} is working on it`
+          : agent.status === "connected"
+            ? `${agentName(preferred)}, in the background`
+            : "Connects an agent first",
         keywords: [
           "codex",
+          "claude",
           "run",
           "continue",
           "agent",
@@ -695,7 +715,7 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         stay: nextStep.busy,
         run: () =>
           nextStep.busy
-            ? void toast(`Codex is already working on ${openIssue.id}`, {
+            ? void toast(`${busyName} is already working on ${openIssue.id}`, {
                 id: `codex-busy:${openIssue.id}`,
               })
             : void nextStep.start(),
@@ -704,10 +724,10 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
         ? [
             {
               id: "cancel-run",
-              label: `Cancel Codex's run on ${openIssue.id}`,
+              label: `Cancel ${busyName}'s run on ${openIssue.id}`,
               icon: <Square {...ICON} />,
               hint: "Stops the run",
-              keywords: ["stop", "abort", "cancel", "codex", "run", openIssue.title],
+              keywords: ["stop", "abort", "cancel", "codex", "claude", "run", openIssue.title],
               inPlace: true,
               run: () => void nextStep.cancel(),
             } satisfies Action,
@@ -775,6 +795,8 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       },
     );
   }
+
+  actions.push(...agentActions(agent));
 
   actions.push(
     {
@@ -968,6 +990,71 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
     },
   );
 
+  return actions;
+}
+
+/**
+ * The agent's commands (plan D11): Connect an agent while none is, Switch and Disconnect while one
+ * is, and Agent status once there is something to show (a pairing, a connection, a lost one). With
+ * no agent "Connect an agent" is the one row: a second row that opens the same place is noise.
+ * They open the same dialogs as the nav row.
+ */
+function agentActions(agent: AgentConnection): Action[] {
+  const kind = agent.agent;
+  const name = kind ? agentName(kind) : undefined;
+  const keywords = ["agent", "codex", "claude", "bridge", "pair", "connect"];
+  const actions: Action[] = [];
+  if (agent.status === "none" || agent.status === "pairing")
+    actions.push({
+      id: "connect-agent",
+      label: "Connect an agent",
+      icon: <Plug {...ICON} />,
+      hint: agent.status === "pairing" ? `${name}, waiting for the bridge` : "Codex or Claude Code",
+      keywords: [...keywords, "link", "start"],
+      run: () => openAgent(),
+    });
+  if (kind && name && (agent.status === "connected" || agent.status === "lost")) {
+    const other = otherAgent(kind);
+    actions.push(
+      {
+        id: "switch-agent",
+        label: `Switch to ${agentName(other)}`,
+        icon: <ArrowLeftRight {...ICON} />,
+        hint:
+          agent.mode === "bridge"
+            ? `Instead of ${name}, stops the bridge on ${agent.host ?? "this computer"}`
+            : `Instead of ${name}`,
+        keywords: [...keywords, "change", "switch agent"],
+        run: () => openAgent({ agent: other }),
+      },
+      {
+        id: "disconnect-agent",
+        label: `Disconnect ${name}`,
+        icon: <Unplug {...ICON} />,
+        // A real bridge is told to stop; the prototype has none, so only the consequence is said.
+        hint:
+          agent.mode === "bridge"
+            ? `Stops the bridge on ${agent.host ?? "this computer"}`
+            : "Do next step needs an agent",
+        keywords: [...keywords, "disconnect", "unpair", "forget", "stop"],
+        inPlace: true,
+        run: () => {
+          agentControls.disconnect();
+          toast(`Disconnected ${name}`);
+        },
+      },
+    );
+  }
+  if (agent.status !== "none")
+    actions.push({
+      id: "agent-status",
+      label: "Agent status",
+      icon: <Bot {...ICON} />,
+      hint:
+        name && agent.status !== "pairing" ? `${name} · ${agent.status}` : "Waiting for the bridge",
+      keywords: [...keywords, "status", "runs", "skills", "host"],
+      run: () => openAgentPanel(),
+    });
   return actions;
 }
 

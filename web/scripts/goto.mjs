@@ -6,6 +6,9 @@
 // then opened from inside the app, so the in-memory sample stays. `/kit` needs no flag: it holds the
 // sample itself while it is open.
 //
+// A run (Do next step) needs a connected agent; without one the button opens the connect flow. With
+// `agent: "codex" | "claude"` the page connects that agent first (`window.__wf.connectAgent`), as a
+// finished pairing would, so a script can click Do next step and get a run.
 // The example team library (`/lib/t/platform-handbook`, the fixture repo acme/platform-handbook) is
 // added by the person, and a library added in a page is gone when it reloads. A route under it is
 // opened the same way as the sample: the app loads, the library is added through the Add team
@@ -29,9 +32,10 @@ async function addExampleLibrary(page) {
 }
 
 /** @param {import("@playwright/test").Page} page */
-export async function gotoRoute(page, base, route, { sample = false, team = route.startsWith(EXAMPLE_LIBRARY) } = {}) {
+export async function gotoRoute(page, base, route, { sample = false, agent, team = route.startsWith(EXAMPLE_LIBRARY) } = {}) {
   if (!sample && !team) {
     await page.goto(base + route, { waitUntil: "networkidle" });
+    if (agent) await connectAgent(page, agent);
     return;
   }
   await page.goto(`${base}/w`, { waitUntil: "networkidle" });
@@ -40,6 +44,7 @@ export async function gotoRoute(page, base, route, { sample = false, team = rout
     await page.evaluate(() => window.__wf.loadSample());
   }
   if (team) await addExampleLibrary(page);
+  if (agent) await connectAgent(page, agent);
   await page.evaluate((to) => {
     if (location.hash.startsWith("#/")) {
       location.hash = to;
@@ -49,4 +54,10 @@ export async function gotoRoute(page, base, route, { sample = false, team = rout
     }
   }, route);
   await page.waitForLoadState("networkidle");
+}
+
+/** Connect the simulated agent, as the connect flow's Done would. */
+async function connectAgent(page, agent) {
+  await page.waitForFunction(() => typeof window.__wf?.connectAgent === "function", null, { timeout: 15000 });
+  await page.evaluate((kind) => window.__wf.connectAgent(kind), agent);
 }

@@ -173,11 +173,7 @@ function StepPanelBody({
           <SkillChoicesSkeleton />
         )}
         {catalog && <MoreSkills catalog={catalog} groups={groups} copy />}
-        <InstallNote
-          skill={skill}
-          catalog={catalog}
-          who={mine ? "Your agent" : "Everyone's agent"}
-        />
+        <InstallNote skill={skill} catalog={catalog} scope={mine ? "me" : "team"} />
       </PanelSection>
 
       <PanelSection title="Options">

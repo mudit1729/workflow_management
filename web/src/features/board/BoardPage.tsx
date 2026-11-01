@@ -1,27 +1,32 @@
 // /w: the board. Builds one view model from the snapshot and the URL search
-// (group, swim, author, q, show) and hands it to the toolbar and the board.
+// (group, author, q, show, needs) and hands it to the toolbar and the board.
 import { BellOff, FolderX, Plus, SearchX, TriangleAlert } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import { openAddWork } from "@/app/shell-store";
 import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ASK, addThen, SkillHint } from "@/features/issue/skill-hint";
 import type { IssueSummary, WorkspaceSnapshot } from "@/gen/types";
-import { issuesInGroup, useInbox, useMe, useSnapshot } from "@/lib/api";
+import {
+  agentName,
+  issuesInGroup,
+  useInbox,
+  useMe,
+  usePreferredAgent,
+  useSnapshot,
+} from "@/lib/api";
 import { type BoardSearch, useBoardSearch } from "@/lib/nav";
 import { BoardToolbar, BoardToolbarSkeleton } from "./BoardToolbar";
 import {
   applyFilter,
   basePathOf,
   boardColumns,
-  buildLanes,
   filterFromSearch,
   groupChain,
   hasActiveFilter,
   issueAuthors,
   type NeedsYou,
   needsYou,
-  singleLane,
   summarize,
 } from "./filter";
 import { BoardSkeleton, KanbanBoard } from "./KanbanBoard";
@@ -48,13 +53,6 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch, mine: NeedsYou
   const needsAnywhere = data.issues.filter(
     (i: IssueSummary) => needs.has(i.id) && (filter.showCancelled || i.status !== "cancelled"),
   ).length;
-
-  const canSwim = selected.children.length > 0;
-  const swim: "child" | "none" = canSwim ? (search.swim ?? "child") : "none";
-  const lanes =
-    swim === "child"
-      ? buildLanes(selected, visible, { hideEmpty: filtered })
-      : [singleLane(visible)];
 
   // Author options: everyone known, plus any handle already in the filter.
   const handles = new Set(data.authors.map((a) => a.handle));
@@ -83,9 +81,6 @@ function buildModel(data: WorkspaceSnapshot, search: BoardSearch, mine: NeedsYou
     cancelledCount,
     needsHere,
     needsElsewhere: Math.max(0, needsAnywhere - needsHere),
-    canSwim,
-    swim,
-    lanes,
     columns: boardColumns(filter.showCancelled),
     basePath: basePathOf(chain),
     // Counted as the toolbar's "Needs you" toggle counts: open requests for the acting person.
@@ -99,15 +94,22 @@ export function BoardPage() {
   const me = useMe();
   const [search, setSearch] = useBoardSearch();
   const inbox = useInbox();
+  // The empty states name the agent the buttons name, so the board agrees with the nav row.
+  const agent = agentName(usePreferredAgent());
   const data = snapshot.data;
-  const { group, swim, author, q, show, needs } = search;
+  const { group, author, q, show, needs } = search;
+
+  // A link from before swimlanes went (?swim=child) loads as usual; the address bar sheds it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("swim")) setSearch({});
+  }, [setSearch]);
 
   // Open requests for the acting person: the toolbar's count and the "Needs you" filter.
   const mine: NeedsYou = useMemo(() => needsYou(inbox.all, me), [inbox.all, me]);
 
   const model = useMemo(
-    () => (data ? buildModel(data, { group, swim, author, q, show, needs }, mine) : null),
-    [data, group, swim, author, q, show, needs, mine],
+    () => (data ? buildModel(data, { group, author, q, show, needs }, mine) : null),
+    [data, group, author, q, show, needs, mine],
   );
 
   if (snapshot.isError && !data) {
@@ -149,8 +151,6 @@ export function BoardPage() {
       filtered={model.filtered}
       authors={model.authors}
       me={me}
-      canSwim={model.canSwim}
-      swim={model.swim}
       cancelledCount={model.cancelledCount}
       needsYou={{ requests: mine.requests, issues: mine.issues.size }}
     />
@@ -198,7 +198,7 @@ export function BoardPage() {
       <Centered>
         <EmptyState
           title="No work yet"
-          hint="Add a group of work and Codex splits it into issues, or add one issue."
+          hint={`Add a group of work and ${agent} splits it into issues, or add one issue.`}
           action={addActions()}
         />
       </Centered>
@@ -258,7 +258,7 @@ export function BoardPage() {
         ) : (
           <EmptyState
             title={`No issues in ${title} yet`}
-            hint="Add work here and Codex splits it into issues."
+            hint={`Add work here and ${agent} splits it into issues.`}
             action={addActions(model.chain.length > 1 ? model.selected.title : undefined)}
           />
         )}
@@ -284,15 +284,7 @@ export function BoardPage() {
       </Centered>
     );
   } else {
-    body = (
-      <KanbanBoard
-        columns={model.columns}
-        lanes={model.lanes}
-        swimlanes={model.swim === "child"}
-        basePath={model.basePath}
-        mine={mine}
-      />
-    );
+    body = <KanbanBoard columns={model.columns} issues={model.visible} basePath={model.basePath} />;
   }
 
   return <Frame toolbar={toolbar}>{body}</Frame>;

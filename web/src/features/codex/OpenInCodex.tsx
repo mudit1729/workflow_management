@@ -1,12 +1,20 @@
 // "Open in Codex" (plan D3): one click copies the command, says so, and opens a small popover
-// with the prompt, so the person sees exactly what Codex will receive.
+// with the prompt, so the person sees exactly what the agent will receive. The button follows the
+// connected agent (plan D12): "Open in Claude Code" copies `claude '…'`.
 import { Check, Copy, Terminal, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { copyText } from "@/components/common";
 import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from "@/components/ui";
-import { codexCommand, useFlowSkill } from "@/lib/api";
+import {
+  type AgentKind,
+  agentCommand,
+  agentName,
+  useAgent,
+  useFlowSkill,
+  usePreferredAgent,
+} from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { type CodexIssue, copyCodexCommand, OPEN_IN_CODEX_HINT } from "./open-in-codex";
+import { type CodexIssue, copyCodexCommand, openInAgentHint } from "./open-in-codex";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
@@ -16,17 +24,22 @@ export interface OpenInCodexPanelProps {
   issue: CodexIssue;
   /** The click already copied the command: true when the clipboard took it, false when it did not. */
   copied?: boolean;
+  /** The agent the command is for. Default: the connected one, else the last one chosen. */
+  agent?: AgentKind;
   /** The Do next step skill in effect (a reference); the built-in one when left out. */
   skill?: string;
 }
 
-/** The prompt, the command, two Copy buttons and a line on what a local daemon would change. */
-export function OpenInCodexPanel({ issue, copied, skill }: OpenInCodexPanelProps) {
-  const { prompt, command } = codexCommand(issue, skill);
+/** The prompt, the command, two Copy buttons and a line on what Do next step does instead. */
+export function OpenInCodexPanel({ issue, copied, agent, skill }: OpenInCodexPanelProps) {
+  const preferred = usePreferredAgent();
+  const connected = useAgent().status === "connected";
+  const name = agentName(agent ?? preferred);
+  const { prompt, command } = agentCommand(agent ?? preferred, issue, skill);
   return (
     <div data-wf="OpenInCodexPanel" className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h3 className="font-semibold text-base text-fg">Codex gets this prompt</h3>
+        <h3 className="font-semibold text-base text-fg">{name} gets this prompt</h3>
         <p
           role="status"
           className={cn(
@@ -66,8 +79,8 @@ export function OpenInCodexPanel({ issue, copied, skill }: OpenInCodexPanelProps
       </div>
 
       <p className="text-fg-faint text-xs leading-snug">
-        Codex reads current_state.md first and does the rest with the wf skills. Later, a local wf
-        daemon will start Codex from this button.
+        {name} reads current_state.md first and does the rest with the wf skills. Do next step runs
+        it for you{connected ? "" : " once an agent is connected"}.
       </p>
     </div>
   );
@@ -105,6 +118,8 @@ export interface OpenInCodexProps {
 }
 
 export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
+  const agent = usePreferredAgent();
+  const name = agentName(agent);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<boolean | undefined>();
   // The tooltip is controlled for its whole life (a boolean from the first render): flipping
@@ -118,18 +133,18 @@ export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
     if (open) return;
     setCopied(undefined);
     // The popover's line says "Command copied" (or that the clipboard was blocked): no toast.
-    void copyCodexCommand(issue, { toast: false, skill }).then(setCopied);
+    void copyCodexCommand(issue, { toast: false, agent, skill }).then(setCopied);
   };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip content={OPEN_IN_CODEX_HINT} open={hint && !open} onOpenChange={setHint}>
+      <Tooltip content={openInAgentHint(agent)} open={hint && !open} onOpenChange={setHint}>
         <PopoverTrigger asChild>
           <Button
             data-wf="OpenInCodexButton"
             variant="secondary"
             onClick={onClick}
-            aria-label={compact ? "Open in Codex" : undefined}
+            aria-label={compact ? `Open in ${name}` : undefined}
             className={cn(
               compact &&
                 "@max-[440px]:size-7 @max-[440px]:px-0 group-data-[busy]/codex:@max-[640px]:size-7 group-data-[busy]/codex:@max-[640px]:px-0",
@@ -142,7 +157,7 @@ export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
                 compact && "@max-[440px]:hidden group-data-[busy]/codex:@max-[640px]:hidden",
               )}
             >
-              Open in Codex
+              Open in {name}
             </span>
           </Button>
         </PopoverTrigger>
@@ -150,10 +165,10 @@ export function OpenInCodex({ issue, compact, className }: OpenInCodexProps) {
       <PopoverContent
         data-wf="OpenInCodexPopover"
         align="start"
-        aria-label="Open in Codex"
+        aria-label={`Open in ${name}`}
         className="w-[min(380px,calc(100vw-24px))]"
       >
-        <OpenInCodexPanel issue={issue} copied={copied} skill={skill} />
+        <OpenInCodexPanel issue={issue} copied={copied} agent={agent} skill={skill} />
       </PopoverContent>
     </Popover>
   );

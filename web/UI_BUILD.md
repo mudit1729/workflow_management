@@ -12,6 +12,8 @@ Linear-like. It is also the real `web/` codebase, so write production-quality co
 The product goals behind the screens (plan `docs/plan/proposals/codex-workflow-plan.md`): (1) distribute skills and plugins across the team
 (Library · Skills), (2) hand anyone the full context of an issue (the Now, Goal, Criteria, Plan, Log, Git, CI and Files tabs, the Open in Codex
 button and **Copy context**, which copies the context bundle as markdown), (3) keep issues and tasks traceable (task ↔ commit ↔ CI run, every change a markdown diff).
+Round 2 (plan D9 to D16) added a **connected agent**: the dashboard pairs once with a small bridge on the person's computer (`plugins/workflow/scripts/wf-bridge.mjs`), so
+**Do next step** runs Codex or Claude Code there, and it removed the swimlanes and the task lanes. See "features/agent" and "features/codex".
 
 **The mock world is markdown.** The data behind the prototype is a real `wf` workspace of
 markdown files, `web/mock/workspace/`, and nothing else (see "Markdown first" below). To change
@@ -51,7 +53,8 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | **Glossary** | one page of the workspace library (`glossary.md`) | `/lib/t/<workspace>/glossary.md`; `/glossary` redirects |
 | **Skills** | the plugins and skills of the repository and how a team installs them (goal 1: distribute skills) | `/skills` |
 | **Add work** | the one way in: a group that Codex splits into issues, or one issue | the toolbar's `+ Add work`, `n`, palette "Add work…" |
-| **Open in Codex / Do next step** | the two Codex buttons beside each other: copy the command, or let Codex do the next ready task in the background | issue header, card menu, palette |
+| **Open in Codex / Do next step** | the two agent buttons beside each other: copy the command, or let the connected agent do the next ready task in the background. "Codex" is the agent's name: with Claude Code connected they read **Open in Claude Code** | issue header, card menu, palette |
+| **Connect an agent** | pair the dashboard with a bridge that runs Codex or Claude Code on the person's computer (plan D9 to D14); Do next step needs it | the nav's agent row (`Connect an agent`, `Codex · connected`), palette "Connect an agent", Do next step with none connected |
 | **Criteria · Git · CI** | the issue tabs added next to Goal and Log (see "issue tabs") | `?tab=criteria`, `git`, `ci` |
 | **Kit** | the prototype's own component gallery, not a view | `/kit`, `g k` |
 
@@ -114,7 +117,7 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
   at 14 px (`size={14}`), stroke 1.75. Motion 100–200 ms with `ease-wf`. Hover states are
   `bg-muted`/`bg-subtle`, never color. Use `tabular` for numbers. Truncate, never wrap
   into chaos. **Empty states are quiet and offer, in this order, a button (when the dashboard can do the job), then the one skill of the workflow plugin that does the same
-  job without the dashboard** (`SkillHint`: the skill reference linking to `/skills?skill=<ref>`, the prompt Codex is asked, and a copy button for `codex '<prompt>'`). **The skill a hint names is the one the skills flow runs for that step** (`<SkillHint step="plan" …/>`, `useFlowSkill(step)`): the built-in one unless Settings chose another.
+  job without the dashboard** (`SkillHint`: the skill reference linking to `/skills?skill=<ref>`, the prompt the agent is asked, and a copy button for `codex '<prompt>'`, or `claude '<prompt>'` when Claude Code is the connected or last chosen agent). **The skill a hint names is the one the skills flow runs for that step** (`<SkillHint step="plan" …/>`, `useFlowSkill(step)`): the built-in one unless Settings chose another.
   **UI hints name only real things**: the skills of `plugins/workflow/skills` (`using-wf`, `adding-work`, `planning-issues`, `doing-next-step`, `logging-work`,
   `handing-off`, `checking-status`, `writing-readable-bulk-text`; `WF_SKILLS` in `features/issue/skill-hint.tsx`), a skill of the workspace, a team library or my library that a flow step names, and buttons that exist. Never invent a skill name
   (`write-plan` and `log-change` were such names), and never show a `wf …` command as something to run: there is no `wf` binary. At most say "with the wf CLI later".
@@ -140,7 +143,7 @@ Workspace: wf            the container: workspace name, groups, workflow.toml
 | path | renders | search |
 |---|---|---|
 | `/` | redirect to `/w` | |
-| `/w` | `BoardLayout` → `BoardPage` | `group, swim, author, q, show, needs` (`needs=me` is the Needs you filter) |
+| `/w` | `BoardLayout` → `BoardPage` | `group, author, q, show, needs` (`needs=me` is the Needs you filter; an old `?swim=` is dropped from the address) |
 | `/w/i/$id` | `BoardLayout` → `BoardPage` + `IssueDrawer id` | board search + `tab, log` |
 | `/i/$id` | `IssuePage id` | `tab, log` |
 | `/inbox` | **gone**: redirects to `/w?needs=me`, so an old link still lands on the filter | |
@@ -203,7 +206,7 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 `src/components/common/index.ts` re-exports:
 - `AuthorChip({ handle: string, size?: "xs"|"sm", variant?: "chip"|"avatar"|"text" })` — avatar = 16 px (xs 14 px) tile in the author hue
   (`var(--wf-hue-<color>)`), rounded square with a bot glyph for agents, circle with initials for humans;
-  chip = avatar + `@handle`; HoverCard shows name, kind, runtime, model, lanes. Unknown handle → gray + Q012 hint.
+  chip = avatar + `@handle`; HoverCard shows name, kind, runtime, model and areas (the author's `lanes:` field, which the skills route work by; the UI says "Areas" and "Any area"). Unknown handle → gray + Q012 hint.
 - `AuthorStack({ handles: string[], max?: number, size? })` — overlapping avatars, +N.
 - `StatusIcon({ status: IssueStatus | TaskStatus, size?: number })` — Linear-style glyphs in status color:
   backlog dashed circle, planned/todo empty circle, in_progress half-filled, blocked circle with bar,
@@ -262,7 +265,7 @@ Features navigate only through `useOpenIssue`, `useCloseIssue`, `useBoardSearch`
 - `queryClient` (TanStack Query client)
 - `api` — `{ snapshot(), issue(id), libraryItem(id), glossary(), search(q, scope?, k?), context(id, budget?), ops(op),
   files(), file(path), writeFile({ path, text, base_rev? }), deleteFile({ path, base_rev? }),
-  delivery(id), splitWork(input, onStep?), codexRuns(issue?), startCodexRun(issue, kind), cancelCodexRun(id), skills() }`
+  delivery(id), splitWork(input, onStep?), codexRuns(issue?), startCodexRun(issue, kind, agent?), cancelCodexRun(id), skills() }`
   (the last six are the delivery, work, codex and skills additions below).
   Uses the in-memory mock server (`@mock/server`) unless `import.meta.env.VITE_API === "real"`, then `fetch("/api/…")`
   (the file calls are prototype endpoints beyond contract §1.10: `GET /api/files`, `GET|PUT|DELETE /api/files/{path}`).
@@ -319,18 +322,34 @@ All four sit beside the markdown ones in `src/lib/api/` and `web/mock/`, with te
   (one delta, one activity line). Real Codex runs `codex exec` with the `adding-work` skill.
 - **`codex` (`lib/api/codex.ts`, `mock/codex.ts`).** `codexCommand(issue)` is a pure function returning `{ prompt, command }`, the text
   "Open in Codex" copies. `useCodexRuns(issueId?)` lists runs (newest first) and follows them live; `useStartCodexRun()` returns
-  `{ start(issueId, "next_step"), cancel(runId) }`. A run is `{ id, issue, kind, status: running | done | failed | cancelled | nothing_ready, by, task?, task_title?, phase?, phases[], started_at, finished_at?, reason?, commit?, pipeline? }`.
+  `{ start(issueId, "next_step"), cancel(runId) }`. A run is `{ id, issue, kind, status: running | done | failed | cancelled | nothing_ready, by, agent, source, task?, task_title?, phase?, phases[], lastLine?, started_at, finished_at?, reason?, commit?, pipeline? }`;
+  `by` and `agent` are the agent's kind (`codex` or `claude`, also its author handle), `source` is `simulated` (the mock run below) or `bridge` (a real run: `phases` is empty, there is no task, and `lastLine` is the last line the agent printed).
+  `start` needs a connected agent (see "The connected agent"): without one it rejects with `AgentNotConnectedError`, and nothing is toasted.
   The prototype's run is a **simulated background run whose phases are real markdown edits** through the store, 2 s apart (claim: the task is
   `in_progress` with a lease; log: a change entry by `@codex`; verify: the task goes to `review` and a CI run starts and passes; done: steps
-  ticked, task `done`, `current_state.md` moves on, a commit with the trailer `Issue: <id>` joins the delivery data). Each phase is visible as a markdown diff
+  ticked, task `done`, `current_state.md` moves on, a commit with the trailer `Issue: <id>` joins the delivery data; the change entries, the claim, the evidence and the commit are by the connected agent, so a Claude Code run writes `@claude`). Each phase is visible as a markdown diff
   and reaches the board through the ordinary live stream; the run itself, its commit and its CI run have a small stream of their own
   (`subscribeCodex`). One run per issue; Cancel puts the task back in the queue. `window.__wf.setCodexPhaseMs(ms)` changes the 2 s.
 - **`skills` (`lib/api/skills.ts`, `mock/skills.ts`).** `useSkills(): SkillsCatalog`, `allSkills(catalog)` and the install-command builders
   `claudeInstallCommands(plugin)`, `codexInstallCommands(plugin)`, `CODEX_INSTALL_COMMAND`. The catalog is read from the repository's own files,
   `plugins/*/skills/*/SKILL.md`, `plugins/*/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` (`import.meta.glob`, so what is
   committed is what shows; the dev server lets Vite reach above `web/`).
+- **The connected agent (`lib/api/agent.ts`, `agent-info.ts`, `bridge-client.ts`, `mock/agent.ts`; plan D9 to D14).** One agent at a time, shared by the whole dashboard.
+  - Types: `AgentKind = "codex" | "claude"`; `AgentConnection { status: "none" | "pairing" | "connected" | "lost", agent?, mode?: "bridge" | "simulated", host?, repo?, version?, workspace?, skills?: { installed, missing }, pairCode?, command?, since?, problem?, note? }`.
+    The token never leaves the store.
+  - Hooks: `useAgent()` (the connection, live), `useAgentControls()` / `agentControls` (`begin(agent)` makes a one-time code and a command and sets `pairing`; `retry()` polls again with the code on screen; `cancel()`; `disconnect()`; `simulate(agent?)` connects at once with the prototype's own answers; `recheck()` asks a lost bridge again),
+    `usePreferredAgent()` / `preferredAgent()` (the connected agent, else the last chosen, else Codex: what the buttons name), `agentName`, `agentHandle`, `agentCommand(kind, issue)` (`codex '…'` or `claude '…'`), `pairCommand`, `makePairCode`.
+  - **Modes.** Dev (`!isStaticBuild`): `begin` sets `mode: "bridge"` and polls the real bridge on `127.0.0.1:7457` until it answers with the code; `simulate()` is the escape hatch. The static build (`VITE_STATIC=1`: `pnpm build:static`, the published artifact) cannot reach
+    127.0.0.1, so `begin` pairs by itself after 2.5 s in simulated mode and the screen says "Prototype: the bridge answers by itself". A simulated Codex has all 12 skills installed, a simulated Claude Code has none (the connect flow then offers the install commands).
+  - **Storage.** `localStorage` key `wf-agent`: a pairing, a simulated connection and a bridge connection survive a reload. A bridge connection starts as connected, asks `/status`, and turns `lost` when the call fails; a connected bridge is checked every 15 s and two failed checks make it `lost`.
+  - **Runs.** `useStartCodexRun().start` starts a bridge run (`POST /runs`, then follows `GET /runs/<id>/events`) or the mock's simulated run, and rejects with `AgentNotConnectedError { status }` when the connection is not `connected` (it also turns the connection `lost` when the bridge is gone). `cancel` routes a bridge run to the bridge. `useCodexRuns` merges bridge runs with the server's.
+  - **The bridge** (`plugins/workflow/scripts/wf-bridge.mjs`, Node 18+, no dependencies; see the plugin README): `node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92`. It binds 127.0.0.1 only, pairs once by the code (a bearer token after it; five wrong codes close pairing), answers only the dashboard's origin, validates the issue id and builds the prompt itself
+    (the browser never sends a prompt or a shell command), and runs `codex exec --full-auto …` or `claude -p … --permission-mode acceptEdits` in the repository with `WF_ROOT` and `WF_AUTHOR`; flags are overridable after `--`. `bridge-client.ts` is the fetch client (typed errors `BridgeError`, `BridgeUnreachableError`). `scripts/wf-bridge.test.ts` runs the real bridge with a fake agent binary. **Disconnect, Switch and Connect again end the bridge** (`DELETE /pair`: it closes its streams, stops its runs and exits 0), so the code cannot pair again and the next pairing finds the port free; the dashboard says so where it matters (below).
+  - **Scripts.** `window.__wf.connectAgent(kind = "codex")` and `disconnectAgent()` connect or end the simulated agent; `scripts/shot.mjs` and `scripts/sweep.mjs` take `--agent codex|claude` for a page that needs a run. The mock's `server.startCodexRun(issue, kind, agent?)` writes the run's edits as that agent.
 - **`openAddWork(start?)`** is in the shell store (`app/shell-store.ts`), not in the data layer: `start` is `{ kind?: "group" | "issue", group? }`.
-  `useShell` also holds `paletteOpen`, `shortcutsOpen`, `addWorkOpen`, `addLibraryOpen` (`openAddLibrary()`), `devPanelOpen`, `mobileNavOpen` and `narrowNavOpen`. The old
+  `useShell` also holds `paletteOpen`, `shortcutsOpen`, `addWorkOpen`, `addLibraryOpen` (`openAddLibrary()`), `devPanelOpen`, `mobileNavOpen`, `narrowNavOpen` and the agent's `agentOpen`, `agentPanelOpen` and `agentStart`.
+  **`openAgent(start?)`** opens the connect flow (`start.agent` skips "Which agent?"; `start.then` is the run to start once the agent is connected) and **`openAgentPanel({ then }?)`** the Agent panel;
+  opening one closes the other, and closing keeps `agentStart` for the exit animation. (Write `{ then }` as a shorthand: biome's `noThenProperty` flags a `then:` key.) The old
   `newIssueOpen`, `newGroupOpen`, `openNewIssue` and `openNewGroup` are gone.
 
 #### The skills flow (the data layer of Settings; spec `docs/plan/proposals/skills-flow-spec.md`)
@@ -438,7 +457,7 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - **Tests** read the files as they ship: `mock/md/*.test.ts` (grammar of every file, the declared findings, tolerant reader,
   edits, rebase, templates), `mock/world.test.ts`, `mock/ops.test.ts`, `mock/files.test.ts`, `mock/server.test.ts`. A large
   hand edit of the workspace can break a test that names an issue by id; fix the test or the edit.
-- **`window.__wf`** (`mockControls`): `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"|"offline"), reset(), loadSample(), holdSample(), setCodexPhaseMs(ms) }`.
+- **`window.__wf`** (`mockControls`): `{ conflictNextWrite(), playNextEvent(), setArchifyAvailable(b), setConnection("live"|"reconnecting"|"offline"), reset(), loadSample(), holdSample(), setCodexPhaseMs(ms), connectAgent(kind?), disconnectAgent() }`.
   Latency 80–160 ms. Playwright smoke tests start from `reset()` (the empty board) or `loadSample()` (26 issues).
 
 ### shell builder: `src/main.tsx`, `src/app/**`
@@ -450,13 +469,14 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - `app/router.tsx` — TanStack Router, code-based route tree per the table above; `validateSearch` for each route;
   `createHashHistory()` when `VITE_HASH_ROUTER === "1"`; register the router type. `/inbox` is a route whose `beforeLoad` redirects to
   `/w?needs=me`. The issue drawer, the issue page and `/skills` render lazy components inside a `Suspense` (`app/lazy-views.tsx`).
-- `app/lazy-views.tsx` — `IssueDrawer`, `IssuePage`, `AddWorkDialog`, `SkillsView` and `SettingsView({ page })` as `React.lazy`; `preloadViews()` fetches their chunks;
+- `app/lazy-views.tsx` — `IssueDrawer`, `IssuePage`, `AddWorkDialog`, `AgentDialogs` (the connect flow and the Agent panel), `SkillsView` and `SettingsView({ page })` as `React.lazy`; `preloadViews()` fetches their chunks;
   `whenIdle(fn)` runs a callback when the browser is idle. This keeps the main chunk under the 500 kB warning (the build must stay free of it).
 - `app/AppShell.tsx` — grid `[NavRail | Main]`, viewport-locked. Main hosts the route outlet. `RailSlot` is the rail's grid cell:
   below 1100 px it is the 52 px icon rail (see NavRail) and, when opened, the full rail floats over the page in the same 52 px cell
   (no page jump) with a click-away layer, both at `z-overlay`. Below 768 px a top bar (`MobileTopBar`: menu, name, Prototype, search)
   opens `MobileNavSheet`, a modal sheet on `bg-scrim` (`z-overlay`) with the rail inside (`z-dialog`). A skip link ("Skip to
   content") sits at `z-popover`.
+  `AppShell` also mounts `AddWorkHost` and `AgentHost`, which render their lazy dialogs once the shell store opens them (or the browser is idle).
 - `app/BoardLayout.tsx` — `/w` layout: root `<div className="relative flex h-full min-h-0 min-w-0">` holding
   `<div className="min-w-0 flex-1"><BoardPage/></div>` and the drawer `<Outlet/>`. The drawer route renders
   `IssueDrawer`, which is a flex item when docked and `absolute inset-y-0 right-0` when overlaid.
@@ -466,7 +486,8 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
   above the workspace name ("wf"), the mark, the acting-as avatar and the live badge at top; then the views: **Workflow** (LayoutGrid
   icon) with its one sub-item Board (`g w`), **Library** (BookOpen icon; `g l`) with Personal (`g p`, its page count), Team libraries (`g t`: the workspace library first, then
   each library added, then **+ Add team library**), Files (`g f`) and Skills (`g s`), each with a faint count; then the **Groups** tree (it filters the Workflow
-  board); then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme (system/light/dark), density, notifications
+  board); then the **agent row** (`AgentStatus` from `features/agent`: `Connect an agent`, `Codex · pairing…`, `Codex · connected` or `Claude Code · lost`, a status dot first; a lost agent is in the warning
+  tone, and so is a connected agent whose wf skills are missing (label unchanged, tooltip adds "Skills missing: open to install"); it opens the connect flow when none or pairing and the Agent panel when connected or lost; the icon rail shows the bot icon with the dot and a tooltip), then Kit (`g k`, prototype tools) beside the Prototype pill; footer with theme (system/light/dark), density, notifications
   toggle, **a gear that opens Settings** (a link to `/settings/flow`, tooltip "Settings ⌘,", `aria-current` while under `/settings`; row 1 after the notifications button, before `?` on the collapsed rail, in row 1 of the phone sheet), ⌘K hint, `?` hint. **There is no Inbox item and no inbox count**: what needs you is the board's Needs you filter. Icon rail:
   one icon per view, tooltips list the sub-views. The phone sheet mirrors the expanded rail. Active states follow the route
   (`useActiveSubView`). `NotifyBanner` (the opt-in for browser notifications of blocking requests) sits in the nav.
@@ -476,13 +497,14 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 - `app/CommandPalette.tsx` — ⌘K. Result groups in order: Issues ("Recent issues" while the field is empty), Groups, Library, Glossary
   (a term opens `/glossary?q=<term>`), Skills (a skill opens `/skills?skill=<ref>`, and its hint is its source), Files (opens the file), Actions; the section that holds the best match
   goes first, so Enter runs what you typed. Actions: **Add work…** (`n`, group path) and **Add one issue…** (issue path); with an issue open:
-  **Open <id> in Codex** (copies the command), **Do the next step of <id>** (a background run), move it to…, open it as a
+  **Open <id> in <agent>** (copies the command; the agent is the connected one, else the last chosen), **Do the next step of <id>** (a background run; with no agent it connects one first), move it to…, open it as a
   full page, "Edit goal.md of <id>", **Hand over <id>: copy its context** (`copyContextWithToast(id)` from `@/features/issue/handoff`: copies the bundle markdown, one toast "Copied context for wf-… (~1.9k tokens)" with **View**,
-  which opens the bundle in the issue view's dialog) and **View the context of <id>**; while a run goes on the issue the "Do the next step" row is **Cancel Codex's run on <id>**; **Ask the library about <id>** (`openAskPanel({ issue })`; with no issue open the row is **Ask the library…**, and the panel offers recent issues to pick), then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"), **"Open settings"** and **"Skills flow"** (always listed) and one **"Change the <step> skill"** per step of the flow (listed only once you type, so the empty palette does not grow by seven rows; each opens `/settings/flow?step=<id>`),
+  which opens the bundle in the issue view's dialog) and **View the context of <id>**; while a run goes on the issue the "Do the next step" row is **Cancel <agent>'s run on <id>**; **Ask the library about <id>** (`openAskPanel({ issue })`; with no issue open the row is **Ask the library…**, and the panel offers recent issues to pick), then "Workflow · Board", "Workflow · Needs you" (the board filter; also found by typing "inbox"), **"Open settings"** and **"Skills flow"** (always listed) and one **"Change the <step> skill"** per step of the flow (listed only once you type, so the empty palette does not grow by seven rows; each opens `/settings/flow?step=<id>`),
   "Library", **"Open personal library"**, "Library · Team libraries", **"Add team library…"**, **"Search the library"** (goes to `/lib` and focuses the search box; `/`), "Library · Glossary" (the Glossary page), "Library · Files", "Library · Skills", "Kit (prototype tools)", theme, density, sidebar, shortcuts, simulate a conflict,
   play the next live event. **The Codex actions use the same code as the buttons**: `copyCodexCommand(issue)` and `useNextStep(issue)` (`{ busy, start, cancel }`) from
   `@/features/codex`, so a run started from the palette, the issue header or the card menu gives exactly one toast (when it ends) and the copy
-  has one wording. While a run goes the palette's action says "Codex is working on it" and is disabled.
+  has one wording. While a run goes the palette's action says "<agent> is working on it" and is disabled. **Agent actions** (`agentActions`, always listed): **Connect an agent** (while none is connected or a pairing waits; it opens the connect flow),
+  **Switch to <other agent>** and **Disconnect <agent>** (while one is connected or lost; Disconnect gives one toast), and **Agent status** (opens the Agent panel; not listed while no agent is connected, where "Connect an agent" is the one row). While a real bridge is connected the Disconnect row says "Stops the bridge on <host>" and the Switch row "Instead of Codex, stops the bridge on <host>".
 - `app/ShortcutsDialog.tsx` — `?`. Lists every shortcut from `SHORTCUTS` in `app/shortcuts.tsx` with `Kbd`; sections General, Go to,
   Workflow · Board, Issue, Library · Files. Go to rows: "Workflow · Board" `g w`, "Library"
   `g l` or `g d`, "Library · Personal" `g p`, "Library · Team libraries" `g t`, "Library · Glossary" `g g`, "Library · Files" `g f`, "Library · Skills" `g s`, "Kit" `g k`. A "Library · Pages" section lists `[`, `]` and `/`. General has `n` = Add work.
@@ -506,50 +528,58 @@ server.ts  (snapshot, issue, libraryItem, glossary, search, context, ops, files,
 ### board builder: `src/features/board/**`
 
 `index.ts` exports `BoardPage`. Files: `BoardPage.tsx`, `BoardToolbar.tsx`, `KanbanBoard.tsx`, `KanbanColumn.tsx`,
-`Swimlane.tsx`, `IssueCard.tsx`, `dnd.ts`, `useBoardKeys.ts`, `filter.ts`.
+`IssueCard.tsx`, `dnd.ts`, `useBoardKeys.ts`, `filter.ts`.
 - Toolbar (44 px, the Board's one top bar): `ViewTabs view="workflow"` first, then the group breadcrumb (from `group` search)
   and the count summary (container queries: the summary needs 1280 px of board width; the breadcrumb shows its whole
   chain from 1152 px and only the current scope below that, the full path in its tooltip). At the right, in this order: text filter
   (`/` focuses), **Needs you** (`NeedsYouToggle`: a toggle with the count of the acting person's open requests across the workspace, accent
   above zero and when on; on, the board shows only the issues that have one: `?needs=me`; it also tells you when the group on show has none
-  and the requests are elsewhere), author filter (AuthorStack + menu), swimlanes toggle (child groups | none), "Show cancelled", and the
+  and the requests are elsewhere), author filter (AuthorStack + menu), "Show cancelled", and the
   primary **+ Add work** button (`data-wf="AddWorkButton"`, shortcut `n`; it opens Add work on the group on show as the starting answer, and still asks where).
   The toolbar takes `needsYou={{ requests, issues }}` (the Kit passes it too). The old "New issue" button is gone.
 - Empty states: an empty workspace says "No work yet" with **Add work** (primary) and **Add one issue**; an empty group says
   "No issues in <group> yet" with the same two buttons; the Needs you filter with nothing to show says "Nothing needs you" and, when
-  requests wait elsewhere, "N issues outside <group> need you" with **Show all groups**.
+  requests wait elsewhere, "N issues outside <group> need you" with **Show all groups**. The two "splits it into issues" hints name the
+  agent the buttons name (`agentName(usePreferredAgent())`: the connected one, else the last chosen), so the board never names a
+  different agent than the nav row beside it. An empty column is one faint "No issues" line, with no box (`EmptyDropArea`); the column
+  is the drop zone, and a card hovering over it turns the line into an accent "Move to <status>".
 - 6 columns (`BOARD_COLUMNS`), cancelled only with `show=cancelled` (when the column appears the board scrolls it into view: a link
   that opens with it jumps, the toggle glides; at 1440 px the columns before it are then partly off to the left, inside the board's own
   scroll container). Column width `var(--wf-col-w)`. Backlog and Done
   fold to a 36 px vertical rail (`usePrefs().foldedColumns`) showing the vertical label + count; click to unfold.
   Columns scroll horizontally inside the board; each column body scrolls vertically; virtualize above 40 cards
   (`@tanstack/react-virtual`). Card order: priority, then last activity.
-- Swimlanes: when `swim=child` (default when the selected group has child groups), one collapsible band per direct
-  child group (color dot, title, roll-up), issues directly in the selected group go in a "No subgroup" band.
-  Drops across swimlanes are disabled (visibly: no drop indicator, `not-allowed` cursor).
-- Drag (pragmatic-drag-and-drop): drop into another column → `useMoveIssue().move` (optimistic; the gate dialog
-  handles illegal moves and the done gate). Drop indicator: accent 2 px line + column highlight.
+- **One set of columns, no swimlanes.** The board shows the visible issues sorted into the status columns; the group tree in the
+  nav filters it (`group`), and each card names its group (the path relative to the group on show). `KanbanBoard({ columns, issues, basePath })`
+  takes the issues and buckets them itself (`bucketByStatus`). There is no `swim` search param: a link that still has `?swim=child` loads the
+  board as usual and the address bar sheds it (`validateBoardSearch` does not return it; `BoardPage` and `useBoardSearch` rewrite the URL without it).
+- Drag (pragmatic-drag-and-drop): every column is a drop target (`useColumnDropTarget`), a folded rail too, and any card can be dropped
+  on any column of the board. A drop on another column → `useMoveIssue().move` (optimistic; the gate dialog handles illegal moves and
+  the done gate). Drop indicator: accent 2 px line + column highlight. Below 768 px the cards do not drag; the card menu moves them.
 - `IssueCard` anatomy: title (2-line clamp, 13 px medium) with the 14 px `ProgressRing` top-right; under it the **id row**: the relative
   group path (faint, truncates) on the left, and at the right one quiet cluster in a fixed order: lint dot, lease holders
-  (`AuthorStack`), priority glyph (urgent: filled danger tile with "!"; high: three bars; others nothing), then the mono id. Priority sits
+  (`AuthorStack`), priority glyph (urgent: filled danger tile with "!"; high: three bars; others nothing), then the mono id. While the run
+  marker shows, the lint dot and the lease avatars leave the cluster (the marker's tile already names who is working), so the phase word
+  has room whichever agent runs and however many hold leases. Priority sits
   here, not before the title, so every title shares one left edge. Then signal chips **only when present** (wrapping, never clipped):
   needs-you (accent, count), blocked (danger), stale / lease expired (amber). Selected (open in drawer) = accent hairline.
-  `useRecentlyChanged` → `wf-flash`. **While Codex works on the issue** `CodexRunMarker` (`features/codex`) takes the group path's place in the id
-  row (the Codex tile, the task id, one word for the phase), so the card keeps its height.
+  `useRecentlyChanged` → `wf-flash`. **While an agent works on the issue** `CodexRunMarker` (`features/codex`) takes the group path's place in the id
+  row (the agent's tile, the task id, one word for the phase; a bridge run names no task), so the card keeps its height.
   **Hover footer = an overlay.** `data-wf="IssueCardFooter"` is `absolute` on the card's bottom edge and grows from 0 with
   `grid-template-rows` (`0fr` to `1fr`), so the card never changes height and nothing below it moves while the pointer sweeps down a
   column. It shows "3/8 tasks · 2 ready", the last-activity author and time, and the "…" menu (Move to…, Open in new page, Copy link, Copy id, and the
-  two Codex actions: **Open in Codex** (copies the command) and **Do next step**, disabled with "Codex is working on it" while a run goes).
+  two agent actions: **Open in <agent>** (copies the command) and **Do next step**; while a run goes the second reads **Cancel <agent>'s run** with the hint "<agent> is working on it". `<agent>` is the connected agent, else the last chosen. With no agent
+  connected, Do next step opens the connect flow and starts the run once it is done, as the header's button does).
   One card shows it at a time: the hovered one while the pointer was the last input, the focused one while the keyboard was; the board
   root carries `data-input="pointer|keyboard"` (set by `useBoardKeys`) for that. The footer covers the card's last row while open. Below
   768 px and on `(hover: none)` screens there is no hover, so the footer is a plain, always-open last row in the flow.
-- Keyboard: `j/k` move card focus, `h/l` move column, Enter opens drawer, `o` full page, `s` opens the status menu
+- Keyboard (`useBoardKeys`, over the visible columns, folded ones skipped): `j/k` move card focus, `h/l` move column, Enter opens drawer, `o` full page, `s` opens the status menu
   of the focused card, `/` filter, `n` Add work (shell handles), Esc closes drawer.
 
 ### issue-frame builder: `src/features/issue/{index.ts, IssueDrawer.tsx, IssuePage.tsx, IssueView.tsx, IssueHeader.tsx, tabs/FilesTab.tsx, DocsList.tsx, DocView.tsx, LintPanel.tsx, HandoffPanel.tsx, handoff.ts, skill-hint.tsx, MetaLine.tsx, delivery-focus.ts}`
 
 `index.ts` exports everything public of the issue feature: `IssueDrawer, IssuePage, IssueView, IssueHeader,
-StateSnapshot, NeedsYouList, CriteriaChecklist, CoverageStrip, PlanLanes, PlanList, TaskPill, ChangesTimeline,
+StateSnapshot, NeedsYouList, CriteriaChecklist, CoverageStrip, PlanList, TaskPill, ChangesTimeline,
 DecisionCards, LearningCards, DocsList, DocView, LintPanel, MetaLine, HandoffButton, HandoffPanel, HandoffViewHost, SkillHint, SkillLink` and the helpers `copyContext, copyContextWithToast,
 showContext, handoffPrompt, tokenCount, tokenLabel, ASK, codexAsk, WF_SKILLS` (the Criteria, Git and CI tabs are in `tabs/`; see "issue-delivery" below).
 The shell loads the feature lazily (`app/lazy-views.tsx`): nothing outside `features/issue` imports it statically. **The one exception is `features/issue/handoff.ts`** (no React, a few
@@ -651,25 +681,29 @@ hundred bytes): the palette imports `copyContextWithToast` from that file direct
 - `delivery-ui.tsx` — the shared bits: `RunStateIcon`, `CiDot` (the CI tab's count), `TrailerCopy`, `gitTitle`/`ciTitle` (tab tooltips),
   `deliveryCounts`, `shortBranch`, `useFreshKeys`.
 
-### issue-plan builder: `src/features/issue/{tabs/PlanTab.tsx, PlanLanes.tsx, PlanList.tsx, TaskPill.tsx, TaskDetail.tsx}`
+### issue-plan builder: `src/features/issue/{tabs/PlanTab.tsx, PlanList.tsx, TaskPill.tsx, TaskDetail.tsx}`
 
+The tasks are one list, the phase list. There is no lanes view and no view toggle (`usePrefs().planView` is gone; an old stored value is ignored).
+A task's `lane` stays a field in plan.md because the skills route work by it; the UI never calls it a lane. Where a label is needed it says
+"Area" (the task detail, the tooltips) or shows just the value (the row). The glossary defines the term as **area** (`## area`: "written as `lane:` in `plan.md`"), in the shipped workspace and in the sample.
 - `PlanTab({ detail, variant })` — Approach (MarkdownProse with diagrams), Assumptions (A-n with open/confirmed),
-  Prior art (RefLinks), then the plan view with a `Segmented` toggle Lanes | List (`usePrefs().planView`) and a
-  "Ready: 2" highlight toggle. Plan header: revision, updated by/at. Empty state when `plan` is null: **a button, "Do next step"** (the same label at every size: the run writes the plan first, then claims T-1), which
+  Prior art (RefLinks), then the **Tasks** header and the list. The header is "Tasks" with the **Ready** highlight toggle (`PlanReadyToggle`, "Ready: 2")
+  right-aligned on the same line, and the counts line under them at full width ("1 done · 1 review · 1 in progress · 2 to do · 1 ready"), so nothing
+  wraps into a gap on a phone. Plan header: revision, updated by/at. Empty state when `plan` is null: **a button, "Do next step"** (the same label at every size: the run writes the plan first, then claims T-1), which
   starts a run (`useNextStep`; **an issue without a plan has the planning as its first step**, as in the `doing-next-step` skill), and a `SkillHint` for `planning-issues`.
-- `PlanLanes({ plan, criteria })` — rows = lanes, columns = dependency levels (`task.level`); `TaskPill`s placed in
-  cells; dependency edges drawn as SVG curves **only** for the hovered/selected task (its deps and dependents);
-  ready tasks get an accent ring when the Ready highlight is on; lane labels at left (sticky). Horizontal scroll inside. **Responsive by the width of its own box:** a level column is
-  `minmax(168px, 240px)` (two fit a 440 px column), the gap is 12 px, and the grid is `width: 100%` but never narrower than every level at its minimum, so a third level scrolls instead of squeezing
-  (the right-edge fade says so). **Under 520 px the lane name moves above its tasks** (two rows per lane, name sticky at the left) so two levels fit a 360 px phone column. The task in progress
-  (else in review) is scrolled into view once when the lanes open, so the task the issue is about is never the one behind the edge.
-- `PlanList({ plan })` — phase stepper: each phase a row with progress; finished phases collapsed; tasks as rows with
-  status glyph, id, title, claimant, steps x/y, lane chip.
-- `TaskPill({ task: Task, size?: "sm"|"md", onClick?, selected? })` — `StatusIcon` + `T-3` mono + title (truncate) +
-  claimant avatar; lease expired → amber dot; stale → amber; ready → accent dot. Used by Now and Goal too.
-- `TaskDetail({ task, issueId })` — Popover (lanes) or inline (list): brief, steps checkboxes (`useToggleStep`),
-  depends_on, owns (mono), satisfies, verify, lease, status menu (`useSetTaskStatus`). **Commits and CI** (`DeliveryRows`): the commits whose change entry names the task and the CI runs of those commits
-  (`useDelivery`), each a button that opens its row in the Git or CI tab (`focusCommit`, `focusRun`); the popover closes when it navigates (`onNavigate`).
+- `PlanList({ plan, issueId, highlightReady?, criteria? })` — phase stepper: each phase a row with progress; finished phases collapsed; tasks as rows with
+  status glyph, id, title, then at the right (all quiet, in this order): what the task still waits for, its area, the claimant (lease expired → amber dot), steps x/y, and the
+  accent ready dot. It carries what the old lanes view gave:
+  - **Ready highlight.** With the toggle on, ready tasks get an accent hairline and tint; a ready dot marks them either way, and a collapsed phase says "N ready".
+  - **The task in progress is easy to find.** Its title is medium weight, and when the list opens it is scrolled to the middle of the view if it is out of it (nothing moves when it is
+    already visible, and later changes of the plan do not move the page; a task asked for by a commit's T-n pill wins). Falls back to the task in review.
+  - **Dependencies are readable.** A task that waits shows "after T-3, T-4" (only the tasks of this plan that are not done or cancelled; the tooltip says "Waits for …"). The detail lists all
+    of them as `TaskPill`s that open that task. The row is a container (`@container/plan`): "after …" shows from 448 px of list width, the area from 512 px; narrower, only the detail has them.
+- `TaskPill({ task: Task, size?: "sm"|"md", onClick?, showTitle?, showClaimant? })` — `StatusIcon` + `T-3` mono + title (truncate) +
+  claimant avatar; lease expired → amber dot; stale → amber; ready → accent dot; the tooltip adds "Area: web". Used by TaskDetail (dependencies), Now, Git and the coverage strip.
+- `TaskDetail({ task, issueId, tasks?, criteria?, onSelectTask? })` — inline under a row of the list: brief, steps checkboxes (`useToggleStep`),
+  area, depends_on, owns (mono), satisfies, verify, lease, status menu (`useSetTaskStatus`). **Commits and CI** (`DeliveryRows`): the commits whose change entry names the task and the CI runs of those commits
+  (`useDelivery`), each a button that opens its row in the Git or CI tab (`focusCommit`, `focusRun`).
 
 ### issue-log builder: `src/features/issue/{tabs/LogTab.tsx, ChangesTimeline.tsx, DecisionCards.tsx, LearningCards.tsx}`
 
@@ -897,16 +931,16 @@ arguments of `useCreateWork`; no React), `useAddWorkFlow.ts` (the state and the 
 - **Stale proposals are never written:** `currentSplit`/`keptRows` need the split signature to match the answers, so after going back and changing one the button is disabled until the new split has loaded. A failed submit gives the primary button focus again, so Enter retries.
 - The result is one `useCreateWork` commit, a toast ("Added <group> with 4 issues", or "Added <title>" with **Open**), and the board opens on the new group with Backlog unfolded.
 
-### features/codex: `src/features/codex/**` (plan D3, D4, + Open in Codex and Do next step)
+### features/codex: `src/features/codex/**` (plan D3, D4, D12, + Open in Codex and Do next step)
 
-`index.ts` exports `CodexActions, CodexRunMarker, OpenInCodex, OpenInCodexPanel, RunStatus, RunProgress, RunNotice, RunsPopover, RunsList, runLine, runWord,
-copyCodexCommand, OPEN_IN_CODEX_HINT, useCodexIssue, useCardRun, useNextStep, useRunActive`. The user asked for "a way to open the codex in a button form, and
-beside it a button that in the background does the next step".
+`index.ts` exports `CodexActions, CodexRunMarker, OpenInCodex, OpenInCodexPanel, RunStatus, RunProgress, RunNotice, RunsPopover, RunsList, RunGlyph, runDetail, runLine, runWord, runsLabel, isBridgeRun,
+reasonAction, copyCodexCommand, openInAgentHint, askToConnect, useCodexIssue, useCardRun, useNextStep, useResumeNextStep, useRunActive`. The user asked for "a way to open the codex in a button form, and
+beside it a button that in the background does the next step". **The names say "Codex" (the user's word and the feature's), but every label follows the connected agent** (plan D12; see "The agent rules" below).
 - `CodexActions({ issue })` — the issue header's pair of buttons. **Open in Codex** copies `codexCommand(issue).command` (a `codex "Work on wf-xxxxx … Read current_state.md first, then use the wf skills (doing-next-step)"` line;
   the popover's own line "Command copied. Paste it in a terminal at the repo root." is the confirmation, with no toast) and opens `OpenInCodexPanel`, which shows the exact prompt, so nobody pastes a command they have not seen.
   With the local daemon the same button starts Codex itself (D3). **Do next step** starts a background run; while it goes the button's slot becomes `RunStatus` (the live phase
   "Claiming T-3", "Logging the change", "Verifying: CI running", "Finishing T-3", a progress bar, Cancel), and a run with nothing to do says why on a line below with a way to the Plan tab (`RunNotice`).
-  `RunsPopover` lists the issue's recent runs. The result of a run is not shown in the strip: it is markdown in the issue (the task, a change entry) plus a commit and a CI run, in the Plan, Log, Git and CI tabs.
+  `RunsPopover` lists the issue's recent runs, titled "Codex runs", "Claude Code runs" or "Agent runs" when both ran (`runsLabel`). The result of a run is not shown in the strip: it is markdown in the issue (the task, a change entry) plus a commit and a CI run, in the Plan, Log, Git and CI tabs.
 - **`CodexActions` has a `children` slot** for more buttons of the same row: the issue header passes `HandoffButton` (**Copy context**, `features/issue/HandoffPanel`), so the row reads `[Open in Codex] [Do next step] [Copy context] [history]`.
   While a run shows (`data-busy` on the root, `group/codex`) Open in Codex and Copy context give way to their glyph below 640 px so the phase keeps its room. The header has no `wf context` icon and copies no CLI string.
 - **Do next step plans first.** On an issue without a plan the run's first phase is "Plan the issue, claim T-1" (`CodexRun.plans`): the strip says "Planning, claiming T-1", the card marker "Planning". The button label stays "Do next step" (the Plan tab's empty state too, at every size). A task that ends in `review` (its `verify` is `manual`) ends the run `done` with `CodexRun.review`, and the strip says "Done: T-n, waiting for a check".
@@ -918,13 +952,37 @@ beside it a button that in the background does the next step".
   ("Codex finished T-3 … Open log", or "Codex failed on T-3"); a cancel is the person's own act and has none (the card menu and the palette show "Cancel Codex's run" while a run goes). `follow-run.ts` keeps a counted registry of the mounted header strips (`holdStrip`/`stripShows`): `announce()` is silent while a strip of that issue is on screen. A run with nothing ready is explained at once (the header's `RunNotice`, a toast from the menu and the palette).
 - `useRunActive(issueId)` — true while a run goes on the issue and for 1.5 s after (the time the issue takes to be read again). The header's Q005 row and the Now tab's "behind" chip wait on it.
 - Run words are in `run-copy.ts` (`runLine`, `runWord`, `runProgress`, `activeRun`): the strip, the card marker, the runs list and the toasts all read a run through them.
+- **The agent rules (plan D12).**
+  - **Names.** Every label that names the agent reads `agentName(connected agent, else the last chosen)` (`usePreferredAgent`): the header's **Open in Claude Code**, the card menu's **Open in Claude Code** and **Cancel Claude Code's run**, the palette's rows, the Plan tab's busy button ("Claude Code is working"),
+    the `SkillHint` ("Claude Code does this with the … skill", Copy Claude Code command). A running or finished run names **its own agent** (`run.agent`), so a toast says "Claude Code finished T-3" even after a switch. `codexAsk(prompt, agent)` and `agentCommand(agent, issue)` give `codex '…'` or `claude '…'`.
+  - **Gating.** Do next step needs a connected agent. `useNextStep(issue)` (returns `{ busy, run?, start, cancel }`) and `useCodexIssue(issue).start` call `startOrConnect`: on `AgentNotConnectedError` they call `askToConnect(issueId, kind, status)`, which opens the **connect flow** with the run to start after it
+    (`openAgent({ then })`; a pairing in progress is picked up where it was) or, for a lost agent, the **Agent panel** (`openAgentPanel({ then })`), where Reconnect is; a lost agent is first asked once whether it answers again (`agentControls.recheck()`), and if it does the step starts with no dialog. The click resolves to nothing and **nothing is toasted**: the dialog is the answer. When the flow's Done step or the panel's Reconnect finishes, `useResumeNextStep()(then)` starts
+    the run through the same path as the card menu and resolves to the run; the dialog then puts focus on that issue's run strip (`focusRunStrip`, `data-run-focus` in the `CodexActions` of `data-issue`), else on the control that opened it, else on the open issue drawer or the nav's agent row (`agent/close-focus.ts`), never on `<body>`. The button's tooltip says what the click will do (`nextStepHint(issue, connection)`: "Needs a connected agent. The click connects one, then starts the next step.").
+  - **Bridge runs.** A run with `source: "bridge"` has no phases and no task: the strip reads "Running on <host>" with a pulsing agent tile and the last line the agent printed (`runLine(run, host)`), no progress bar (`RunProgress` renders nothing without phases), and ends Done, Failed (by the exit code) or Cancelled. The card marker has no task id; the toast says "Codex finished" with no T-n. A failed bridge run has no "Open plan" (it held no task): a lost bridge ("Lost the bridge. …") offers **Agent status**, which opens the Agent panel where Reconnect is (`lostBridge(run)`; the toast does the same), an agent that exited offers nothing.
+  - **One confirmation per event still holds:** a run started through the connect flow gives no toast when its issue's header strip is on screen; the palette's Disconnect gives one toast.
+
+### features/agent: `src/features/agent/**` (plan D9 to D14, + Connect an agent)
+
+The user asked: "in the dashboard have the ability to connect the agent, like codex or claude". `index.ts` exports everything (the gallery and the tests use it); **app code imports `AgentStatus` and `agent-copy` by path** (`@/features/agent/AgentStatus`, as `NavRail` and `CommandPalette` do), because the index pulls the dialogs into the main
+bundle. The shell mounts the dialogs lazily (`AgentDialogs` in `app/lazy-views.tsx`, `AgentHost` in `AppShell`) and opens them with `openAgent` and `openAgentPanel` (`app/shell-store.ts`).
+- **Connect flow** (`ConnectAgentDialog` around `ConnectAgentPanel`, `useConnectFlow`, `connect-flow.ts` for the steps and the words as plain data, `ConnectScreens.tsx`): the same look and parts as Add work (`ChoiceList`, `KeyHint`, `DigitSlot` imported from `features/add-work/parts`; its `StepFrame` and `ProgressDots` are typed to Add work's step ids, so the flow has small copies, `Screen` and `StepDots`).
+  1. **Which agent?** Two big buttons, **Codex** and **Claude Code** (keys 1 and 2); a click picks and goes on. `openAgent({ agent })` skips it.
+  2. **Run this in the repo.** The exact command (`node plugins/workflow/scripts/wf-bridge.mjs --agent codex --pair 4F7K-92`) with one Copy button, "Needs Node 18 or newer. The code works once.", and "Waiting for the bridge…". It turns into **Connected** with host, repo, version and a skills check. The bridge's answer is not the whole screen: the spent code collapses to one quiet line ("Paired with code 7RQT-KN", no Copy). Skills missing: the row says "Not installed" or "3 of 8 installed", with one hint line and the install commands, each with its own Copy. They install for the whole repository, because that is
+     what the bridge counts: for Claude Code `claude plugin marketplace add … --scope project` and `claude plugin install workflow@… --scope project` ("In a shell in the repo, then commit .claude/settings.json"; the same pair as the Skills page's "Everyone on the repository"), for Codex `scripts/install-skills.sh --codex` and `--print-agents-md >> AGENTS.md` ("then commit .agents/skills and AGENTS.md so everyone has them"). A user-scope `/plugin install` is not offered: the bridge does not count it. After a **lost** agent the hint above the command says "If the Codex bridge still runs, stop it first: press Ctrl+C in its terminal."; after **Switch** from a connected bridge the hint says "The Codex bridge on laptop-2 stopped. Paste this at the repo root to start the new one, and leave it running." (`endedBridgeLine`, read from the connection the flow found, because pairing again tells that bridge to stop). **Claude Code only:** one line under the command, "Claude Code edits files, but does not run the helper scripts or commit.", with a ghost button **Allow them** and the pointer "What it can do: plugins/workflow/README.md"; the button adds `claudeAllowFlags()` (`-- --allowedTools 'Bash(*/wf-env.sh *)' …`) to the command, the line then reads "Allowed: wf-env.sh, wf-status.sh, git add, git commit, pnpm." with **Undo**. Off by default, because every entry is a permission (`allowLine`, `withAllowList`, `ALLOW_DOC` in `agent-copy.ts`). In dev a small **Simulate** link connects at once; the static build says "Prototype: the bridge answers by itself." An old bridge that still runs (the one of the last pairing) refuses the new code: the screen then shows a plain note under "Waiting for the bridge…" (`connection.note`: "Another bridge is still running. Press Ctrl+C in its terminal, then run this.") and keeps polling with the same code, so it pairs by itself once that bridge is stopped. Any other refusal or an unreachable bridge shows the problem with **Try again**, which polls again with the same code (`retry`, never `begin`: the running bridge holds the code on screen).
+  3. **Done.** "<Agent> is connected. Do next step now runs on <host>." When Do next step opened the flow the primary button reads **Do next step** and starts that run (`AgentThen`).
+  About 5 clicks with the opener (4 when Enter is pressed). Keys: Backspace and ← go back, Enter goes on, Esc closes. Back from the command screen ends an unfinished pairing; Esc keeps it, and the nav row then reads "Codex · pairing…".
+- **Nav row** (`AgentStatus`, `AgentStatusRow`): see the NavRail entry. **Agent panel** (`AgentPanel` is the dialog, `AgentPanelBody` the presentational body): agent, status chip, mode (Bridge or Prototype), host, repo, workspace, version, connected since (or last seen), skills ("Not installed" or "3 of 8 installed"; the missing names only when some are installed; the install commands),
+  and the five most recent runs (a click opens the issue). Buttons: **Switch to <other agent>**, **Disconnect**, and for a lost agent **Check again** (`recheck`) and **Reconnect**. It also handles none and pairing (a Connect button), and when Do next step opened it, says "Reconnect, then Do next step starts on wf-3k9x2." (the second line of a lost agent's one warning band, plain text in the other states). **Disconnect** says "Stops the bridge on <host>" (and "and the run that is going") in a tooltip, and **Switch** says the same followed by "Then you start the Claude Code bridge.": pairing again or disconnecting tells a real bridge to stop. The palette's Switch row says "Instead of Codex, stops the bridge on <host>".
+- **Rules and words** are pure and tested: `agent-copy.ts` (`statusLabel`, `statusHint`, `modeLabel`, `otherAgent`, `skillsLine`, `skillsMissing`, `stopBridgeLine`, `endedBridgeLine`, `installCommands`, `installWhere`, `allowLine`, `withAllowList`) and `connect-flow.ts` (`stepsFor`, `initialStep`, `needsPairing`, `canContinue`, `pairCodeOf`, `doneCopy`, `primaryLabel`). `parts.tsx` has `AgentTile`, `StatusDot`, `CopyAction`, `CommandBox`, `Facts`.
+- **Safety copy.** The bridge's default mode (`acceptEdits` for Claude Code, `--full-auto` for Codex) lets the agent edit files; a headless run cannot answer a prompt, so what the mode does not allow is skipped: under `acceptEdits` Claude Code runs read-only commands but not the helper scripts, `git add`, `git commit` or a verify command, unless the person passes `-- --allowedTools …` to the bridge (`CLAUDE_ALLOWED_TOOLS` in `agent-info.ts`, kept in step with the README by a test and run against a real `claude -p`; `Bash(git *)` alone is not enough). The README says so and the bridge prints one line at start-up for Claude Code; the connect flow's Claude Code step says it in one line and offers the list as one button, **Allow them** (off by default).
+- **Kit.** The "Agent" group (after Shell): `AgentStatus`, `ConnectAgentPanel` (screen by screen, on fixed connections through `useConnectFlow({ seed })`) and `AgentPanel` (connected, lost, none, pairing). The flow frames include the old-bridge note (`BLOCKED_NOTE`, exported from `@/lib/api`), Reconnect after a lost agent, and Switch from a connected bridge.
 
 ### features/skills: `src/features/skills/**` (plan D7, Library · Skills)
 
 `index.ts` exports `SkillsView, SkillItemView, SkillRow, SkillSource, InstallPanel, useSkillsNav, skillHref, validateSkillsSearch`. Goal 1 of the user: **distribute skills and plugins across the team**. **A skill is its reference everywhere** (`ws:acme-planning`, `platform-handbook:checking-security`, `me:planning-small`; a built-in's bare name is its own): `SkillRow {skill, selected, onSelect(ref)}` (`id=skill-row-<ref>`, `data-skill=<ref>`, shows the first rule a skill breaks), `useSkillsNav().select(ref)`, `skillHref(ref)`, the palette's `skill:<ref>`. The list is grouped by source (the plugins, **This workspace**, each team library, **Yours**: `ShelfSection` per `catalog.shelves`), `SkillItemView` takes an optional `shelf` (a source chip, the reference, the `install-skills.sh --from` command), and `InstallPanel` adds **Your own skills** with the Codex and Claude Code `--from` commands per shelf that has skills.
 - `SkillsView` (`/skills`, `g s`) — a 44 px top bar that starts with the Library tabs, then by page width (the rail counts): from 900 px the install panel and the list beside the open skill; under 900 px
   and on a phone an open skill is a screen of its own. `?skill=<name>` opens one. Esc closes it.
-- `InstallPanel` — says the repository is the team's (`SKILLS_REPO`, `mudit1729/workflow_management`: GitHub redirects the old name there, so the constant stays) and gives the commands to install its plugins, **for two audiences**: for Claude Code "Just me" (`/plugin marketplace add <repo>`, one `/plugin install` per plugin) and
+- `InstallPanel` — says the repository is the team's (`SKILLS_REPO`, `mudit1729/workflow_management`, the same slug as `repository` in the plugin's `plugin.json`, which `install-skills.sh --claude-plugin` prints; `scripts/install-skills.test.ts` keeps them equal. GitHub redirects the old name `workflow_maagement` there, so an old clone's `origin` still works) and gives the commands to install its plugins, **for two audiences**: for Claude Code "Just me" (`/plugin marketplace add <repo>`, one `/plugin install` per plugin) and
   "Everyone on the repository" (`claude plugin … --scope project`, then commit `.claude/settings.json`; `claudeTeamCommands`, `claudeInstallGroups`), and for Codex two steps (`scripts/install-skills.sh --codex`, which copies the skills to `.agents/skills/`, then `--print-agents-md >> AGENTS.md`; `CODEX_AGENTS_COMMAND`), each with a copy button. They are built from the plugin's own manifests (`claudeInstallCommands`, `codexInstallCommands`), so they do not go stale.
 - `SkillRow` — name, description and the plugin; `SkillItemView` — one skill: its plugin, where it lives, `SkillSource` (the SKILL.md read from the file, rendered, with a Rendered | Source switch).
 - Data: `useSkills()` reads `plugins/*/skills/*/SKILL.md`, the plugin manifests and `.claude-plugin/marketplace.json` (see the data layer); a saved SKILL.md updates the page in the dev server.
@@ -961,15 +1019,15 @@ queries as the Library, Glossary and Files views) and the link grammar (`links.t
 as "ElementName: change". `?el=<ComponentName>` opens the page at that element's section (for example `/kit?el=IssueCard`); `?view=side` shows
 light and dark side by side. Entries live in `entries/*.tsx`, one `entry(...)` per `data-wf` name, and `registry.ts` lists every file in index order.
 The groups (`GROUPS` in `kit-ui.tsx`) follow the product: Foundations, Shell, Workflow · Board, Issue · Header, Now, Goal, **Criteria**, Plan, Log, **Git**, **CI**, Files, Diagrams,
-Library, **Library · Personal**, **Library · Team**, **Library · Ask**, **Settings**, Shared, Primitives. The library entries: `entries/library.tsx` (`WikiView`, `LibraryHome`, `MarkdownProse (wiki)`, `GlossaryView`,
+Library, **Library · Personal**, **Library · Team**, **Library · Ask**, **Settings**, Shared, Primitives, plus **Agent** (after Shell: `entries/agent.tsx`: `AgentStatus`, `ConnectAgentPanel`, `AgentPanel`). The library entries: `entries/library.tsx` (`WikiView`, `LibraryHome`, `MarkdownProse (wiki)`, `GlossaryView`,
 `PromoteDialog`), `library-parts.tsx` (`PageHeader`, `PageTree`, `RightRail`, `OnThisPage`, `Callouts`, `MediaFigure`, `GifPlayer`, `VideoPlayer`, `EmbedCard`), `library-personal.tsx`
 (`PersonalHome`, `TopicsSection`, `CodebasesSection`, `WorkSection`, `SummaryBanner`, `PersonalSetup`), `library-team.tsx` (`AddTeamLibrary · link`, `· folder`, `· preview`, each screen in a framed
 surface that runs the real flow and adds nothing) and `library-ask.tsx` (`AskPanel` ready and answered, `AskPanel · states`, `PassageList`, `AskLibraryButton`). There is no "Workflow · Inbox" group. The Add work entries (`entries/add-work.tsx`: `AddWorkDialog` screen by screen,
 `ChoiceList`, `ChoiceButton`, `ToggleChip`, `ProgressDots`, `SplitProgress`, `SplitCard`, `SplitStart`, `DiscardDialog`, `NeedsYouToggle`) sit under Shell and
-Workflow · Board; the Codex entries (`entries/codex.tsx`: `CodexActions`, `CodexRunStatus`, `CodexRunNotice`, `OpenInCodexPanel`, `CodexRunsList`, `CodexRunMarker`) under Issue · Header and
-Workflow · Board; the Skills entries (`entries/skills.tsx`) under Library; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
+Workflow · Board; the Codex entries (`entries/codex.tsx`: `CodexActions`, `CodexRunStatus`, `CodexRunNotice`, `OpenInCodexPanel`, `CodexRunsList`, `CodexRunMarker`, with variants for Claude Code and for a run on a bridge) under Issue · Header and
+Workflow · Board; the live Do next step variants open the connect flow when no agent is connected (the nav's agent row connects one); the Skills entries (`entries/skills.tsx`) under Library; `entries/issue-delivery.tsx` holds `CriteriaTab`, `GitTab`, `PullRequestRow`, `CommitRow`, `CiTab`,
 `PipelineRow` and `RunStateIcon`; `entries/issue-header.tsx` holds `HandoffPanel` (with the button, compact, and the panel before, after and without the clipboard); `entries/shared.tsx` holds `SkillHint` and `MetaLine`.
-The Kit's `EmptyState`, `CopyButton` and `CodeBlock` examples use real skill names and real commands (`codex '…'`), never `wf …`. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
+The Kit's `EmptyState`, `CopyButton` and `CodeBlock` examples use real skill names and real commands (`codex '…'`), never `wf …`; its "board · no work yet" example names the agent the nav row names (`agentName(usePreferredAgent())`), as the board does. The legacy `NewIssueDialog`, `NewGroupDialog` and `NewIssueContext` entries are gone with the dialogs. The board's `BoardToolbar` variants pass
 `needsYou={{ requests, issues }}`, so the Needs you count shows (and a variant has the filter on). Foundations shows the tokens live (surfaces,
 accent and signals, readable signal text, scrim and the z scale, status colors, the hue scale). The "hover footer (forced open)" board variant
 forces the footer open with a selector on `IssueCardFooter`; the real footer is an overlay on the card's last row, and so is this one.
@@ -986,8 +1044,10 @@ its config, authors, glossary, library and `_group.md` files and has none of the
 sample entries, so each shows a dangling reference, F009, until the sample is loaded: 18 F009 warnings and one Q013 info, no
 error). Workspace "wf" (`id_prefix = "wf"`), acting
 author **shruti**. Authors (`authors.md`):
+(`lanes:` is the data field the skills route work by; the UI calls it "areas".)
 - `shruti` human, Shruti Joshi, color 1, lanes web, skills
 - `claude-opus` agent, claude-code, model claude-opus-5-5, color 7, coordinator
+- `claude` agent, Claude Code, claude-code, color 7: the author of a connected Claude Code's runs; it writes nothing in the sample, and is listed so a run raises no Q012
 - `codex` agent, codex, color 2, lanes server, core
 - `claude-sonnet` agent, claude-code, model claude-sonnet-5-5, color 3, lanes web
 - `cursor-bot` agent, cursor, color 4, lanes web
@@ -1001,7 +1061,7 @@ Groups (root = `issues/`, implicit title "Issues"):
 
 The rich dogfood issue **`wf-3k9x2` "Push board updates over SSE"** in `issues/wf/web/live-board-updates`: status
 in_progress, priority high, size m, owner shruti, coordinator claude-opus (live lease). Criteria SC-1…SC-5 (SC-1, SC-2
-verified, SC-3 claimed, SC-4, SC-5 open). Tasks T-1…T-5 across lanes core, server, web in 3 phases (T-1 done, T-2
+verified, SC-3 claimed, SC-4, SC-5 open). Tasks T-1…T-5 across the areas core, server and web (the `lane` field) in 3 phases (T-1 done, T-2
 review, T-3 in_progress claimed by codex with steps 1/2, T-4 todo + ready, T-5 todo blocked by deps). current_state
 with a blocking needs-you request `Q-4m2pz` to shruti ("Approve keeping SSE instead of WebSocket for the board?",
 ref D-7f3k2). ~10 changes over 2 days incl. a `failure` and a `verify` pass; decisions incl. `D-7f3k2` accepted

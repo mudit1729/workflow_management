@@ -3,6 +3,7 @@
 // guards on `undefined`.
 import { toast } from "sonner";
 import type { FlowStepId } from "@/gen/types";
+import type { AgentKind } from "@/lib/api/types";
 
 export type MockConnection = "live" | "reconnecting" | "offline";
 
@@ -30,6 +31,10 @@ export interface MockControls {
   resetFlow: () => void;
   /** Make the custom step `id` fail (or pass again) in the Do next step runs that reach it. */
   failCustomStep: (id: string, fail?: boolean) => void;
+  /** Connect the simulated agent (`"codex"` by default), as a finished pairing would. */
+  connectAgent: (kind?: AgentKind) => void;
+  /** End the agent connection. */
+  disconnectAgent: () => void;
 }
 
 export function getMockControls(): MockControls | undefined {

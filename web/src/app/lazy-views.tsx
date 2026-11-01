@@ -1,11 +1,13 @@
 // Views that are large and not needed for the first paint load as chunks of their own: the issue
-// drawer and page (the whole issue feature), Add work, the library viewer, Add team library,
-// Library · Skills and Settings. The board, the nav and the palette are what a first load shows. After the first paint the browser is idle and
+// drawer and page (the whole issue feature), Add work, the agent dialogs (connect flow and Agent
+// panel), the library viewer, Add team library, Library · Skills and Settings. The board, the nav
+// and the palette are what a first load shows. After the first paint the browser is idle and
 // fetches the rest, so the first click on a card or on + Add work finds its chunk already there.
 import { lazy } from "react";
 
 const loadIssue = () => import("@/features/issue");
 const loadAddWork = () => import("@/features/add-work/AddWorkDialog");
+const loadAgent = () => import("@/features/agent/AgentDialogs");
 const loadSkills = () => import("@/features/skills/SkillsView");
 const loadWiki = () => import("@/features/library/WikiView");
 const loadLibraryHome = () => import("@/features/library/LibraryHome");
@@ -15,6 +17,7 @@ const loadSettings = () => import("@/features/settings/SettingsView");
 export const IssueDrawer = lazy(() => loadIssue().then((m) => ({ default: m.IssueDrawer })));
 export const IssuePage = lazy(() => loadIssue().then((m) => ({ default: m.IssuePage })));
 export const AddWorkDialog = lazy(() => loadAddWork().then((m) => ({ default: m.AddWorkDialog })));
+export const AgentDialogs = lazy(() => loadAgent().then((m) => ({ default: m.AgentDialogs })));
 export const SkillsView = lazy(() => loadSkills().then((m) => ({ default: m.SkillsView })));
 export const WikiView = lazy(() => loadWiki().then((m) => ({ default: m.WikiView })));
 export const LibraryHome = lazy(() => loadLibraryHome().then((m) => ({ default: m.LibraryHome })));
@@ -28,6 +31,7 @@ export function preloadViews(): void {
   for (const load of [
     loadIssue,
     loadAddWork,
+    loadAgent,
     loadSkills,
     loadWiki,
     loadLibraryHome,

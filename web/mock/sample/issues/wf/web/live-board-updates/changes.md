@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-20T17:22+05:30 @claude-opus — Wrote the plan with 5 tasks in 3 lanes {#C-3m8tz}
+## 2026-10-20T17:22+05:30 @claude-opus — Wrote the plan with 5 tasks in 3 areas {#C-3m8tz}
 - kind: docs
 - files: `plan.md`
 - session: cc-41a9

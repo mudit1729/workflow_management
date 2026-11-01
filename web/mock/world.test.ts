@@ -201,7 +201,7 @@ describe("roster", () => {
     expect(root.children[2].implicit).toBe(true);
   });
 
-  it("uses all six authors", () => {
+  it("uses all six authors, and lists @claude for the runs of a connected Claude Code", () => {
     const used = new Set<string>();
     for (const s of world.issues) {
       for (const c of s.changes) used.add(c.author);
@@ -211,7 +211,8 @@ describe("roster", () => {
     expect([...used].sort()).toEqual(
       ["claude-opus", "claude-sonnet", "codex", "cursor-bot", "mudit", "shruti"].sort(),
     );
-    expect(world.authors.map((a) => a.handle).sort()).toEqual([...used].sort());
+    // @claude writes nothing in the sample; a connected Claude Code run does, and must not raise Q012.
+    expect(world.authors.map((a) => a.handle).sort()).toEqual([...used, "claude"].sort());
   });
 });
 
@@ -348,7 +349,7 @@ describe("wf-3k9x2, the dogfood issue", () => {
     ]);
   });
 
-  it("has a plan with 3 phases, 5 tasks and 3 lanes", () => {
+  it("has a plan with 3 phases, 5 tasks and 3 areas", () => {
     const p = detail("wf-3k9x2").plan;
     expect(p?.revision).toBe(3);
     expect(p?.updated_by).toBe("claude-opus");
@@ -811,7 +812,7 @@ describe("library and glossary", () => {
       "learning",
       "criterion",
       "task",
-      "lane",
+      "area",
       "lease",
       "author",
       "library item",

@@ -1,6 +1,7 @@
 // Search-param validators for the route tree. Each returns every key the route
 // knows, set to `undefined` when the value is missing or invalid, so a bad value
-// in the URL (`?swim=sideways`) never reaches a component.
+// in the URL (`?show=sideways`) never reaches a component. A key a route no longer knows (an old
+// `?swim=child`) is simply not returned, so it drops from the URL.
 import type { FilesSearch } from "@/features/files";
 import {
   type BoardSearch,
@@ -41,7 +42,6 @@ export function validateBoardSearch(raw: Raw): BoardSearch {
   const author = str(raw.author);
   return {
     group: str(raw.group),
-    swim: oneOf(raw.swim, ["child", "none"] as const),
     // Handles are stored without "@"; accept "@codex" from a pasted link.
     author: author?.replace(/^@/, ""),
     q: text(raw.q),

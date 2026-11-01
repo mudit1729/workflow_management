@@ -1,6 +1,6 @@
 // Navigation helpers. Features use these instead of raw router calls, so route
 // paths live in one place. Paths (contract 1.11):
-//   /w            board            search: group, swim, author, q, show, needs
+//   /w            board            search: group, author, q, show, needs
 //   /w/i/$id      board + drawer   search: board search + tab, log
 //   /i/$id        full issue page  search: tab, log (tab used below 768 px only)
 //   /lib                           Library home: the personal library, the team libraries, recent pages
@@ -35,7 +35,6 @@ export const ISSUE_TABS: IssueTab[] = [
 
 export interface BoardSearch {
   group?: string; // group id; the board shows that subtree
-  swim?: "child" | "none";
   author?: string; // handle filter
   q?: string; // text filter
   show?: "cancelled";
@@ -75,7 +74,14 @@ export function usePathname(): string {
   return useRouterState({ select: (s) => s.location.pathname });
 }
 
-const BOARD_KEYS: (keyof BoardSearch)[] = ["group", "swim", "author", "q", "show", "needs"];
+const BOARD_KEYS: (keyof BoardSearch)[] = ["group", "author", "q", "show", "needs"];
+/** Params an older build wrote to the URL (`?swim=`). The router passes unknown ones through, so a rewrite drops them. */
+const RETIRED_KEYS = ["swim"];
+function current(raw: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...raw };
+  for (const k of RETIRED_KEYS) delete out[k];
+  return out;
+}
 function pickBoard(s: Record<string, unknown>): BoardSearch {
   const out: Record<string, unknown> = {};
   for (const k of BOARD_KEYS) if (s[k] !== undefined) out[k] = s[k];
@@ -124,7 +130,7 @@ export function useBoardSearch(): [BoardSearch, (patch: Partial<BoardSearch>) =>
   const search = pickBoard(raw);
   const set = useCallback(
     (patch: Partial<BoardSearch>) => {
-      const next: Record<string, unknown> = { ...raw, ...patch };
+      const next: Record<string, unknown> = { ...current(raw), ...patch };
       for (const k of Object.keys(next))
         if (next[k] === undefined || next[k] === "") delete next[k];
       nav({ to: path.startsWith("/w") ? path : "/w", search: next, replace: true });
@@ -142,11 +148,12 @@ export function useIssueTab(defaultTab: IssueTab = "now") {
   const tab = (raw.tab as IssueTab | undefined) ?? defaultTab;
   const log = (raw.log as LogView | undefined) ?? "changes";
   const setTab = useCallback(
-    (t: IssueTab) => nav({ to: path, search: { ...raw, tab: t }, replace: true }),
+    (t: IssueTab) => nav({ to: path, search: { ...current(raw), tab: t }, replace: true }),
     [nav, raw, path],
   );
   const setLog = useCallback(
-    (v: LogView) => nav({ to: path, search: { ...raw, tab: "log", log: v }, replace: true }),
+    (v: LogView) =>
+      nav({ to: path, search: { ...current(raw), tab: "log", log: v }, replace: true }),
     [nav, raw, path],
   );
   return { tab, setTab, log, setLog };

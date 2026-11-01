@@ -207,3 +207,31 @@ describe("install commands", () => {
     }
   });
 });
+
+describe("author handles", () => {
+  const raw = (files: Record<string, string>) => Object.values(files)[0] ?? "";
+
+  test("using-wf names @claude for a Claude Code run under the bridge, and both authors.md carry it", () => {
+    const skill = allSkills(skillsCatalog()).find((s) => s.name === "using-wf");
+    const format = raw(
+      import.meta.glob("../../plugins/workflow/skills/using-wf/references/format.md", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>,
+    );
+    for (const text of [skill?.text ?? "", format]) {
+      expect(text).toContain("Claude Code is `@claude` when the bridge starts it");
+      expect(text).toContain("`@claude-opus` or `@claude-sonnet` by model");
+    }
+    const authors = Object.values(
+      import.meta.glob(["./sample/authors.md", "./workspace/authors.md"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>,
+    );
+    expect(authors).toHaveLength(2);
+    for (const text of authors) expect(text).toMatch(/^## @claude$/m);
+  });
+});

@@ -342,8 +342,8 @@ describe("the options", () => {
         onPick={noop}
       />,
     );
-    expect(out).toContain("Most tasks in a plan");
-    expect(out).toContain('aria-label="Most tasks in a plan"');
+    expect(out).toContain("Most tasks in a phase");
+    expect(out).toContain('aria-label="Most tasks in a phase"');
     expect(out.match(/data-state="on"/g)).toHaveLength(1);
     expect(out).not.toContain("A team setting");
   });

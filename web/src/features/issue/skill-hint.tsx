@@ -1,7 +1,8 @@
 // SkillHint: what an empty state offers when the work can also be done without the dashboard. It
-// names the one skill that does the job, links to it in Workdatabase · Skills, and gives
-// `codex '<prompt>'`, a command that exists today. It replaces hints that named skills the plugin
-// does not have and a CLI that has not been built (hints.test.ts keeps them out).
+// names the one skill that does the job, links to it in Library · Skills, and gives
+// `codex '<prompt>'` or `claude '<prompt>'`, a command that exists today. It replaces hints that
+// named skills the plugin does not have and a CLI that has not been built (hints.test.ts keeps
+// them out).
 //
 // "The skill that does the job" is the skill of a step of the flow (skills-flow-spec 4.3): the
 // built-in one unless the team or the person chose another in Settings. A caller asks
@@ -12,6 +13,8 @@ import { CopyButton } from "@/components/common";
 import { skillHref, useSkillsNav } from "@/features/skills/search";
 import type { FlowStepId } from "@/gen/types";
 import {
+  type AgentKind,
+  agentName,
   BUILTIN_FLOW,
   BUILTIN_SKILL_NAMES,
   BUILTIN_SKILLS,
@@ -20,6 +23,7 @@ import {
   shellQuote,
   useFlow,
   useFlowSkill,
+  usePreferredAgent,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -32,9 +36,12 @@ export const WF_SKILLS = BUILTIN_SKILL_NAMES;
  */
 export type WfSkill = string;
 
-/** `codex '<prompt>'`: what the Copy button of a hint puts on the clipboard. */
-export function codexAsk(prompt: string): string {
-  return `codex ${shellQuote(prompt)}`;
+/**
+ * `codex '<prompt>'`: what the Copy button of a hint puts on the clipboard. `claude '<prompt>'` for
+ * Claude Code: the agent's kind is also the name of its command.
+ */
+export function codexAsk(prompt: string, agent: AgentKind = "codex"): string {
+  return `${agent} ${shellQuote(prompt)}`;
 }
 
 /** What the Add work step does once the issues are written (`[flow.add] then`). */
@@ -48,7 +55,7 @@ export const addThen = (flow: ResolvedFlow): string =>
   String(flowOptionValue(flow, "add", "then") ?? "offer");
 
 /**
- * The prompts the issue hints hand to Codex, one place so the empty states say the same thing. Each
+ * The prompts the issue hints hand to the agent, one place so the empty states say the same thing. Each
  * takes the skill in effect for its step as its last argument (a reference; the built-in skill of
  * the step when left out).
  */
@@ -131,7 +138,7 @@ function SkillAnchor({ skill, className }: { skill: WfSkill; className?: string 
 
 export type SkillHintProps = SkillTarget & {
   /**
-   * What Codex is asked, one sentence that names the issue. A function gets the skill in effect
+   * What the agent is asked, one sentence that names the issue. A function gets the skill in effect
    * and the flow, so a hint for a step names the skill the flow runs: `(skill) => ASK.plan(id,
    * skill)`. A hint for a bare reference gets the built-in flow.
    */
@@ -142,9 +149,10 @@ export type SkillHintProps = SkillTarget & {
 };
 
 /**
- * "Codex does this with the <skill> skill", the prompt it is asked, and a button that copies the
- * `codex '<prompt>'` command. The prompt is shown as text that wraps (a long one stays readable);
- * the command it becomes is the button's tooltip and what lands on the clipboard.
+ * "<Agent> does this with the <skill> skill", the prompt it is asked, and a button that copies the
+ * `codex '<prompt>'` command (`claude '<prompt>'` for Claude Code, the connected agent or else the
+ * last one chosen). The prompt is shown as text that wraps (a long one stays readable); the command
+ * it becomes is the button's tooltip and what lands on the clipboard.
  */
 export function SkillHint(props: SkillHintProps) {
   const { prompt, align, className } = props;
@@ -182,7 +190,9 @@ function HintView({
   className?: string;
 }) {
   const prompt = typeof given === "function" ? given(skill, flow) : given;
-  const command = codexAsk(prompt);
+  const agent = usePreferredAgent();
+  const name = agentName(agent);
+  const command = codexAsk(prompt, agent);
   return (
     <div
       data-wf="SkillHint"
@@ -193,7 +203,7 @@ function HintView({
       )}
     >
       <p className="text-fg-muted text-sm">
-        Codex does this with the <SkillAnchor skill={skill} /> skill:
+        {name} does this with the <SkillAnchor skill={skill} /> skill:
       </p>
       {/* An absolute width: a percentage would not hold inside an empty state that sizes itself by
           its content, and a long prompt would push the Copy button out of the panel. */}
@@ -205,7 +215,7 @@ function HintView({
         >
           {prompt}
         </p>
-        <CopyButton text={command} label="Copy Codex command" />
+        <CopyButton text={command} label={`Copy ${name} command`} />
       </div>
     </div>
   );

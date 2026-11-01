@@ -124,14 +124,24 @@ install_to() { # install_to <label> <target folder>
   echo "  $n skills"
 }
 
-plugin_commands() {
+repo_slug() { # owner/repo on GitHub, or nothing
+  # The plugin manifest's `repository` first: it is committed, so a clone whose origin still has
+  # the name from before a rename (GitHub redirects it) prints the commands the dashboard shows.
   local url slug=""
-  url="$(git -C "$REPO" remote get-url origin 2>/dev/null || true)"
+  url="$(sed -n 's/^[[:space:]]*"repository"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$SRC/../.claude-plugin/plugin.json" 2>/dev/null | head -n 1 || true)"
+  [ -n "$url" ] || url="$(git -C "$REPO" remote get-url origin 2>/dev/null || true)"
   case "$url" in
     git@github.com:*) slug="${url#git@github.com:}" ;;
     https://github.com/*) slug="${url#https://github.com/}" ;;
   esac
-  slug="${slug%.git}"
+  slug="${slug%/}"
+  echo "${slug%.git}"
+}
+
+plugin_commands() {
+  local slug
+  slug="$(repo_slug)"
   echo "Claude Code plugin (marketplace workflow-marketplace, plugin workflow):"
   echo
   echo "  # inside a Claude Code session, from a local clone"

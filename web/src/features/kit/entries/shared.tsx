@@ -24,7 +24,7 @@ import { Button } from "@/components/ui";
 import { MetaLine } from "@/features/issue/MetaLine";
 import { ASK, SkillHint, SkillLink } from "@/features/issue/skill-hint";
 import type { IssueStatus, TaskStatus } from "@/gen/types";
-import { useAuthors, useIssue } from "@/lib/api";
+import { agentName, useAuthors, useIssue, usePreferredAgent } from "@/lib/api";
 import { STATUS_LABEL, STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/status";
 import { Caption, entry, type KitEntry, Row, V, WithSummary } from "../kit-ui";
 import { AUTHORS, ISSUE } from "./data";
@@ -361,6 +361,28 @@ function LintBadgeBody() {
 
 // ---------------------------------------------------------------- EmptyState
 
+/** The empty board's state: it names the agent the nav row names, as the board does. */
+function NoWorkYet() {
+  const agent = agentName(usePreferredAgent());
+  return (
+    <EmptyState
+      title="No work yet"
+      hint={`Add a group of work and ${agent} splits it into issues, or add one issue.`}
+      action={
+        <div className="flex items-center gap-2">
+          <Button variant="primary" size="sm">
+            <Plus size={14} strokeWidth={1.75} />
+            Add work
+          </Button>
+          <Button variant="secondary" size="sm">
+            Add one issue
+          </Button>
+        </div>
+      }
+    />
+  );
+}
+
 function EmptyStateBody() {
   return (
     <>
@@ -413,21 +435,7 @@ function EmptyStateBody() {
       </V>
       <V label="board · no work yet" width={420}>
         <div className="rounded-md border border-border">
-          <EmptyState
-            title="No work yet"
-            hint="Add a group of work and Codex splits it into issues, or add one issue."
-            action={
-              <div className="flex items-center gap-2">
-                <Button variant="primary" size="sm">
-                  <Plus size={14} strokeWidth={1.75} />
-                  Add work
-                </Button>
-                <Button variant="secondary" size="sm">
-                  Add one issue
-                </Button>
-              </div>
-            }
-          />
+          <NoWorkYet />
         </div>
       </V>
       <V label="title only" width={320}>
@@ -738,7 +746,7 @@ export const sharedEntries: KitEntry[] = [
     "Shared",
     "EmptyState",
     `${SRC}/EmptyState.tsx`,
-    "An empty panel should tell you what fills it: a button when the dashboard can do it, and the one skill that does it without the dashboard, with a Codex command to copy, so an empty tab is an instruction, not a dead end.",
+    "An empty panel should tell you what fills it: a button when the dashboard can do it, and the one skill that does it without the dashboard, with the command to copy for the connected agent (`codex` or `claude`), so an empty tab is an instruction, not a dead end.",
     EmptyStateBody,
   ),
   entry(

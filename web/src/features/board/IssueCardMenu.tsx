@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { copyCodexCommand, useNextStep } from "@/features/codex";
 import type { IssueStatus, IssueSummary } from "@/gen/types";
-import { useMoveIssue } from "@/lib/api";
+import { agentName, useMoveIssue, usePreferredAgent } from "@/lib/api";
 import { hrefFor, useOpenIssue } from "@/lib/nav";
 import { STATUS_LABEL, STATUS_ORDER, TRANSITIONS } from "@/lib/status";
 
@@ -162,25 +162,29 @@ export function IssueCardMenu({
 }
 
 /**
- * Open in Codex and Do next step. A component of its own so the run state is read only while the
- * menu is open (its content mounts then), not by every card on the board. While a run goes on the
- * issue the second item stops it, so a run started here (or from the palette) can be cancelled
- * without opening the issue; the card's marker shows the run either way.
+ * Open in <agent> and Do next step, named for the connected agent (the last one chosen when none
+ * is). A component of its own so the run state is read only while the menu is open (its content
+ * mounts then), not by every card on the board. While a run goes on the issue the second item
+ * stops it, so a run started here (or from the palette) can be cancelled without opening the
+ * issue; the card's marker shows the run either way. With no agent connected, Do next step opens
+ * the connect flow and starts the run after it.
  */
 function CodexItems({ issue }: { issue: IssueSummary }) {
   const next = useNextStep(issue);
+  const preferred = usePreferredAgent();
+  const busyName = agentName(next.run?.agent ?? preferred);
   return (
     <>
       <DropdownMenuItem icon={<Terminal {...ICON} />} onSelect={() => void copyCodexCommand(issue)}>
-        Open in Codex
+        Open in {agentName(preferred)}
       </DropdownMenuItem>
       {next.busy ? (
         <DropdownMenuItem
           icon={<Square {...ICON} />}
-          hint="Codex is working on it"
+          hint={`${busyName} is working on it`}
           onSelect={() => void next.cancel()}
         >
-          Cancel Codex's run
+          Cancel {busyName}'s run
         </DropdownMenuItem>
       ) : (
         <DropdownMenuItem icon={<Play {...ICON} />} onSelect={() => void next.start()}>

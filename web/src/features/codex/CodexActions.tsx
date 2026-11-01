@@ -1,16 +1,21 @@
-// CodexActions (plan D3, D4): "Open in Codex" and "Do next step", side by side in the issue header.
+// CodexActions (plan D3, D4, D12): "Open in Codex" and "Do next step", side by side in the issue
+// header. Both follow the connected agent: "Open in Claude Code" copies `claude '…'`.
 //
 //  - Open in Codex copies the command and shows the prompt (see OpenInCodex).
 //  - Do next step starts a background run. While it runs, the button's slot shows the live phase,
-//    a progress pulse and Cancel; a run with nothing to do says why on a line below, with a way to
-//    the tab that answers it. When the run ends the slot says how ("Done: T-4", Open log) for a
-//    few seconds, and that is the one announcement: the end-of-run toast stays quiet while this
-//    strip is on screen (see follow-run.ts). What the run did is markdown in the issue (the plan,
-//    the task, a change entry), a commit and a CI run, which the Plan, Log, Git and CI tabs show.
+//    a progress pulse and Cancel (a run on a real bridge: "Running on <host>" and the last line the
+//    agent printed); a run with nothing to do says why on a line below, with a way to the tab that
+//    answers it. When the run ends the slot says how ("Done: T-4", Open log) for a few seconds, and
+//    that is the one announcement: the end-of-run toast stays quiet while this strip is on screen
+//    (see follow-run.ts). With no agent connected the click opens the connect flow instead and the
+//    run starts after it. What the run did is markdown in the issue (the plan, the task, a change
+//    entry), a commit and a CI run, which the Plan, Log, Git and CI tabs show.
 //  - `children` are more buttons for the same row, such as the header's Copy context.
 import { Play } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
+import { openAgentPanel } from "@/app/shell-store";
 import { Button, Tooltip } from "@/components/ui";
+import { type AgentConnection, agentName, useAgent } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useIssueTab } from "@/lib/nav";
 import { OpenInCodex } from "./OpenInCodex";
@@ -22,16 +27,20 @@ import { useCodexIssue } from "./use-codex";
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 /**
- * What the button does right now. An issue without a plan has no task to claim, so its next step
- * is the plan (`planning-issues`, as `doing-next-step` step 3 says); otherwise it is the next
- * ready task.
+ * What the button does right now. Without a connected agent it says so: the click connects one. An
+ * issue without a plan has no task to claim, so its next step is the plan (`planning-issues`, as
+ * `doing-next-step` step 3 says); otherwise it is the next ready task.
  */
-function nextStepHint(issue: CodexIssue): string {
+export function nextStepHint(issue: CodexIssue, agent: AgentConnection): string {
+  const name = agentName(agent.agent ?? "codex");
+  if (agent.status === "lost")
+    return `${name} stopped answering. The click opens the agent panel, where you can reconnect.`;
+  if (agent.status !== "connected")
+    return "Needs a connected agent. The click connects one, then starts the next step.";
   const tasks = issue.progress?.tasks;
   if (tasks?.total === 0)
-    return "This issue has no plan yet. Codex writes plan.md from the criteria first, then claims T-1, logs the change, runs CI and finishes it.";
-  const base =
-    "Codex does the next ready task in the background: it claims the task, logs the change, runs CI and finishes it.";
+    return `This issue has no plan yet. ${name} writes plan.md from the criteria first, then claims T-1, logs the change, runs CI and finishes it.`;
+  const base = `${name} does the next ready task in the background: it claims the task, logs the change, runs CI and finishes it.`;
   if (tasks === undefined) return base;
   return tasks.ready === 0
     ? `${base} No task is ready right now.`
@@ -48,6 +57,7 @@ export interface CodexActionsProps {
 export function CodexActions({ issue, children, className }: CodexActionsProps) {
   const { runs, active, outcome, starting, start, cancel, dismiss } = useCodexIssue(issue);
   const { setTab } = useIssueTab();
+  const agent = useAgent();
 
   // Short results take the button's slot; a reason is a sentence and gets its own line.
   const slot =
@@ -89,6 +99,7 @@ export function CodexActions({ issue, children, className }: CodexActionsProps) 
     <div
       ref={root}
       data-wf="CodexActions"
+      data-issue={issue.id}
       data-busy={active ? "" : undefined}
       // detail is 0 for a click from the keyboard (Enter or Space on a button).
       onClickCapture={(e) => {
@@ -101,12 +112,13 @@ export function CodexActions({ issue, children, className }: CodexActionsProps) 
         {slot ? (
           <RunStatus
             run={slot}
+            host={agent.host}
             onCancel={cancel}
             onOpenLog={() => openTab("log")}
             className="@max-[440px]:min-w-0"
           />
         ) : (
-          <Tooltip content={nextStepHint(issue)}>
+          <Tooltip content={nextStepHint(issue, agent)}>
             <Button
               data-wf="DoNextStepButton"
               variant="secondary"
@@ -127,6 +139,10 @@ export function CodexActions({ issue, children, className }: CodexActionsProps) 
           run={notice}
           onOpen={(tab) => {
             openTab(tab);
+            dismiss();
+          }}
+          onOpenAgent={() => {
+            openAgentPanel();
             dismiss();
           }}
           onDismiss={dismiss}

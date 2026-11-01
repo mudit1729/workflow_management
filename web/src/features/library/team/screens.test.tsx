@@ -10,6 +10,13 @@ import { EXAMPLE, type Suggestion, screensFor } from "./flow";
 import { LinkScreen, PreviewScreen, RootScreen } from "./screens";
 import type { AddLibraryFlow } from "./useAddLibraryFlow";
 
+// RelativeTime reads the clock once, when it loads: pin it to the deps' `now` before any import, so
+// "2 days ago" does not turn into "3 days ago" as the calendar moves.
+vi.hoisted(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.parse("2026-10-30T12:00:00Z"));
+});
+
 const offline: Partial<GithubDeps> = {
   fetch: () => Promise.reject(new TypeError("Failed to fetch")),
   cache: new Map(),
