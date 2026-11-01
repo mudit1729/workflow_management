@@ -5,7 +5,7 @@ description: Use when someone asks where wf work stands, such as "what is the st
 
 # Checking status
 
-A read-only report. `scripts/wf-status.sh` (relative to this file) reads the markdown of the workspace and, for one issue, asks git and gh. The dashboard shows the same facts; this is the terminal view for people and agents without the UI. Format background: `../using-wf/references/format.md` sections 6, 7 and 11.
+A read-only report. `scripts/wf-status.sh` (relative to this file) reads the markdown of the workspace and, for one issue, asks git and gh. The dashboard shows the same facts; this is the terminal view for people and agents without the UI. Format background: `../using-wf/references/format.md` sections 6, 7 and 11. This is the Status step of the skills flow (`../using-wf/SKILL.md` section 3): a team may name another skill for it, but `scripts/wf-status.sh` stays, because other skills call it by path.
 
 ## Steps
 
@@ -21,15 +21,15 @@ A read-only report. `scripts/wf-status.sh` (relative to this file) reads the mar
    | Issues | count per status | `status:` of every `goal.md` |
    | Needs you | open requests, blocking first; `[answered]` marks one a human answered that nobody resolved | `## Needs you` of `current_state.md` |
    | Leases expired | a `claimed_by` whose `lease_until` is in the past, for a task or a coordinator | `plan.md`, `goal.md` |
-   | Stale | an `in_progress` task with no change entry or lease renewal within `task_hours`; an `in_progress` issue with no change or state update within `issue_hours` | `changes.md`, `current_state.md` |
+   | Stale | an `in_progress` task with no change entry or lease renewal within `task_hours`; an `in_progress` issue with no change or state update within `issue_hours` (the Status step's options, 4 and 24 by default; `../using-wf/scripts/wf-env.sh flow status task_hours`, `flow status issue_hours`; the script reads them from `[staleness]`) | `changes.md`, `current_state.md` |
    | Ready tasks | `todo` in a `planned` or `in_progress` issue, dependencies `done`, no live lease, `owns` free of live leases | `plan.md` |
    | Git, pull requests and CI | commits that mention the id (`git log --grep`), PRs (`gh pr list --search`), CI runs of those commits or of a branch named after the id (`gh run list`) | git, gh |
 
 3. **Handle missing sources.** The script names every source it skips (no git repository, no `gh`, not signed in, no network) and keeps going. Repeat that reason in your answer. Never guess a PR or CI result.
 4. **Answer the question asked.** Lead with the facts that need action: blocking requests, expired leases, then ready tasks. One line each, with the id and the next action:
    - a blocking request: who must answer it;
-   - an expired lease or a stale task: take it over with `doing-next-step` (say so in the change entry), or ask the holder;
-   - a ready task: `doing-next-step`.
+   - an expired lease or a stale task: take it over with the Do next step's skill (`wf-env.sh flow do`; built-in `doing-next-step`; say so in the change entry), or ask the holder;
+   - a ready task: the Do next step's skill.
 5. **Recompute by hand only if the script is missing:**
    - counts: `grep -rh --include=goal.md '^status:' <issues> | sort | uniq -c`
    - requests: `grep -rn --include=current_state.md '^- \[ \] Q-' <issues>`

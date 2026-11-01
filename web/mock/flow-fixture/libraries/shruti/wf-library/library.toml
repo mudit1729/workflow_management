@@ -1,0 +1,23 @@
+name = "Personal library"
+owner = "shruti"
+kind = "personal"
+
+# My skills flow: it applies to every workspace I work in (skills-flow-spec 3.2).
+[flow.plan]
+skill = "me:planning-small"
+
+[flow.do]
+finish = "review"
+
+# Ignored: the hand-off budget is a team setting and lives in the workspace's [context].
+[flow.handoff]
+budget_tokens = 10000
+
+[flow.custom.tidy-up]
+after = "do"
+skill = "me:tidying-up"
+
+[flow.custom.notify-me]
+after = "handoff"
+skill = "me:notifying-me"
+label = "Tell me when it is ready"

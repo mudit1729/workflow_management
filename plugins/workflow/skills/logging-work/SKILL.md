@@ -15,7 +15,7 @@ The three logs are what makes an issue traceable: every entry has a time, an aut
 | A choice was made between real options | `decisions.md` | `D-` | the choice as an imperative: "Push board updates over SSE" |
 | A rule worth keeping for later work | `learnings.md` | `L-` | the rule, subject first, full stop: "Compare files by hash, never by mtime." |
 
-If it is one of several lines of the same kind, collect them first and write the titles together (`writing-readable-bulk-text`).
+If it is one of several lines of the same kind, collect them first and write the titles together (the Writing style step's skill, `../using-wf/scripts/wf-env.sh flow style`; built-in `writing-readable-bulk-text`).
 
 ## Steps
 

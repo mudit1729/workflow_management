@@ -1,0 +1,8 @@
+# The team libraries this person added.
+[[team]]
+alias = "platform"
+url = "https://github.com/acme/platform-handbook"
+ref = "main"
+root = "docs"
+access = "public"
+added = 2026-10-30

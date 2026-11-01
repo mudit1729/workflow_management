@@ -5,7 +5,7 @@ description: Use when a wf issue has a goal.md but no plan.md, or its plan must 
 
 # Planning issues
 
-A plan turns the criteria of `goal.md` into tasks that one agent can finish in one session each, and that several agents can run in parallel. Read `../using-wf/SKILL.md` section 1 and `../using-wf/references/format.md` sections 6, 7, 10 and 12 first.
+A plan turns the criteria of `goal.md` into tasks that one agent can finish in one session each, and that several agents can run in parallel. Read `../using-wf/SKILL.md` sections 1 and 3 (the skills flow) and `../using-wf/references/format.md` sections 6, 7, 10 and 12 first.
 
 ## Steps
 
@@ -21,15 +21,17 @@ A plan turns the criteria of `goal.md` into tasks that one agent can finish in o
    - Every task has `lane` (area of the work, for example `core`, `server`, `web`, `docs`), `owns` (paths or globs it edits), `satisfies` (the `SC-n` it proves), `verify` (a command in backticks, or `manual`).
    - Keep `owns` disjoint between tasks that can run at the same time. The overlap test compares the text before the first glob character, so `tests/test_event.py` overlaps `tests/test_events.py`: give parallel tasks file names that do not start with each other. Add `depends_on` only for a real order. Make the ready set as wide as the work allows.
    - Every `SC-n` is covered by at least one task, and every task satisfies at least one criterion.
-   - Group tasks into `## Phase N: <name>` sections of at most 10 tasks. Keep the whole plan under 200 lines.
-   - Titles are imperative, verb first, one shape for the whole list (`writing-readable-bulk-text`). Steps are `- [ ]` lines of at most 20 words, each starting with a verb.
+   - Group tasks into `## Phase N: <name>` sections of at most `max_tasks` tasks (`../using-wf/scripts/wf-env.sh flow plan max_tasks`, default 8). A plan that needs more phases than fit in 200 lines, or whose criteria stand apart, is too big for one issue: propose splitting it with the Add work step's skill (`wf-env.sh flow add`; built-in `adding-work`). Keep the whole plan under 200 lines.
+   - Titles are imperative, verb first, one shape for the whole list (the Writing style step's skill, `wf-env.sh flow style`; built-in `writing-readable-bulk-text`). Steps are `- [ ]` lines of at most 20 words, each starting with a verb.
    - Do not set `claimed_by` or `lease_until`. Set `assignee` only if the issue names one.
 6. **Write `plan.md`** from the template in `format.md` section 6. Frontmatter: `updated_at` is `wf-env.sh now`, `updated_by` is your quoted handle, `revision` is 1 (or the old one plus 1).
 7. **Move the issue.** In `goal.md` change only the `status:` line: `backlog` to `planned`. A revision leaves the status alone.
-8. **Leave a trail.** Append a change entry with `logging-work` (`kind: docs`, `plan.md` under `files`, title "Wrote the plan with N tasks in M lanes"). If `current_state.md` is missing, create it with `summary` "Planned: N tasks in M lanes; <the ready ids> ready." (for example "T-1 and T-2 are ready.", ids from `wf-status.sh --ready`), `phase` the first phase, and `Next steps` 1 "Claim T-1 and start the first step."; if it exists, change only `summary`, `updated_at`, `updated_by` and `Next steps`.
+8. **Leave a trail.** Append a change entry with the Log step's skill (`wf-env.sh flow log`; built-in `logging-work`): `kind: docs`, `plan.md` under `files`, title "Wrote the plan with N tasks in M lanes". If `current_state.md` is missing, create it with `summary` "Planned: N tasks in M lanes; <the ready ids> ready." (for example "T-1 and T-2 are ready.", ids from `wf-status.sh --ready`), `phase` the first phase, and `Next steps` 1 "Claim T-1 and start the first step."; if it exists, change only `summary`, `updated_at`, `updated_by` and `Next steps`.
 9. **Check.** `pnpm -s -C web wf:lint <root>`; fix findings in the files you touched (max 3 rounds). Then run `../checking-status/scripts/wf-status.sh --ready <id>` to confirm the first tasks are ready. Report the task count, the lanes and the ready tasks.
 
-An xs or s issue with one obvious step may skip the plan when a person only asks to look at it. `doing-next-step` plans every issue that has no `plan.md` as the first step of its run (a one-task plan is fine), so the lease and the log entry always name a task.
+This skill does not run the custom steps after Plan (`wf-env.sh flow custom plan`), so they run once, whichever skill plans. When a person asked for the plan, run them yourself once step 9 is done, with the issue folder as input. When `adding-work` or `doing-next-step` sent you here, it runs them when you return (`../using-wf/SKILL.md` section 3).
+
+An xs or s issue with one obvious step may skip the plan when a person only asks to look at it. The Do next step's skill (`wf-env.sh flow do`; built-in `doing-next-step`) plans every issue that has no `plan.md` as the first step of its run (a one-task plan is fine), so the lease and the log entry always name a task.
 
 ## Example
 

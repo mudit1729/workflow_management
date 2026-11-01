@@ -5,9 +5,9 @@ description: Use when someone wants to add work to a wf workspace, such as "add 
 
 # Adding work
 
-Orchestrator. It is the headless twin of **+ Add work** in the dashboard: the same questions, the same files. It may call `writing-readable-bulk-text` for the titles and `planning-issues` afterwards. It never calls another orchestrator.
+Orchestrator. It is the headless twin of **+ Add work** in the dashboard: the same questions, the same files. It may call the Writing style step's skill for the titles and the Plan step's skill afterwards (`../using-wf/scripts/wf-env.sh flow style` and `flow plan` name them; the built-ins are `writing-readable-bulk-text` and `planning-issues`). It never calls another orchestrator.
 
-Read `../using-wf/SKILL.md` section 1 (find the workspace, your author handle) and the templates in `../using-wf/references/format.md` (sections 2, 4, 5 and the writing rules of section 12) first.
+Read `../using-wf/SKILL.md` sections 1 and 3 (find the workspace, your author handle, the skills flow) and the templates in `../using-wf/references/format.md` (sections 2, 4, 5 and the writing rules of section 12) first. Step 7 follows the option `then` (`../using-wf/scripts/wf-env.sh flow add then`; read it once).
 
 ## Steps
 
@@ -24,7 +24,7 @@ Read `../using-wf/SKILL.md` section 1 (find the workspace, your author handle) a
    - Give each issue exactly one EARS criterion (`format.md` section 4) with a measurable response and a `verify:` command or `manual`. Keep the criterion to 25 words or fewer: the linter counts it as a sentence (S01). The `verify:` command runs from the repository root.
    - Give each a size (xs, s, m, l) and a priority. An `l` issue is split again.
    - Order them so that dependencies come first. Set `blocked_by: [<issue id>]` only for a hard dependency.
-   - Write the titles with `writing-readable-bulk-text`: collect all of them, then use one shape (imperative verb first, the distinguishing words early). Use the glossary's words (issue, group).
+   - Write the titles with the Writing style step's skill (`wf-env.sh flow style`; built-in `writing-readable-bulk-text`): collect all of them, then use one shape (imperative verb first, the distinguishing words early). Use the glossary's words (issue, group).
 4. **Confirm.** If a person is present, show a table and wait for "all", "drop 2" or an edit:
 
    | # | Title | Size | Priority | Criterion |
@@ -34,9 +34,13 @@ Read `../using-wf/SKILL.md` section 1 (find the workspace, your author handle) a
 5. **Write the files.** Use `../using-wf/scripts/wf-env.sh` for ids and the time.
    - New group: `id group`, folder `<issues_dir>/<parent path>/<slug>/` (no parent path at the top level), file `_group.md` (`format.md` section 5): `title` the name as the requester wrote it, `slug` its kebab-case form; `color` the lowest unused 1 to 8 among siblings, `order` the highest sibling `order` plus 1, `owner` the requester, `goal` one line.
    - Each issue: `id issue`, folder `<group folder>/<slug>/`, file `goal.md` (`format.md` section 4). `status: backlog`, `created: <now>`, `owner` the requester or the group owner, `labels` from the request. `## Context` holds the why in 1 or 2 short paragraphs. Add `## Out of scope` and `## Links` only when you have content.
-   - Create new files only. Do not touch other issues and do not create `plan.md`, `current_state.md` or the logs.
-6. **Check.** `pnpm -s -C web wf:lint <root>`. Fix findings in the files you wrote (max 3 rounds). The board shows the new cards at once.
-7. **Report.** Print each new id, title and path, one line each. Offer `planning-issues` for the first issue.
+   - Create new files only. Do not touch other issues and do not create `plan.md`, `current_state.md` or the logs (step 6 creates one `changes.md` when a custom step fails).
+6. **Check.** `pnpm -s -C web wf:lint <root>`. Fix findings in the files you wrote (max 3 rounds). The board shows the new cards at once. Then run the custom steps after Add work (`wf-env.sh flow custom add`; `../using-wf/SKILL.md` section 3), handing each the new ids and paths.
+   - A custom step that fails is written to the `changes.md` of the first new issue (create it from `format.md` section 8: `kind: failure`, `result: fail`, the reason in `evidence`; lint it) and named in the report. The new issues have no `current_state.md`, so there is no `Needs you` request. A required step stops the run here: skip step 7 and say so in the report. An optional one does not stop it.
+7. **Report.** Print each new id, title and path, one line each. Then follow `then`:
+   - `offer` (the default): offer the Plan step's skill (`wf-env.sh flow plan`; built-in `planning-issues`) for the first issue.
+   - `plan`: run the Plan step's skill on every new issue in the order you wrote them, then the custom steps after Plan for that issue (`wf-env.sh flow custom plan`, the issue folder as input; the Plan step's skill leaves them to you), and add the plan results to the report.
+   - `stop`: end here; offer nothing.
 
 ## Example
 
@@ -97,4 +101,4 @@ A fresh agent session starts with no memory of the issue. The `SessionStart` hoo
 - Two titles start with the same words, or the verbs differ in tense.
 - A criterion says "fast", "easy" or "should", or any sentence of a `## Context` holds a hedge word ("may", "might", "probably") or runs past 25 words.
 - An id came from memory or from the sample instead of `wf-env.sh id`.
-- You also wrote `plan.md` or `current_state.md`: that is `planning-issues`.
+- You also wrote `plan.md` or `current_state.md` yourself: that is the Plan step's skill, and only when `then` is `plan`.

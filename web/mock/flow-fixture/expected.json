@@ -1,0 +1,39 @@
+{
+  "steps": {
+    "add": { "skill": "adding-work", "source": "built-in", "origin": "built-in", "options": { "then": "plan" } },
+    "plan": { "skill": "me:planning-small", "source": "me", "origin": "me", "options": { "max_tasks": 5 } },
+    "do": {
+      "skill": "doing-next-step",
+      "source": "built-in",
+      "origin": "built-in",
+      "options": { "finish": "review", "commit": "task" }
+    },
+    "log": { "skill": "logging-work", "source": "built-in", "origin": "built-in", "options": {} },
+    "handoff": {
+      "skill": "handing-off",
+      "source": "built-in",
+      "origin": "built-in",
+      "options": { "budget_tokens": 4000, "changes": 5 }
+    },
+    "status": {
+      "skill": "checking-status",
+      "source": "built-in",
+      "origin": "built-in",
+      "options": { "issue_hours": 12, "task_hours": 4 },
+      "unresolved": { "ref": "ws:gone-status", "origin": "team" }
+    },
+    "style": { "skill": "writing-readable-bulk-text", "source": "built-in", "origin": "built-in", "options": {} }
+  },
+  "custom": {
+    "add": [],
+    "plan": [],
+    "do": [
+      { "id": "security-check", "skill": "platform:checking-security", "required": true, "label": "Security check", "origin": "team" },
+      { "id": "changelog", "skill": "ws:writing-changelog", "required": false, "label": "Writing changelog", "origin": "team" },
+      { "id": "tidy-up", "skill": "me:tidying-up", "required": false, "label": "Tidying up", "origin": "me" }
+    ],
+    "handoff": [
+      { "id": "notify-me", "skill": "me:notifying-me", "required": false, "label": "Tell me when it is ready", "origin": "me" }
+    ]
+  }
+}

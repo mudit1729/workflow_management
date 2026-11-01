@@ -1,7 +1,8 @@
 // Fixture team repos: GitHub repos the prototype can read with no network. Each folder here is the
 // repo as GitHub would hold it, root included, so `acme-platform-handbook/` stands for
-// https://github.com/acme/platform-handbook (a `wf-library.toml` that points at `docs/`, ten
-// pages in three sections, a GIF, a video and an alert file). The link resolver in
+// https://github.com/acme/platform-handbook (a `wf-library.toml` that points at `docs/`, eleven
+// pages in four sections, a GIF, a video and an alert file). The fourth section, `skills/`, is a
+// skill folder (`checking-security`) that the skills flow can use as a custom step. The link resolver in
 // `libraries/github.ts` checks these first, in any of the link forms, and reads them through the
 // same `Repo` interface it uses for a real repo.
 //

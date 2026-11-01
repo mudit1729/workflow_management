@@ -11,7 +11,8 @@
 # parse accepts https://github.com/o/r, .../tree/<ref>/<path>, .../blob/<ref>/<path>.md,
 # git@github.com:o/r.git and o/r. kind is repo, tree or blob; rest is what follows tree/ or blob/
 # (ref and path together: a ref may hold slashes, so resolve it against the remote's branches).
-# alias is the repo name in lowercase ("me" and "t" are taken by the routes, so they get "-library").
+# alias is the repo name in lowercase ("me", "t" and "ws" are taken (the routes, and ws: in a skill
+# reference), so they get "-library").
 #
 # Exit codes: 0 ok, 1 not found or bad value (the reason goes to stderr).
 set -euo pipefail
@@ -69,7 +70,7 @@ parse() {
     case "$more" in */*) rest="${more#*/}" ;; *) die "no branch in the link: $in" ;; esac
   fi
   alias="$(alias_of "$repo")"
-  case "$alias" in me|t|"") alias="${alias:-library}-library" ;; esac
+  case "$alias" in me|t|ws|"") alias="${alias:-library}-library" ;; esac
   printf 'owner=%s\nrepo=%s\nkind=%s\nrest=%s\nalias=%s\nurl=https://github.com/%s/%s\n' \
     "$owner" "$repo" "$kind" "$rest" "$alias" "$owner" "$repo"
 }

@@ -38,6 +38,8 @@ done
 ROOT="$("$ENV_SH" root)"
 REPO="${WF_REPO:-$ROOT}"
 cfg() { WF_ROOT="$ROOT" "$ENV_SH" config "$1" 2>/dev/null || echo "$2"; }
+# The staleness hours are options of the Status step: the same answer as the dashboard's (a bad value is skipped).
+hours() { WF_ROOT="$ROOT" "$ENV_SH" flow status "$1" 2>/dev/null || echo "$2"; }
 ISSUES_DIR="$ROOT/$(cfg workspace.issues_dir issues)"
 [ -d "$ISSUES_DIR" ] || { echo "wf-status: no folder $ISSUES_DIR" >&2; exit 1; }
 
@@ -62,8 +64,8 @@ echo "$FILES" > "$LIST"
 
 awk -v listfile="$LIST" \
   -v root="$ROOT" -v only="$ONLY" -v now="$NOW_EPOCH" -v nowts="$NOW_TS" -v ready_only="$READY_ONLY" \
-  -v lease_min="$(cfg leases.minutes 60)" -v task_h="$(cfg staleness.task_hours 4)" \
-  -v issue_h="$(cfg staleness.issue_hours 24)" '
+  -v lease_min="$(cfg leases.minutes 60)" -v task_h="$(hours task_hours 4)" \
+  -v issue_h="$(hours issue_hours 24)" '
 BEGIN { while ((getline f < listfile) > 0) ARGV[ARGC++] = f; close(listfile) }
 function epoch(ts,   y, m, d, hh, mm, rest, sign, oh, om, off, yy, era, yoe, mp, doy, doe) {
   if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]/) return 0

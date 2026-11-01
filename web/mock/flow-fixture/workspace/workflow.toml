@@ -1,0 +1,38 @@
+wf_format = 1
+
+[workspace]
+name = "flow-fixture"
+issues_dir = "issues"
+library_dir = "library"
+id_prefix = "ff"
+
+[staleness]
+issue_hours = 12
+
+[context]
+budget_tokens = 4000
+
+# The skills flow: the team default. A step that is left out uses its built-in skill.
+[flow.add]
+then = "plan"
+
+[flow.plan]
+skill = "ws:acme-planning"
+max_tasks = 5
+
+# Unresolved on purpose: there is no skills/gone-status folder, so Status falls back to checking-status.
+[flow.status]
+skill = "ws:gone-status"
+
+# Custom steps run after the step named in `after`, by `order`, then by id.
+[flow.custom.security-check]
+after = "do"
+skill = "platform:checking-security"
+label = "Security check"
+required = true
+order = 1
+
+[flow.custom.changelog] # a trailing comment on a header must not hide the table
+after = "do"
+skill = "ws:writing-changelog"
+order = 2

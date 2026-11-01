@@ -102,7 +102,7 @@ The dashboard asks for the link, finds the library, shows a preview and adds it.
 4. **Ref and path.** `kind=repo`: the default branch. `tree` or `blob`: `rest` is `<ref>/<path>`, and a branch name may hold slashes, so list `git ls-remote --heads <url>` and take the longest branch name that is a prefix of `rest`; the rest is the path. No branch matches: the first segment is a tag or sha.
 5. **Clone** into `scripts/wf-lib.sh dir <o> <r>` (`~/.wf/libraries/<o>/<r>`): `git clone --depth 1 --branch <ref> <url> <dir>`, or `git -C <dir> pull --ff-only` when it exists. A private repo needs the person's own credentials. When the clone fails, tell them to sign in (`gh auth login`) or fix their SSH key. Never ask for a token and never write one to a file.
 6. **Find the root.** The first rule that applies: (1) a path in the link; (2) `wf-library.toml` at the repo root, key `root`; (3) the first of `library/`, `docs/`, `wiki/`, `handbook/` that holds a `.md` file; (4) the repo root. With a person present and more than one folder from rule 3, offer each as a numbered choice with its page count ("1. docs/ · 42 pages"), the first as the default. A `blob` link names a page, not a root: apply rules 2 to 4 and tell the person which page it was.
-7. **Alias.** The `alias` of step 1 (the repo name in lowercase), unless a `[[team]]` already uses it (add `-2`). `me` is the personal library and `t` is part of the routes, so neither is used.
+7. **Alias.** The `alias` of step 1 (the repo name in lowercase), unless a `[[team]]` already uses it (add `-2`). `me` is the personal library, `t` is part of the routes and `ws` is this workspace in a skill reference (`ws:<name>`), so none of them is used.
 8. **Append** one block to `$LIB/libraries.toml` (create the file if it is missing; do not rewrite the rest). `root` is left out when it is the repo root. `added` is today's date, an unquoted TOML date.
 
    ```toml
@@ -133,7 +133,7 @@ One commit per request. The dashboard commits its own edits as `Edit <path>`. If
 - A write happened without `pull --ff-only`, or after it failed.
 - A topic holds findings nobody gave you, or a finding has no source.
 - A media file over 25 MB is committed, an image has no caption, or a file sits outside a `media/` folder.
-- `libraries.toml` was rewritten instead of appended, or holds a token, a non-github.com url or the alias `me` or `t`.
+- `libraries.toml` was rewritten instead of appended, or holds a token, a non-github.com url or the alias `me`, `t` or `ws`.
 - You edited, committed in or pushed from a team library clone.
 - A secret, a token or private customer data is in a page.
 - A tree or blob link was split into ref and path without the remote's branch list.

@@ -6,7 +6,7 @@ Skills that run the whole wf issue flow from Claude Code or Codex, without the d
 
 | Skill | Does | Dashboard twin |
 |---|---|---|
-| `using-wf` | Finds the workspace, lists the formats (`references/format.md`), routes to the other skills | |
+| `using-wf` | Finds the workspace, lists the formats (`references/format.md`), routes to the other skills, explains the skills flow | **Settings → Skills flow** |
 | `adding-work` (orchestrator) | Splits an outcome into 3 to 6 issues and writes `_group.md` and `goal.md` files | **+ Add work** |
 | `planning-issues` | Writes `plan.md` with phases and tasks and moves the issue to `planned` | Plan tab |
 | `doing-next-step` | Plans the issue first when it has no plan, then claims the next ready task, does it, verifies it, logs it, updates `current_state.md`, commits with the trailer `Issue: <id>` | **Do next step**, **Open in Codex** |
@@ -19,7 +19,7 @@ Skills that run the whole wf issue flow from Claude Code or Codex, without the d
 | `summarizing-work` | Writes or refreshes `work/<workspace>/<group>/_group.md` and `<issue-id>.md` from a workspace, with a `rev` that shows when they went stale | **Summarize this group**, **Refresh** |
 | `querying-library` | Answers a question from a given set of pages, only from them, with numbered citations | **Ask library** |
 
-Helper scripts (plain bash and awk): `skills/using-wf/scripts/wf-env.sh` (workspace, time, ids, issue lookup), `skills/checking-status/scripts/wf-status.sh` (the report), `skills/keeping-a-library/scripts/wf-lib.sh` (the personal library folder, GitHub links, slugs) and `skills/summarizing-work/scripts/wf-rev.sh` (the rev of an issue or a group).
+Helper scripts (plain bash and awk): `skills/using-wf/scripts/wf-env.sh` (workspace, time, ids, issue lookup, the skills flow), `skills/checking-status/scripts/wf-status.sh` (the report), `skills/keeping-a-library/scripts/wf-lib.sh` (the personal library folder, GitHub links, slugs) and `skills/summarizing-work/scripts/wf-rev.sh` (the rev of an issue or a group).
 
 ## Install for Claude Code
 
@@ -41,9 +41,27 @@ Without the plugin system, copy the skills: `scripts/install-skills.sh --claude 
 scripts/install-skills.sh --codex                  # copies into <repo>/.agents/skills
 scripts/install-skills.sh --codex ~/.agents/skills # or for every project of this user
 scripts/install-skills.sh --print-agents-md >> AGENTS.md
+scripts/install-skills.sh --codex --from <workspace>/skills   # also installs the team's own skills (repeat --from for more)
 ```
 
 Codex reads `.agents/skills` from the working folder up to the repository root, and `AGENTS.md` tells it to use them. Only the frontmatter keys `name` and `description` are used, so the skills run unchanged in both tools. Install the skills together: they point at each other with relative paths (`../using-wf/references/format.md`). Run the script again after a plugin update.
+
+## Skills flow
+
+Each step of the work (Add work, Plan, Do next step, Log, Hand off, Status, Writing style) is run by a skill, and a team can swap that skill without editing the plugin. The team default is a `[flow.<step>]` table in `workflow.toml`; anyone can override a step for themselves in the `library.toml` of their personal library. The dashboard's **Settings → Skills flow** writes both. The skills read the flow through `skills/using-wf/scripts/wf-env.sh flow`, so a swap changes what agents run:
+
+```
+$ wf-env.sh flow
+add adding-work built-in built-in then=offer
+plan ws:acme-planning workspace team max_tasks=8
+do doing-next-step built-in built-in finish=verify commit=task
+...
+after:do security-check platform:checking-security true team
+```
+
+- A skill is named `planning-issues` (built-in), `ws:<name>` (`<workspace>/skills/<name>/SKILL.md`), `me:<name>` (the `skills/` of your personal library) or `<alias>:<name>` (the `skills/` of a team library you added). `wf-env.sh flow path <skill>` prints its `SKILL.md`; one that cannot be found falls back to the built-in skill and is reported. A copy of a built-in skill keeps its `../using-wf/...` paths, which mean the built-in folders beside `using-wf`, not the copy's folder.
+- Options change behavior (`then`, `max_tasks`, `finish`, `commit`, `budget_tokens`, `changes`, `issue_hours`, `task_hours`; `wf-env.sh flow origin <step> <option>` says whether a value is the default, the team's or yours), and custom steps run any skill after Add work, Plan, Do next step or Hand off, each handed the issue folder (and the task id and short sha after Do next step). A `required` custom step that fails stops the run; after Do next step the task goes to `blocked` and no criterion is ticked. The formats are in `skills/using-wf/references/format.md` section 3 and the rules in `skills/using-wf/SKILL.md` section 3.
+- Agents need the skills the flow names: install them beside the built-ins with `--from` (above). `node plugins/workflow/scripts/check-skills.mjs --with-builtins <skills folder>` checks such a folder.
 
 ## Use
 
@@ -94,7 +112,7 @@ wf-library/                      the personal library (private repo)
 ## Check your changes
 
 - `pnpm -s -C web wf:lint <workspace>` prints `file:line rule severity message` and exits 1 on any error. It is the stand-in for the future `wf lint`.
-- `node plugins/workflow/scripts/check-skills.mjs` checks the house rules for every `SKILL.md`: only `name` and `description` in the frontmatter, a description of at most 1024 characters that starts with "Use when" and names what to avoid, fewer than 300 lines.
+- `node plugins/workflow/scripts/check-skills.mjs` checks the house rules for every `SKILL.md`: only `name` and `description` in the frontmatter, a description of at most 1024 characters that starts with "Use when" and names what to avoid, fewer than 300 lines. `--with-builtins <folder>` checks a team or personal `skills/` folder as if it sat beside the built-ins.
 - `node plugins/workflow/scripts/check-work-revs.mjs` checks that `summarizing-work/scripts/wf-rev.sh` prints the `rev` the dashboard stores in each work summary of the sample (times are made neutral in both).
 - `claude plugin validate plugins/workflow --strict` checks the plugin manifest.
 

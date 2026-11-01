@@ -30,12 +30,64 @@ Every wf skill points here. The source is `docs/plan/contract.md` sections 1.2 t
 
 - **Quote handles in YAML frontmatter** (`owner: "@shruti"`). A bare `@` breaks the YAML (F001). Inside the markdown body (meta lists) write them bare (`- claimed_by: @codex`).
 - Lists in frontmatter are flow lists: `labels: [live, sse]`, `blocked_by: []`. In meta lists they are comma separated; paths and commands go in backticks.
-- Helper `../scripts/wf-env.sh` (relative to this file): `root`, `config leases.minutes`, `now`, `later 60`, `id issue|group|change|decision|learning|request`, `issue <id|slug>`, `author`. The by-hand equivalents: `date +%Y-%m-%dT%H:%M%z` (insert a colon in the offset); `LC_ALL=C tr -dc '0-9a-hjkmnp-tv-z' </dev/urandom | head -c5`, then `grep -r <id> <workspace>` must find nothing.
+- Helper `../scripts/wf-env.sh` (relative to this file): `root`, `config leases.minutes`, `now`, `later 60`, `id issue|group|change|decision|learning|request`, `issue <id|slug>`, `author`, `flow` (section 3). The by-hand equivalents: `date +%Y-%m-%dT%H:%M%z` (insert a colon in the offset); `LC_ALL=C tr -dc '0-9a-hjkmnp-tv-z' </dev/urandom | head -c5`, then `grep -r <id> <workspace>` must find nothing.
 - Author: `$WF_AUTHOR`, else the `authors.md` entry for your runtime (Codex is `@codex`; Claude Code is `@claude-opus` or `@claude-sonnet` by model), else ask. If your handle is missing from `authors.md`, add a block (section 9) before you write entries (Q012).
 
 ## 3. workflow.toml (read it, rarely write it)
 
-`wf_format = 1`; `[workspace] name, issues_dir="issues", library_dir="library", id_prefix="wf"`; `[leases] minutes=60`; `[staleness] issue_hours=24, task_hours=4`; `[context] budget_tokens=6000, changes=5, library=3`; `[lint] disable=[...]`; `[server] port, author`.
+`wf_format = 1`; `[workspace] name, issues_dir="issues", library_dir="library", id_prefix="wf"`; `[leases] minutes=60`; `[staleness] issue_hours=24, task_hours=4`; `[context] budget_tokens=6000, changes=5, library=3`; `[flow]` (below); `[lint] disable=[...]`; `[server] port, author`.
+
+**The skills flow (`[flow]`).** Which skill runs each step. A step that is left out runs its built-in skill. Scalars only (strings, integers, booleans): one table per step and one per custom step, no arrays, no inline tables. Write the table names bare (`[flow.plan]`); `[flow."plan"]` is the same table to TOML and is read as such. A comment after a table header or a value is fine.
+
+```toml
+[flow.plan]
+skill = "ws:acme-planning"
+max_tasks = 8
+
+[flow.do]
+finish = "review"
+
+# Custom steps run after the step named in `after`, in `order`.
+[flow.custom.security-check]
+after = "do"
+skill = "platform:checking-security"
+label = "Security check"
+required = true
+order = 1
+```
+
+- Steps: `add` (`adding-work`), `plan` (`planning-issues`), `do` (`doing-next-step`), `log` (`logging-work`), `handoff` (`handing-off`), `status` (`checking-status`), `style` (`writing-readable-bulk-text`); the built-in skill is in parentheses. Keys: `skill` and the step's options.
+- A custom step id is kebab-case. `after` is `add`, `plan`, `do` or `handoff`. `required` defaults to `false`, `order` (a whole number, 0 or more) to 1, `label` to the skill's name in words. A `skill` or `label` of white space only counts as left out.
+- The same tables in the `library.toml` of the personal library (`kind = "personal"`) override the team's, key by key. A person cannot change or remove a team custom step; their own run after the team's at the same point.
+- A skill is named by a reference:
+
+  | Reference | Source | Folder |
+  |---|---|---|
+  | `planning-issues` (a bare name) | built-in | beside `using-wf` |
+  | `ws:<name>` | this workspace | `<workspace root>/skills/<name>/` |
+  | `<alias>:<name>` | a team library | `skills/<name>/` under the library's root; the alias is a `[[team]]` block of the personal `libraries.toml` |
+  | `me:<name>` | the personal library | `skills/<name>/` |
+
+  A skill folder is like a built-in one: `SKILL.md` with `name` and `description` only, optional `scripts/` and `references/`. A reference that does not resolve falls back to the built-in skill and is reported.
+- Options (default first). The skills read them with `wf-env.sh flow <step> <option>`; a value that is not listed is skipped.
+
+  | Step | Option | Values | Effect |
+  |---|---|---|---|
+  | `add` | `then` | `offer`, `plan`, `stop` | after writing the issues: offer the Plan step for the first one, plan every new issue, or stop |
+  | `plan` | `max_tasks` | `8`, `5`, `12` | the most tasks in a phase before the plan is split into phases or issues |
+  | `do` | `finish` | `verify`, `review` | a task whose `verify` passed goes to `done`, or every task goes to `review` for a person |
+  | `do` | `commit` | `task`, `none` | commit after each task with the `Issue:` trailer, or leave the changes for a person to commit |
+  | `handoff` | `budget_tokens` | `6000`, `4000`, `10000` | stored in `[context] budget_tokens` (team only) |
+  | `handoff` | `changes` | `5`, `3`, `10` | stored in `[context] changes` (team only) |
+  | `status` | `issue_hours` | `24`, `12`, `48` | stored in `[staleness] issue_hours` (team only) |
+  | `status` | `task_hours` | `4`, `2`, `8` | stored in `[staleness] task_hours` (team only) |
+
+  `log` and `style` have no options. The numbers are the values the dashboard offers; any whole number above 0 works (a TOML integer: `8`, `+8`, `1_000`). A float (`8.0`), a negative number, and a number or `true` written in quotes are skipped.
+- `wf-env.sh flow` prints the result: the personal value, else the team's, else the built-in default. See `using-wf/SKILL.md` section 3.
+- **The flow line of a context bundle.** When the flow in effect differs from the built-in one, the header of a `handing-off` bundle ends with one line, `skills flow: ` and the differences joined by ` · `, in the order of the steps (Add work, Plan, Do next step, Log, Hand off, Status, Writing style). The line is left out when nothing differs. Each part is one of:
+  - `<Step>: <skill> (team)` or `(personal)` for a step whose skill is not its built-in one: `Plan: ws:acme-planning (team)`.
+  - `<Step>: <phrase> (team)` or `(personal)` for an option that is not at its default and was set by a file. Its origin is `wf-env.sh flow origin <step> <option>`: `team` is `(team)`, `me` is `(personal)`, and `built-in` is the default, which is left out. The phrase is lowercase: `Do next step: tasks finish in review (personal)`. The phrases are `plans every new issue`, `stops after adding`, `up to N tasks`, `tasks finish in review`, `leaves the commit to a person`, `bundle up to N tokens` (`4,000`), `last N changes`, `issues go stale after N h`, `tasks go stale after N h`.
+  - `After <Step>: <label> (<skill>[, must pass][, personal])` for each custom step that runs: `After Do next step: Security check (platform:checking-security, must pass)`. A custom step whose skill does not resolve is left out.
 
 ## 4. goal.md
 
@@ -347,12 +399,12 @@ library = 3
 - Changes in past tense. State and criteria in present tense. Decisions and learnings start with the point (R13).
 - No hedge words: maybe, probably, perhaps, possibly, likely, might, may, somewhat, hopefully, basically (S06). State the fact or write it as an assumption.
 - Do not start an entry body with "It" or "This". No contractions (S11). Always use full timestamps (S13).
-- Titles of any list (issues, tasks, change entries) follow the `writing-readable-bulk-text` skill.
+- Titles of any list (issues, tasks, change entries) follow the Writing style step's skill (`wf-env.sh flow style`; built-in `writing-readable-bulk-text`).
 
 ## 13. Linking commits (traceability)
 
 - Every commit for an issue ends with the trailer line `Issue: wf-3k9x2` (second `-m`, or a blank line and the trailer). Branches may be named `wf-3k9x2/<slug>`.
-- Change entries carry `commit:` with the short sha. The dashboard and `checking-status` derive commits, pull requests and CI from these; they are never written by hand into the workspace.
+- Change entries carry `commit:` with the short sha. The dashboard and the Status step's skill (`checking-status`) derive commits, pull requests and CI from these; they are never written by hand into the workspace.
 
 ## 14. Self-check after writing
 
@@ -369,5 +421,6 @@ Work on <id> "<title>" in <issue path>. Read current_state.md first, then use th
 ```
 
 - `<issue path>` is the issue folder relative to the workspace, for example `issues/wf/web/live-board-updates`.
+- The name in the parentheses is the skill of the Do next step in effect (`wf-env.sh flow do`). With the built-in skill it is `doing-next-step`, word for word the sentence above; if the flow names `ws:acme-doing`, the sentence ends `(ws:acme-doing).`
 - Interactive Codex: `codex '<prompt>'`. This is what the button copies and what the bundle's `To resume:` line prints. Wrap the prompt in single quotes; a single quote inside the title is written `'\''`.
 - Headless run: `codex exec '<prompt>'`. Use it in scripts and evals, not in the button.
