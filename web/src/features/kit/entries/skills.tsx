@@ -1,4 +1,5 @@
 // Kit entries of Library · Skills (src/features/skills).
+import { FIXTURE_SHELVES } from "@/features/settings/fixtures";
 import { InstallPanel, SkillItemView, SkillRow, SkillSource, SkillsView } from "@/features/skills";
 import { allSkills, type Skill, type SkillsCatalog, useSkills } from "@/lib/api";
 import { entry, type KitEntry, Loading, Sandbox, V } from "../kit-ui";
@@ -55,25 +56,42 @@ function SkillsViewBody() {
 
 // ---------------------------------------------------------------- SkillRow
 
+/** A skill of the workspace and one of mine, from the made-up shelves of the Settings frames. */
+const WORKSPACE_SKILL = FIXTURE_SHELVES[0]?.skills[0];
+const INVALID_SKILL = FIXTURE_SHELVES.flatMap((s) => s.skills).find((s) => s.problem);
+
 function SkillRowBody() {
   return (
-    <V
-      label="three rows · the second selected"
-      note="The words that differ lead: “Use when” steps back because every row starts with it."
-      width={640}
-    >
-      <Sandbox quiet path="/skills">
-        <WithSkills>
-          {(_catalog, skills) => (
-            <ul className="m-0 list-none divide-y divide-border rounded-md border border-border p-0">
-              {skills.slice(0, 3).map((skill, i) => (
-                <SkillRow key={skill.path} skill={skill} selected={i === 1} onSelect={() => {}} />
-              ))}
-            </ul>
-          )}
-        </WithSkills>
-      </Sandbox>
-    </V>
+    <>
+      <V
+        label="three rows · the second selected"
+        note="The words that differ lead: “Use when” steps back because every row starts with it."
+        width={640}
+      >
+        <Sandbox quiet path="/skills">
+          <WithSkills>
+            {(_catalog, skills) => (
+              <ul className="m-0 list-none divide-y divide-border rounded-md border border-border p-0">
+                {skills.slice(0, 3).map((skill, i) => (
+                  <SkillRow key={skill.ref} skill={skill} selected={i === 1} onSelect={() => {}} />
+                ))}
+              </ul>
+            )}
+          </WithSkills>
+        </Sandbox>
+      </V>
+      {INVALID_SKILL && (
+        <V
+          label="a skill that fails the rules of check-skills"
+          note="A skill of the workspace, of a library or of mine is not checked until it is written: the row says what is wrong."
+          width={640}
+        >
+          <ul className="m-0 list-none divide-y divide-border rounded-md border border-border p-0">
+            <SkillRow skill={INVALID_SKILL} selected={false} onSelect={() => {}} />
+          </ul>
+        </V>
+      )}
+    </>
   );
 }
 
@@ -94,7 +112,16 @@ function InstallPanelBody() {
         note="Without a marketplace only the Codex command is left."
         width={640}
       >
-        <InstallPanel catalog={{ plugins: [] }} />
+        <InstallPanel catalog={{ plugins: [], shelves: [] }} />
+      </V>
+      <V
+        label="with the skills of this workspace, a library and mine"
+        note="Their skills are not in the plugin: each place has its own command, which installs them beside the built-in ones."
+        width={640}
+      >
+        <WithSkills>
+          {(catalog) => <InstallPanel catalog={{ ...catalog, shelves: FIXTURE_SHELVES }} />}
+        </WithSkills>
       </V>
       <V label="narrow · 340 px" note="Long commands wrap instead of hiding." width={340}>
         <WithSkills>{(catalog) => <InstallPanel catalog={catalog} />}</WithSkills>
@@ -138,6 +165,23 @@ function SkillItemViewBody() {
           <ItemBody name={ENTRY_SKILL} mode="source" />
         </Sandbox>
       </V>
+      {WORKSPACE_SKILL && FIXTURE_SHELVES[0] && (
+        <V
+          label="a skill of this workspace"
+          note="It says where it lives and gives the command that installs it."
+          width={600}
+          height={640}
+        >
+          <Sandbox quiet path="/skills">
+            <SkillItemView
+              skill={WORKSPACE_SKILL}
+              shelf={FIXTURE_SHELVES[0]}
+              defaultView="rendered"
+              onClose={() => {}}
+            />
+          </Sandbox>
+        </V>
+      )}
     </>
   );
 }

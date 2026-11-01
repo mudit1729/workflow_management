@@ -1,12 +1,14 @@
 // One skill, read from its SKILL.md. The page is the rendered file (its frontmatter as a header,
 // then every block tied to its line by the library's markdown viewer); "Source" shows the text
-// with line numbers. Same toolbar and path row as a library item.
+// with line numbers. Same toolbar and path row as a library item. A skill of this workspace, of a
+// team library or of mine says where it lives and gives the command that installs it beside the
+// built-in ones (a skill nobody installed cannot run, whatever the flow names).
 import { ArrowLeft, ScrollText, X } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/common";
 import { Button, Chip, IconButton, Segmented } from "@/components/ui";
 import { MarkdownDocument, Properties, Property } from "@/features/library/MarkdownDocument";
-import type { Skill, SkillPlugin } from "@/lib/api";
+import { installFromCommand, type Skill, type SkillPlugin, type SkillShelf } from "@/lib/api";
 import { SkillSource } from "./SkillSource";
 
 export type SkillMode = "rendered" | "source";
@@ -14,6 +16,8 @@ export type SkillMode = "rendered" | "source";
 export interface SkillItemViewProps {
   skill: Skill;
   plugin?: SkillPlugin;
+  /** Where the skill lives, when it is not built in. */
+  shelf?: SkillShelf;
   /** Closes the pane (or goes back, on a small screen). Without it no close button shows. */
   onClose?: () => void;
   /** `screen` is the small-screen variant: the skill fills the page and the button reads "Skills". */
@@ -24,16 +28,18 @@ export interface SkillItemViewProps {
 export function SkillItemView({
   skill,
   plugin,
+  shelf,
   onClose,
   variant = "pane",
   defaultView = "rendered",
 }: SkillItemViewProps) {
-  // Keyed by name: opening another skill starts on the page again, at the top.
+  // Keyed by reference: opening another skill starts on the page again, at the top.
   return (
     <Body
-      key={skill.name}
+      key={skill.ref}
       skill={skill}
       plugin={plugin}
+      shelf={shelf}
       onClose={onClose}
       variant={variant}
       defaultView={defaultView}
@@ -44,6 +50,7 @@ export function SkillItemView({
 function Body({
   skill,
   plugin,
+  shelf,
   onClose,
   variant,
   defaultView,
@@ -75,9 +82,18 @@ function Body({
           <ScrollText aria-hidden size={14} strokeWidth={1.75} />
           Skill
         </span>
-        <Chip tone="outline" title={`Ships in the ${plugin?.name ?? skill.plugin} plugin`}>
-          {plugin?.name ?? skill.plugin}
-        </Chip>
+        {shelf ? (
+          <Chip
+            tone={shelf.source === "me" ? "accent" : "outline"}
+            title={`Read from the skills folder of ${shelf.name}`}
+          >
+            {shelf.name}
+          </Chip>
+        ) : (
+          <Chip tone="outline" title={`Ships in the ${plugin?.name ?? skill.plugin} plugin`}>
+            {plugin?.name ?? skill.plugin}
+          </Chip>
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Segmented
             size="sm"
@@ -123,7 +139,7 @@ function Body({
               text={skill.text}
               variant="pane"
               margin={24}
-              frontmatter={<SkillHeader skill={skill} plugin={plugin} />}
+              frontmatter={<SkillHeader skill={skill} plugin={plugin} shelf={shelf} />}
               onJump={showSource}
             />
           </div>
@@ -134,7 +150,15 @@ function Body({
 }
 
 /** The frontmatter as a header: the name, the whole description, and where it comes from. */
-function SkillHeader({ skill, plugin }: { skill: Skill; plugin?: SkillPlugin }) {
+function SkillHeader({
+  skill,
+  plugin,
+  shelf,
+}: {
+  skill: Skill;
+  plugin?: SkillPlugin;
+  shelf?: SkillShelf;
+}) {
   // The rest of the description ("Orchestrator. …  Avoid for …") steps back behind the sentence
   // that says when to use the skill.
   const rest =
@@ -151,19 +175,43 @@ function SkillHeader({ skill, plugin }: { skill: Skill; plugin?: SkillPlugin }) 
       </p>
       {rest && <p className="text-fg-faint text-sm leading-normal">{rest}</p>}
       {/* One key and its value per row: a two-column grid broke the pairs across the columns. */}
+      {skill.problem && <p className="text-danger text-sm">Not a valid skill: {skill.problem}</p>}
       <Properties>
-        <Property label="plugin" wide>
-          {plugin?.name ?? skill.plugin}
-          {plugin?.version && <span className="text-fg-faint"> · v{plugin.version}</span>}
+        {shelf ? (
+          <Property label="source" wide>
+            {shelf.name}
+          </Property>
+        ) : (
+          <Property label="plugin" wide>
+            {plugin?.name ?? skill.plugin}
+            {plugin?.version && <span className="text-fg-faint"> · v{plugin.version}</span>}
+          </Property>
+        )}
+        <Property label="ref" wide>
+          <code className="font-mono text-sm">{skill.ref}</code>
         </Property>
         <Property label="lines" wide>
           <span className="tabular">{skill.lines}</span>
         </Property>
-        <Property label="claude" wide>
-          <code className="font-mono text-sm">
-            /{plugin?.name ?? skill.plugin}:{skill.name}
-          </code>
-        </Property>
+        {shelf ? (
+          <Property label="install" wide>
+            <span className="flex min-w-0 items-start gap-1">
+              <code className="min-w-0 break-words font-mono text-sm">
+                {installFromCommand(shelf, "codex")}
+              </code>
+              <CopyButton
+                text={installFromCommand(shelf, "codex")}
+                label="Copy the install command"
+              />
+            </span>
+          </Property>
+        ) : (
+          <Property label="claude" wide>
+            <code className="font-mono text-sm">
+              /{plugin?.name ?? skill.plugin}:{skill.name}
+            </code>
+          </Property>
+        )}
       </Properties>
     </header>
   );

@@ -1,7 +1,6 @@
 // Views that are large and not needed for the first paint load as chunks of their own: the issue
-// drawer and page (the whole issue feature), Add work, the library viewer, Add team library and
-// Library · Skills. The board, the
-// nav and the palette are what a first load shows. After the first paint the browser is idle and
+// drawer and page (the whole issue feature), Add work, the library viewer, Add team library,
+// Library · Skills and Settings. The board, the nav and the palette are what a first load shows. After the first paint the browser is idle and
 // fetches the rest, so the first click on a card or on + Add work finds its chunk already there.
 import { lazy } from "react";
 
@@ -11,6 +10,7 @@ const loadSkills = () => import("@/features/skills/SkillsView");
 const loadWiki = () => import("@/features/library/WikiView");
 const loadLibraryHome = () => import("@/features/library/LibraryHome");
 const loadAddLibrary = () => import("@/features/library/team/AddTeamLibraryDialog");
+const loadSettings = () => import("@/features/settings/SettingsView");
 
 export const IssueDrawer = lazy(() => loadIssue().then((m) => ({ default: m.IssueDrawer })));
 export const IssuePage = lazy(() => loadIssue().then((m) => ({ default: m.IssuePage })));
@@ -21,6 +21,7 @@ export const LibraryHome = lazy(() => loadLibraryHome().then((m) => ({ default: 
 export const AddTeamLibraryDialog = lazy(() =>
   loadAddLibrary().then((m) => ({ default: m.AddTeamLibraryDialog })),
 );
+export const SettingsView = lazy(() => loadSettings().then((m) => ({ default: m.SettingsView })));
 
 /** Fetch every lazy view now. Failures are ignored: the view loads again when it is opened. */
 export function preloadViews(): void {
@@ -31,6 +32,7 @@ export function preloadViews(): void {
     loadWiki,
     loadLibraryHome,
     loadAddLibrary,
+    loadSettings,
   ])
     void load().catch(() => {});
 }

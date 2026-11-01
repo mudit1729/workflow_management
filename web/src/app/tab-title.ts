@@ -3,7 +3,8 @@ import { SUBVIEWS, subViewForPath, VIEWS } from "@/components/common";
 
 /**
  * "(3) Workflow · wf": the view, then the workspace. 3 = my open needs-you requests, no count at
- * zero. A sub-view that is not its view's home says so: "Library · Skills · wf".
+ * zero. A sub-view that is not its view's home says so: "Library · Skills · wf". Settings has no
+ * home page of its own, so each of its tabs says so: "Settings · Skills flow · wf".
  */
 export function tabTitle(path: string, workspace: string | undefined, count: number): string {
   const parts: string[] = [];
@@ -11,7 +12,7 @@ export function tabTitle(path: string, workspace: string | undefined, count: num
   if (sub) {
     const def = SUBVIEWS[sub];
     parts.push(VIEWS[def.view].label);
-    if (VIEWS[def.view].home !== sub) parts.push(def.label);
+    if (VIEWS[def.view].home !== sub || def.view === "settings") parts.push(def.label);
   } else if (path === "/kit" || path.startsWith("/kit/")) {
     parts.push("Kit");
   }

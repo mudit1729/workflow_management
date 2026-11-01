@@ -10,11 +10,19 @@ import {
 import { Suspense } from "react";
 import { WorkspaceView } from "@/features/files";
 import { KitPage } from "@/features/kit";
-// The search validator lives apart from the view, so the view can load when /skills opens.
+// The search validators live apart from the views, so a view can load when its route opens.
+import { validateSettingsEditSearch, validateSettingsFlowSearch } from "@/features/settings/search";
 import { validateSkillsSearch } from "@/features/skills/search";
 import { AppShell } from "./AppShell";
 import { BoardLayout } from "./BoardLayout";
-import { IssueDrawer, IssuePage, LibraryHome, SkillsView, WikiView } from "./lazy-views";
+import {
+  IssueDrawer,
+  IssuePage,
+  LibraryHome,
+  SettingsView,
+  SkillsView,
+  WikiView,
+} from "./lazy-views";
 import {
   redirectGlossary,
   redirectLibraryItem,
@@ -189,6 +197,63 @@ const skillsRoute = createRoute({
   },
 });
 
+// /settings — where the work's own rules are set. /settings itself opens the Skills flow; its step
+// panel is `?step=`, the editor of a skill copy is /settings/flow/edit. One lazy chunk (lazy-views.tsx).
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "settings",
+});
+
+const settingsIndexRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/",
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/flow", replace: true });
+  },
+});
+
+function SettingsPage({ page }: { page: "flow" | "edit" | "agent" | "workspace" }) {
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <SettingsView page={page} />
+    </Suspense>
+  );
+}
+
+const settingsFlowRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "flow",
+  validateSearch: validateSettingsFlowSearch,
+  component: function SettingsFlowRoute() {
+    return <SettingsPage page="flow" />;
+  },
+});
+
+const settingsEditRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "flow/edit",
+  validateSearch: validateSettingsEditSearch,
+  component: function SettingsEditRoute() {
+    return <SettingsPage page="edit" />;
+  },
+});
+
+const settingsAgentRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "agent",
+  component: function SettingsAgentRoute() {
+    return <SettingsPage page="agent" />;
+  },
+});
+
+const settingsWorkspaceRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "workspace",
+  component: function SettingsWorkspaceRoute() {
+    return <SettingsPage page="workspace" />;
+  },
+});
+
 // /inbox is gone (plan D5): what needs you is a filter of the board. Old links still land there.
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -230,6 +295,13 @@ const routeTree = rootRoute.addChildren([
   ]),
   glossaryRoute,
   skillsRoute,
+  settingsRoute.addChildren([
+    settingsIndexRoute,
+    settingsFlowRoute,
+    settingsEditRoute,
+    settingsAgentRoute,
+    settingsWorkspaceRoute,
+  ]),
   inboxRoute,
   filesRoute,
   kitRoute,

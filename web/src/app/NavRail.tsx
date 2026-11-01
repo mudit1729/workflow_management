@@ -18,6 +18,7 @@ import {
   Rows2,
   Rows3,
   Search,
+  Settings,
   Sun,
   WifiOff,
 } from "lucide-react";
@@ -143,7 +144,7 @@ export function NavRail({ collapsed = false, variant = "rail", onNavigate }: Nav
         {variant === "rail" && !isCollapsed && <DevPanel placement="nav" />}
       </div>
 
-      <NavFooter collapsed={isCollapsed} sheet={variant === "sheet"} />
+      <NavFooter collapsed={isCollapsed} sheet={variant === "sheet"} onNavigate={onNavigate} />
     </nav>
   );
 }
@@ -571,7 +572,15 @@ function useNotificationToggle() {
   return { notifications, toggle };
 }
 
-function NavFooter({ collapsed, sheet }: { collapsed: boolean; sheet: boolean }) {
+function NavFooter({
+  collapsed,
+  sheet,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  sheet: boolean;
+  onNavigate?: () => void;
+}) {
   const theme = usePrefs((s) => s.theme);
   const setTheme = usePrefs((s) => s.setTheme);
   const density = usePrefs((s) => s.density);
@@ -613,6 +622,29 @@ function NavFooter({ collapsed, sheet }: { collapsed: boolean; sheet: boolean })
     </Tooltip>
   );
 
+  // The gear opens Settings · Skills flow. It is a link, so it can open in a new tab, and it is
+  // marked while any Settings page is open.
+  const inSettings = usePathname().startsWith("/settings");
+  const settingsButton = (
+    <Tooltip content="Settings" shortcut="mod+," side={collapsed ? "right" : "top"}>
+      <Button
+        asChild
+        variant="ghost"
+        size="icon-sm"
+        className={cn(inSettings && "bg-muted text-fg")}
+      >
+        <Link
+          to="/settings/flow"
+          onClick={onNavigate}
+          aria-label="Settings"
+          aria-current={inSettings ? "page" : undefined}
+        >
+          <Settings {...ICON} />
+        </Link>
+      </Button>
+    </Tooltip>
+  );
+
   if (collapsed) {
     return (
       <div
@@ -632,6 +664,7 @@ function NavFooter({ collapsed, sheet }: { collapsed: boolean; sheet: boolean })
         </Tooltip>
         {densityButton}
         {notifyButton}
+        {settingsButton}
         <Tooltip content="Keyboard shortcuts" shortcut="?" side="right">
           <Button
             variant="ghost"
@@ -675,6 +708,7 @@ function NavFooter({ collapsed, sheet }: { collapsed: boolean; sheet: boolean })
         <span className="flex-1" />
         {densityButton}
         {notifyButton}
+        {settingsButton}
       </div>
       {/* Shortcuts and the collapse control are for a keyboard and a wide screen: not on a phone. */}
       {!sheet && (

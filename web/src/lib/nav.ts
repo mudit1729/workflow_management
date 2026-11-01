@@ -8,7 +8,11 @@
 //   /lib/t/<alias>, /lib/t/<alias>/<path>   a team library, the workspace's first   search: q, scope, view
 //   /lib/$id                       old address of a library item (lib-xxxxx): redirects to its page
 //   /glossary                      old address of the glossary: redirects to its page in the workspace library
-//   /skills       Workdatabase · Skills        search: skill (the open skill)
+//   /skills       Workdatabase · Skills        search: skill (the open skill, by reference: planning-issues, ws:acme-planning)
+//   /settings                      redirects to /settings/flow
+//   /settings/flow                 Settings · Skills flow   search: step (a step id, custom:<id> or new), after (with new), view (team)
+//   /settings/flow/edit            the editor of a skill   search: skill, to, name, for
+//   /settings/agent, /settings/workspace   the other two Settings tabs
 //   /inbox        gone: redirects to /w?needs=me
 //   /kit          component gallery (prototype only)
 import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router";

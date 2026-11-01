@@ -1,5 +1,7 @@
 // One skill in the list: its name, when to use it (the "Use when" sentence of its description)
-// and the file it lives in.
+// and the file it lives in. A skill that fails the rules of check-skills says so. The row is keyed
+// by the skill's reference, and its list says where the skill lives (a plugin, this workspace, a
+// library, mine).
 import { ScrollText } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { Skill } from "@/lib/api";
@@ -9,7 +11,8 @@ import { skillHref } from "./search";
 export interface SkillRowProps {
   skill: Skill;
   selected: boolean;
-  onSelect: (name: string) => void;
+  /** Called with the skill's reference. */
+  onSelect: (ref: string) => void;
 }
 
 const LEAD = /^Use when\s+/;
@@ -19,17 +22,17 @@ export function SkillRow({ skill, selected, onSelect }: SkillRowProps) {
     // Let the browser handle new-tab clicks.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
-    onSelect(skill.name);
+    onSelect(skill.ref);
   };
   const lead = LEAD.exec(skill.use_when)?.[0];
   const rest = lead ? skill.use_when.slice(lead.length) : skill.use_when;
 
   return (
-    <li data-wf="SkillRow" data-skill={skill.name}>
+    <li data-wf="SkillRow" data-skill={skill.ref}>
       <a
-        id={`skill-row-${skill.name}`}
+        id={`skill-row-${skill.ref}`}
         data-skill-row=""
-        href={skillHref(skill.name)}
+        href={skillHref(skill.ref)}
         onClick={open}
         aria-current={selected ? "true" : undefined}
         className={cn(
@@ -52,6 +55,9 @@ export function SkillRow({ skill, selected, onSelect }: SkillRowProps) {
             {lead && <span className="text-fg-faint">{lead}</span>}
             {rest}
           </span>
+          {skill.problem && (
+            <span className="truncate text-danger text-xs">Not a valid skill: {skill.problem}</span>
+          )}
           <span className="truncate font-mono text-fg-faint text-xs" title={skill.path}>
             {skill.path}
           </span>

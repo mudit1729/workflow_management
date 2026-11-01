@@ -63,6 +63,7 @@ export const GROUPS = [
   "Library · Personal",
   "Library · Team",
   "Library · Ask",
+  "Settings",
   "Shared",
   "Primitives",
 ] as const;

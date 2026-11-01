@@ -3,7 +3,8 @@
 // SHORTCUTS is also the source for the ShortcutsDialog.
 //
 // Go to: `g w` Workflow · Board, `g l` (or `g d`) Library, `g p` Personal library, `g t` Team
-// libraries, `g g` Glossary (a page of the workspace library), `g f` Files, `g s` Skills, `g k` Kit. `n` opens Add work. There is no inbox (plan D5): what needs
+// libraries, `g g` Glossary (a page of the workspace library), `g f` Files, `g s` Skills, `g k` Kit.
+// `n` opens Add work and `mod+,` Settings · Skills flow. There is no inbox (plan D5): what needs
 // you is a filter of the board.
 
 import { useNavigate } from "@tanstack/react-router";
@@ -33,6 +34,7 @@ export const SHORTCUTS: ShortcutSection[] = [
       { combos: ["mod+k"], label: "Search or run a command" },
       { combos: ["mod+b", "["], label: "Collapse or expand the sidebar" },
       { combos: ["n"], label: "Add work" },
+      { combos: ["mod+,"], label: "Open settings" },
       { combos: ["?"], label: "Show keyboard shortcuts" },
       { combos: ["."], label: "Prototype controls" },
     ],
@@ -117,6 +119,7 @@ export function GlobalShortcuts() {
   useHotkey("g s", () => void navigate({ to: "/skills" }));
   useHotkey("g k", () => go.kit());
   useHotkey("n", () => openAddWork());
+  useHotkey("mod+,", () => void navigate({ to: "/settings/flow" }), { allowInInputs: true });
   // "?" and "." may close their own overlay, but never open over another dialog.
   useHotkey("?", () => shell.setShortcutsOpen(!shell.shortcutsOpen), {
     allowInDialogs: shell.shortcutsOpen,

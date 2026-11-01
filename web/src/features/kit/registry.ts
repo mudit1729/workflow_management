@@ -20,6 +20,7 @@ import { libraryPersonalEntries } from "./entries/library-personal";
 import { libraryTeamEntries } from "./entries/library-team";
 import { libraryViewerEntries } from "./entries/library-viewer";
 import { primitiveEntries } from "./entries/primitives";
+import { settingsEntries } from "./entries/settings";
 import { sharedEntries } from "./entries/shared";
 import { shellEntries } from "./entries/shell";
 import { skillsEntries } from "./entries/skills";
@@ -47,6 +48,7 @@ const ALL: KitEntry[] = [
   ...libraryPersonalEntries,
   ...libraryTeamEntries,
   ...libraryAskEntries,
+  ...settingsEntries,
   ...skillsEntries,
   ...contextEntries,
   ...filesEntries,

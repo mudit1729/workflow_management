@@ -17,6 +17,17 @@ describe("which sub-view a route belongs to", () => {
     expect(subViewForPath("/skills")).toBe("skills");
   });
 
+  it("puts the settings routes in Settings, the editor of a skill copy with the flow", () => {
+    expect(subViewForPath("/settings/flow")).toBe("flow");
+    expect(subViewForPath("/settings/flow/edit")).toBe("flow");
+    expect(subViewForPath("/settings/agent")).toBe("agent");
+    expect(subViewForPath("/settings/workspace")).toBe("workspace");
+    // /settings redirects to /settings/flow before anything renders.
+    expect(subViewForPath("/settings")).toBeUndefined();
+    expect(subViewForPath("/settings-old")).toBeUndefined();
+    expect(subViewForPath("/settings/flowers")).toBeUndefined();
+  });
+
   it("splits the Library into the personal library and the team libraries", () => {
     for (const path of ["/lib/me", "/lib/me/topics/agent-context/index.md"])
       expect(subViewForPath(path)).toBe("personal");
@@ -61,9 +72,21 @@ describe("the view tables", () => {
     for (const view of views) expect(SUBVIEWS[VIEWS[view].home].view).toBe(view);
   });
 
-  it("gives every sub-view its own route and its own shortcut", () => {
+  it("gives every sub-view its own route, and no shortcut to two of them", () => {
     expect(new Set(subs.map((s) => SUBVIEWS[s].to)).size).toBe(subs.length);
-    expect(new Set(subs.map((s) => SUBVIEWS[s].shortcut)).size).toBe(subs.length);
+    const keys = subs.flatMap((s) => SUBVIEWS[s].shortcut ?? []);
+    expect(new Set(keys).size).toBe(keys.length);
+    // The two tabs after Skills flow are reached from the tabs and the palette.
+    expect(SUBVIEWS.agent.shortcut).toBeUndefined();
+    expect(SUBVIEWS.workspace.shortcut).toBeUndefined();
+  });
+
+  it("says Settings holds Skills flow, Agent and Workspace, and opens on the flow with mod+,", () => {
+    expect(VIEWS.settings.label).toBe("Settings");
+    expect(VIEWS.settings.subs).toEqual(["flow", "agent", "workspace"]);
+    expect(SUBVIEWS[VIEWS.settings.home].to).toBe("/settings/flow");
+    expect(VIEWS.settings.shortcut).toBe("mod+,");
+    expect(SUBVIEWS.flow.label).toBe("Skills flow");
   });
 
   it("opens a view on its home with the home's route", () => {
@@ -103,6 +126,13 @@ describe("tab title", () => {
     expect(tabTitle("/files", "wf", 0)).toBe("Library · Files · wf");
   });
 
+  it("names the Settings tab, home included", () => {
+    expect(tabTitle("/settings/flow", "wf", 0)).toBe("Settings · Skills flow · wf");
+    expect(tabTitle("/settings/flow/edit", "wf", 2)).toBe("(2) Settings · Skills flow · wf");
+    expect(tabTitle("/settings/agent", "wf", 0)).toBe("Settings · Agent · wf");
+    expect(tabTitle("/settings/workspace", "wf", 0)).toBe("Settings · Workspace · wf");
+  });
+
   it("covers the kit, unknown paths and a workspace that has not loaded", () => {
     expect(tabTitle("/kit", "wf", 0)).toBe("Kit · wf");
     expect(tabTitle("/nope", "wf", 0)).toBe("wf");
@@ -117,6 +147,11 @@ describe("the shortcuts", () => {
     expect(combos).not.toContain("g i");
     const general = SHORTCUTS.find((s) => s.title === "General");
     expect(general?.items.find((i) => i.combos.includes("n"))?.label).toBe("Add work");
+  });
+
+  it("opens settings with mod+, from the General section", () => {
+    const general = SHORTCUTS.find((s) => s.title === "General");
+    expect(general?.items.find((i) => i.combos.includes("mod+,"))?.label).toBe("Open settings");
   });
 
   it("names the eight issue tabs", () => {

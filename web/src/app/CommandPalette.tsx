@@ -21,14 +21,17 @@ import {
   MessageCircleQuestionMark,
   PanelLeft,
   Play,
+  Replace,
   Rows3,
   ScrollText,
   Search,
+  Settings,
   Square,
   SquareTerminal,
   StepForward,
   SunMoon,
   UserRound,
+  Workflow,
   Zap,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -54,9 +57,10 @@ import type {
   IssueSummary,
   LibrarySummary,
 } from "@/gen/types";
-import type { Skill, WorkspaceFileInfo } from "@/lib/api";
+import type { Skill, SkillsCatalog, WorkspaceFileInfo } from "@/lib/api";
 import {
   allSkills,
+  FLOW_STEPS,
   useGlossary,
   useGroupTree,
   useIssueMap,
@@ -77,6 +81,20 @@ import { useSelectGroup } from "./useSelectGroup";
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 const LIMIT = { issues: 8, groups: 5, library: 5, glossary: 4, skills: 4, files: 5, recent: 6 };
+
+/** Where a skill comes from, after its name: the plugin, This workspace, a library's name, Yours. */
+function skillHint(skill: Skill, catalog: SkillsCatalog | undefined): string {
+  switch (skill.source) {
+    case "built-in":
+      return skill.plugin;
+    case "workspace":
+      return "This workspace";
+    case "me":
+      return "Yours";
+    case "library":
+      return catalog?.shelves.find((s) => s.key === skill.library)?.name ?? skill.plugin;
+  }
+}
 
 type Page = "root" | "move";
 
@@ -269,6 +287,8 @@ interface Action {
   inPlace?: boolean;
   /** Listed and selectable, but it does nothing now (a run is going). A reader hears it as unavailable. */
   unavailable?: boolean;
+  /** Found by typing only: it stays out of the list shown before anything is typed (one per step of the flow). */
+  searchOnly?: boolean;
   run: () => void;
 }
 
@@ -402,7 +422,7 @@ function RootPage({
   }, [workspaceFiles, openIssue, q]);
 
   const matchedActions = useMemo<Ranked<Action>>(() => {
-    if (!q) return { items: actions, best: 0.5 };
+    if (!q) return { items: actions.filter((a) => !a.searchOnly), best: 0.5 };
     const scored = actions
       .map((a) => ({ a, score: defaultFilter(a.label, q, a.keywords) }))
       .filter((r) => r.score >= MIN_SCORE)
@@ -501,14 +521,15 @@ function RootPage({
     skills: skills.items.length > 0 && (
       <CommandGroup key="skills" heading="Skills">
         {skills.items.map((k: Skill) => (
+          // A skill goes by its reference: two sources can have a skill of the same name.
           <CommandItem
-            key={k.path}
-            value={`skill:${k.name}`}
+            key={k.ref}
+            value={`skill:${k.ref}`}
             icon={<ScrollText {...ICON} />}
-            hint={k.plugin}
+            hint={skillHint(k, skillList)}
             onSelect={() => {
               close();
-              void navigate({ to: "/skills", search: { skill: k.name } });
+              void navigate({ to: "/skills", search: { skill: k.ref } });
             }}
           >
             {k.name}
@@ -851,6 +872,40 @@ function useActions(openIssue: IssueSummary | undefined, setPage: (p: Page) => v
       keywords: ["go to skills", "plugins", "install", "codex", "claude", "marketplace"],
       run: () => void navigate({ to: "/skills" }),
     },
+    {
+      id: "open-settings",
+      label: "Open settings",
+      icon: <Settings {...ICON} />,
+      shortcut: "mod+,",
+      keywords: ["settings", "preferences", "configure", "options", "agent", "workspace"],
+      run: () => void navigate({ to: "/settings/flow" }),
+    },
+    {
+      id: "settings-flow",
+      label: "Skills flow",
+      icon: <Workflow {...ICON} />,
+      hint: "Settings",
+      keywords: [
+        "skills flow",
+        "settings",
+        "which skill",
+        "steps",
+        "swap skill",
+        "team default",
+        "override",
+      ],
+      run: () => void navigate({ to: "/settings/flow" }),
+    },
+    // One per step of the flow, found by typing "plan skill" or the step's own name.
+    ...FLOW_STEPS.map<Action>((step) => ({
+      id: `change-skill-${step.id}`,
+      label: `Change the ${step.name} skill`,
+      icon: <Replace {...ICON} />,
+      hint: "Settings",
+      searchOnly: true,
+      keywords: [step.name, step.builtin, "skill", "swap", "replace", "flow", "settings"],
+      run: () => void navigate({ to: "/settings/flow", search: { step: step.id } }),
+    })),
     {
       id: "go-kit",
       label: "Kit (prototype tools)",

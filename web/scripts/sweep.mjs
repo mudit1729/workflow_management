@@ -52,6 +52,10 @@ export const ROUTES = [
   "/lib/t/platform-handbook/runbooks/rotate-signing-keys",
   "/skills",
   "/skills?skill=adding-work",
+  "/settings/flow",
+  "/settings/flow?step=plan",
+  "/settings/agent",
+  "/settings/workspace",
   "/kit",
   "/kit?el=HandoffPanel",
   "/w/i/wf-e6kc1?tab=plan",
@@ -60,6 +64,8 @@ export const ROUTES = [
   "/kit?el=PersonalHome",
   "/kit?el=MediaFigure",
   "/kit?el=AskPanel",
+  "/kit?el=SettingsView",
+  "/kit?el=StepPanel",
 ];
 
 const args = process.argv.slice(2);
