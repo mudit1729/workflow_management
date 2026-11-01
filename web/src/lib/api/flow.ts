@@ -149,7 +149,7 @@ export const FLOW_STEPS: readonly FlowStepDef[] = [
         [
           n(8, "8", "Up to 8 tasks a phase"),
           n(5, "5", "Up to 5 tasks a phase"),
-          n(12, "12", "Up to 12 tasks a phase"),
+          n(10, "10", "Up to 10 tasks a phase"),
         ],
         { numeric: true, phrase: (v) => `Up to ${v} tasks a phase` },
       ),

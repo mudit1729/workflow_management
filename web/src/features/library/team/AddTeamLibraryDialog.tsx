@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useShell } from "@/app/shell-store";
 import { Dialog, DialogContent } from "@/components/ui";
 import { AddLibraryPanel } from "./AddLibraryPanel";
+import { closeAddLibraryFromSettings, useAddStaysInSettings } from "./from-settings";
 import { useAddLibraryFlow } from "./useAddLibraryFlow";
 
 /** Fixed height, so the dialog does not jump between screens; the whole screen on a phone. */
@@ -17,6 +18,7 @@ const DIALOG_CLASS = [
 export function AddTeamLibraryDialog() {
   const open = useShell((s) => s.addLibraryOpen);
   const setOpen = useShell((s) => s.setAddLibraryOpen);
+  const stay = useAddStaysInSettings();
 
   // Each opening starts with an empty field: a new key makes a new session. (State set while
   // rendering is applied before anything is shown.)
@@ -27,11 +29,29 @@ export function AddTeamLibraryDialog() {
     if (open) setSession((n) => n + 1);
   }
 
-  return <AddLibrarySession key={session} open={open} onClose={() => setOpen(false)} />;
+  return (
+    <AddLibrarySession
+      key={session}
+      open={open}
+      stay={stay}
+      onClose={() => {
+        closeAddLibraryFromSettings();
+        setOpen(false);
+      }}
+    />
+  );
 }
 
-function AddLibrarySession({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const flow = useAddLibraryFlow({ onClose });
+function AddLibrarySession({
+  open,
+  stay,
+  onClose,
+}: {
+  open: boolean;
+  stay: boolean;
+  onClose: () => void;
+}) {
+  const flow = useAddLibraryFlow({ onClose, stay });
 
   // The control that opened the dialog (the nav's button), so closing returns the person there.
   const [opener] = useState(() =>

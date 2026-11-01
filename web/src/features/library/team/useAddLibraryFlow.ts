@@ -18,6 +18,7 @@ import {
   screensFor,
   suggestionsFor,
 } from "./flow";
+import { addedFromSettings } from "./from-settings";
 
 /** The GitHub reader is its own chunk: it loads when the flow first asks it something. */
 const github = () => import("@mock/libraries/github");
@@ -44,9 +45,12 @@ export interface AddLibraryFlow {
 
 export function useAddLibraryFlow({
   onClose,
+  stay = false,
   deps: override,
 }: {
   onClose: () => void;
+  /** Opened from Settings: the add stays on that page and says it there (no jump, no toast). */
+  stay?: boolean;
   /** Replace parts of what the flow talks to (the component kit adds nothing for real). */
   deps?: Partial<Deps>;
 }): AddLibraryFlow {
@@ -55,8 +59,8 @@ export function useAddLibraryFlow({
   const digits = useRef<((n: number) => void) | undefined>(undefined);
 
   // The controller is made once; what it reads from the render goes through a ref.
-  const latest = useRef({ taken: [] as string[], open, onClose });
-  latest.current = { taken: libraries?.map((l) => l.alias) ?? [], open, onClose };
+  const latest = useRef({ taken: [] as string[], open, onClose, stay });
+  latest.current = { taken: libraries?.map((l) => l.alias) ?? [], open, onClose, stay };
 
   const [controller] = useState(() => {
     const deps: Deps = {
@@ -67,12 +71,13 @@ export function useAddLibraryFlow({
       register: addLibrary,
       taken: () => latest.current.taken,
       added: (info, { page, skipped }) => {
+        const description = `${pagesLabel(info.pages)} from ${info.url ? repoName(info.url) : info.alias}${
+          skipped > 0 ? `. ${pagesLabel(skipped)} not read.` : ""
+        }`;
+        // From Settings the page stays where it is and says the add itself: one confirmation.
+        if (latest.current.stay) return addedFromSettings({ name: info.name, description });
         void latest.current.open({ alias: info.alias, ...(page ? { path: page } : {}) });
-        toast.success(`Added ${info.name}`, {
-          description: `${pagesLabel(info.pages)} from ${info.url ? repoName(info.url) : info.alias}${
-            skipped > 0 ? `. ${pagesLabel(skipped)} not read.` : ""
-          }`,
-        });
+        toast.success(`Added ${info.name}`, { description });
       },
       close: () => latest.current.onClose(),
     };

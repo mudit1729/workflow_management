@@ -191,6 +191,9 @@ describe("custom steps after Do next step", () => {
     );
     // The run let go of what it held.
     expect(detail.summary.coordinator).toBeUndefined();
+    // The task waits for the step.
+    const live = detail.plan?.phases.flatMap((p) => p.tasks).find((t) => t.id === run.task);
+    expect(live?.status).toBe("blocked");
   });
 
   test("an optional step that fails is logged and the run goes on", async () => {

@@ -930,6 +930,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     if (!src) throw new Error(`${issue} is gone.`);
     const changesFile = store.filePath(issue, "changes.md");
     const stateFile = store.filePath(issue, "current_state.md");
+    const planFile = store.filePath(issue, "plan.md");
     const owner = src.goal.owner ?? store.me;
     const entry: ChangeSrc = {
       id: store.newId("C-"),
@@ -949,6 +950,9 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       w.write(changesFile, appendChange(w.read(changesFile), entry));
       const touches: Touch[] = [{ file: changesFile, anchors: [entry.id] }];
       if (c.required) {
+        // The task waits for the step: blocked, still claimed, the lease let go (using-wf 3.6).
+        w.write(planFile, setTaskStatus(w.read(planFile) ?? "", task, "blocked"));
+        touches.push({ file: planFile, anchors: [task] });
         const request: RequestSrc = {
           id: store.newId("Q-"),
           question: `${c.label} failed on ${task}. Fix it, or tell ${agentName(a.run.agent)} how to go on.`,

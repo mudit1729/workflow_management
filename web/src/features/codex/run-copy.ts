@@ -8,7 +8,7 @@
 // A run on a real bridge (`source: "bridge"`, plan D9) has no phases and names no task: the agent
 // picks it. Its lines say where it runs ("Running on laptop") and how it ended ("Done", "Failed";
 // the reason, such as the exit code, is on the run).
-import { type AgentKind, agentName, type CodexPhaseId, type CodexRun } from "@/lib/api";
+import { type AgentKind, agentName, type CodexRun } from "@/lib/api";
 import type { IssueTab } from "@/lib/nav";
 
 /**

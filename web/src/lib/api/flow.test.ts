@@ -16,6 +16,7 @@ import {
   FLOW_AFTER,
   FLOW_STEP_IDS,
   flowLine,
+  flowOption,
   flowOptionsLine,
   flowOptionValue,
   flowSkillRefs,
@@ -353,6 +354,12 @@ describe("what a card and the Agent tab read", () => {
     expect(flowOptionsLine(flow.steps.status)).toBe(
       "Issues go stale after 12 h · Tasks go stale after 4 h",
     );
+  });
+
+  test("no max_tasks button allows a phase that trips Q014 (more than 10 tasks)", () => {
+    const def = flowOption("plan", "max_tasks");
+    expect(def?.values.map((v) => v.value)).toEqual([8, 5, 10]);
+    for (const v of def?.values ?? []) expect(Number(v.value)).toBeLessThanOrEqual(10);
   });
 
   test("a number the buttons do not offer still reads as a phrase", () => {
