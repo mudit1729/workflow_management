@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { type MouseEvent, type ReactNode, useState } from "react";
 import { Button } from "@/components/ui";
 import { skillHref, useSkillsNav } from "@/features/skills/search";
-import { type Skill, type SkillsCatalog, shelfOf } from "@/lib/api";
+import { type FlowScope, type Skill, type SkillsCatalog, shelfOf } from "@/lib/api";
 import { CopyDialog } from "./CopyDialog";
 import { type PanelKey, useEditNav } from "./search";
 
@@ -21,6 +21,7 @@ export function SkillActions({
   skill,
   catalog,
   panel,
+  scope = "team",
   children,
 }: {
   /** The skill in effect. Undefined while the catalog loads, or when the reference does not resolve. */
@@ -28,6 +29,8 @@ export function SkillActions({
   catalog: SkillsCatalog | undefined;
   /** The panel the editor comes back to. */
   panel: PanelKey;
+  /** Apply to in the panel: Edit a copy starts on the place that matches it. */
+  scope?: FlowScope;
   children?: ReactNode;
 }) {
   const skills = useSkillsNav();
@@ -75,7 +78,13 @@ export function SkillActions({
       )}
       {children}
       {skill && !editable && (
-        <CopyDialog open={copying} onOpenChange={setCopying} skill={skill} forPanel={panel} />
+        <CopyDialog
+          open={copying}
+          onOpenChange={setCopying}
+          skill={skill}
+          forPanel={panel}
+          scope={scope}
+        />
       )}
     </div>
   );

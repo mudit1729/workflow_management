@@ -32,7 +32,7 @@ import {
 } from "./panel";
 import { OverrideMark, Warning } from "./parts";
 import { SkillActions } from "./SkillActions";
-import { SkillChoices } from "./SkillChoices";
+import { groupsFor, SkillChoices } from "./SkillChoices";
 import { SkillChoicesSkeleton } from "./StepPanel";
 import { fileWords } from "./saved";
 
@@ -135,7 +135,7 @@ export function CustomStepBody({
   const { busy, problem, run } = useWriter(panel);
   const scope: FlowScope = custom.origin;
   const skill = skillByRef(catalog, custom.skill);
-  const groups = skillChoices(catalog, "custom");
+  const groups = groupsFor(skillChoices(catalog, "custom"), scope);
   const missing = flow.problems.find((p) => p.id === custom.id && p.kind === "unresolved");
 
   const patch = (change: CustomStepPatch) =>
@@ -214,7 +214,7 @@ export function CustomStepBody({
       </PanelSection>
 
       <PanelSection title="Actions">
-        <SkillActions skill={skill} catalog={catalog} panel={panel}>
+        <SkillActions skill={skill} catalog={catalog} panel={panel} scope={scope}>
           <Button
             size="sm"
             variant="danger"
@@ -268,7 +268,7 @@ export function NewStepPanel({
   const [required, setRequired] = useState(false);
   const [scope, setScope] = useState<FlowScope>("team");
   const { busy, problem, run } = useWriter("new");
-  const groups = skillChoices(catalog, "custom");
+  const groups = groupsFor(skillChoices(catalog, "custom"), scope);
   const picked = skillByRef(catalog, skill ?? "");
 
   // The "+" that opened the form can change while it is open.

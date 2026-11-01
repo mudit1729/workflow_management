@@ -8,6 +8,7 @@ import { ChoiceList, DigitSlot, isTypingTarget, KeyHint } from "@/features/add-w
 import {
   type CopyTarget,
   copyNameProblem,
+  type FlowScope,
   type Skill,
   shelfOf,
   suggestCopyName,
@@ -34,11 +35,20 @@ export interface CopyDialogProps {
   skill: Skill;
   /** The panel the editor comes back to, and the step it points at the copy. */
   forPanel: PanelKey;
+  /** Apply to in the panel it came from: Just me starts on My library, Everyone on This workspace. */
+  scope?: FlowScope;
   /** Called with the choice instead of opening the editor (the Kit frames). */
   onDone?: (choice: { to: CopyTarget; name: string }) => void;
 }
 
-export function CopyDialog({ open, onOpenChange, skill, forPanel, onDone }: CopyDialogProps) {
+export function CopyDialog({
+  open,
+  onOpenChange,
+  skill,
+  forPanel,
+  scope,
+  onDone,
+}: CopyDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open && (
@@ -50,6 +60,7 @@ export function CopyDialog({ open, onOpenChange, skill, forPanel, onDone }: Copy
           <CopyPanel
             skill={skill}
             forPanel={forPanel}
+            scope={scope}
             onClose={() => onOpenChange(false)}
             onDone={onDone}
           />
@@ -63,12 +74,14 @@ export function CopyDialog({ open, onOpenChange, skill, forPanel, onDone }: Copy
 export function CopyPanel({
   skill,
   forPanel,
+  scope = "team",
   onClose,
   onDone,
   startAt = "where",
 }: {
   skill: Skill;
   forPanel: PanelKey;
+  scope?: FlowScope;
   onClose: () => void;
   onDone?: CopyDialogProps["onDone"];
   /** The screen it opens on (the Kit shows the second). */
@@ -80,7 +93,7 @@ export function CopyPanel({
   const me = useMe();
   const hasLibrary = usePersonalConfig().data !== undefined;
   const [screen, setScreen] = useState<Screen>(startAt);
-  const [to, setTo] = useState<CopyTarget>("ws");
+  const [to, setTo] = useState<CopyTarget>(scope === "me" && hasLibrary ? "me" : "ws");
   const [typed, setTyped] = useState<string>();
   const digits = useRef<((n: number) => void) | undefined>(undefined);
   const root = useRef<HTMLDivElement>(null);

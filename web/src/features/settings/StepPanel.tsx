@@ -34,7 +34,7 @@ import {
 } from "./panel";
 import { OverrideMark, Warning } from "./parts";
 import { SkillActions } from "./SkillActions";
-import { SkillChoices } from "./SkillChoices";
+import { groupsFor, SkillChoices } from "./SkillChoices";
 
 export interface StepPanelProps {
   step: FlowStepId;
@@ -82,7 +82,7 @@ function StepPanelBody({
   const shown: ResolvedFlow = mine ? flow : team;
   const resolved: ResolvedStep = shown.steps[id];
   const skill = skillByRef(catalog, resolved.skill);
-  const groups = skillChoices(catalog, id);
+  const groups = groupsFor(skillChoices(catalog, id), scope);
   const teamNamed = config.team.steps[id]?.skill ?? BUILTIN_SKILLS[id];
 
   // What applies when my key is taken away (Just me), or when the team's is (Everyone).
@@ -187,7 +187,7 @@ function StepPanelBody({
       </PanelSection>
 
       <PanelSection title="Actions">
-        <SkillActions skill={skill} catalog={catalog} panel={id}>
+        <SkillActions skill={skill} catalog={catalog} panel={id} scope={scope}>
           {resettable.length > 0 && (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void reset()}>
               {mine ? "Reset to the team's choice" : "Reset to built-in"}
