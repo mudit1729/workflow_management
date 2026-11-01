@@ -135,7 +135,10 @@ export function CustomStepBody({
   const { busy, problem, run } = useWriter(panel);
   const scope: FlowScope = custom.origin;
   const skill = skillByRef(catalog, custom.skill);
-  const groups = groupsFor(skillChoices(catalog, "custom"), scope);
+  const groups = groupsFor(
+    skillChoices(catalog, "custom", { exclude: [flow.steps[custom.after].skill] }),
+    scope,
+  );
   const missing = flow.problems.find((p) => p.id === custom.id && p.kind === "unresolved");
 
   const patch = (change: CustomStepPatch) =>
@@ -148,7 +151,7 @@ export function CustomStepBody({
       title={custom.label}
       about={
         custom.origin === "team"
-          ? "A team step. It runs for everyone, and a personal setting cannot change it."
+          ? "A team step, kept in workflow.toml. It runs for everyone. Changes here are for everyone, and you cannot turn it off just for yourself."
           : "Only you. It runs after the team's steps at this point."
       }
       variant={variant}
@@ -156,7 +159,11 @@ export function CustomStepBody({
     >
       {missing && <Warning role="status">{missing.message}</Warning>}
 
-      <PanelSection title="Label" hint="What the card and the run call this step.">
+      <p data-wf="AppliesTo" className="text-fg-faint text-xs">
+        Applies to: {custom.origin === "team" ? "Everyone" : "Just you"}
+      </p>
+
+      <PanelSection title="Label" hint="What the line and the run call this step.">
         <LabelField
           value={custom.label}
           disabled={busy}
@@ -226,7 +233,7 @@ export function CustomStepBody({
               }).then((saved) => saved && onClose())
             }
           >
-            Remove step
+            {custom.origin === "team" ? "Remove for everyone" : "Remove step"}
           </Button>
         </SkillActions>
       </PanelSection>
@@ -250,6 +257,8 @@ export interface NewStepPanelProps {
   /** The step was added: open its panel. */
   onAdded: (id: string) => void;
   keys?: boolean;
+  /** The page shows the team default alone: the step is the team's and Just me is off. */
+  teamView?: boolean;
 }
 
 /** The form behind a "+": a skill, a label, must pass, whom it is for. Nothing is written before Add step. */
@@ -259,16 +268,21 @@ export function NewStepPanel({
   onClose,
   onAdded,
   keys = true,
+  teamView = false,
 }: NewStepPanelProps) {
-  const { catalog } = useFlow();
-  const canBeMine = usePersonalConfig().data !== undefined;
+  const { flow, catalog } = useFlow();
+  const canBeMine = usePersonalConfig().data !== undefined && !teamView;
   const [after, setAfter] = useState<FlowAfter>(first);
   const [skill, setSkill] = useState<string>();
   const [label, setLabel] = useState("");
   const [required, setRequired] = useState(false);
-  const [scope, setScope] = useState<FlowScope>("team");
+  const [chosen, setScope] = useState<FlowScope>("team");
+  const scope: FlowScope = canBeMine ? chosen : "team";
   const { busy, problem, run } = useWriter("new");
-  const groups = groupsFor(skillChoices(catalog, "custom"), scope);
+  const groups = groupsFor(
+    skillChoices(catalog, "custom", { exclude: [flow.steps[after].skill] }),
+    scope,
+  );
   const picked = skillByRef(catalog, skill ?? "");
 
   // The "+" that opened the form can change while it is open.
@@ -295,6 +309,13 @@ export function NewStepPanel({
     if (saved?.id) onAdded(saved.id);
   };
 
+  // Enter in the label adds the step when a skill is picked.
+  const onEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    if (skill && !busy) void add();
+  };
+
   return (
     <PanelFrame
       panel="new"
@@ -303,6 +324,17 @@ export function NewStepPanel({
       about="Runs a skill at a point of the flow. Nothing is saved until you add it."
       variant={variant}
       onClose={onClose}
+      footer={
+        <div className="flex items-center gap-2">
+          <Button variant="primary" disabled={!skill || busy} onClick={() => void add()}>
+            Add step
+          </Button>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          {!skill && <span className="text-fg-faint text-sm">Pick a skill first.</span>}
+        </div>
+      }
     >
       <PanelSection title="Runs after">
         <Segmented<FlowAfter>
@@ -313,6 +345,17 @@ export function NewStepPanel({
           onChange={setAfter}
         />
       </PanelSection>
+
+      <ApplyTo
+        scope={scope}
+        onChange={setScope}
+        canBeMine={canBeMine}
+        why={
+          teamView
+            ? "You are looking at the team default. Switch to In effect for me to change yours."
+            : undefined
+        }
+      />
 
       <PanelSection title="Skill">
         {catalog ? (
@@ -332,13 +375,14 @@ export function NewStepPanel({
 
       <PanelSection
         title="Label"
-        hint="Optional. Without one the card says what the skill is called."
+        hint="Optional. Without one the line says what the skill is called."
       >
         <Input
           aria-label="Label"
           value={label}
           placeholder={skill ? skillWords(skillName(skill)) : "Security check"}
           onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={onEnter}
           maxLength={60}
           autoComplete="off"
           spellCheck={false}
@@ -358,23 +402,11 @@ export function NewStepPanel({
         />
       </PanelSection>
 
-      <ApplyTo scope={scope} onChange={setScope} canBeMine={canBeMine} />
-
       {problem && (
         <p role="alert" className="text-danger text-sm">
           {problem}
         </p>
       )}
-
-      <div className="flex items-center gap-2">
-        <Button variant="primary" disabled={!skill || busy} onClick={() => void add()}>
-          Add step
-        </Button>
-        <Button variant="ghost" onClick={onClose} disabled={busy}>
-          Cancel
-        </Button>
-        {!skill && <span className="text-fg-faint text-sm">Pick a skill first.</span>}
-      </div>
     </PanelFrame>
   );
 }

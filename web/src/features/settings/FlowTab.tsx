@@ -4,10 +4,11 @@
 // under 900 px it is a screen of its own, as the skill is in Library · Skills.
 import { useEffect, useRef } from "react";
 import { Segmented } from "@/components/ui";
-import { FLOW_AFTER, type ResolvedFlow, useFlow, useSnapshot } from "@/lib/api";
+import type { FlowAfter } from "@/gen/types";
+import { FLOW_AFTER, useFlow, useSnapshot } from "@/lib/api";
 import { useHotkey } from "@/lib/hooks";
 import { CustomStepPanel, NewStepPanel } from "./CustomPanel";
-import { FlowMap } from "./FlowMap";
+import { FlowLine } from "./FlowLine";
 import { customKey } from "./labels";
 import type { PanelVariant } from "./panel";
 import { Warning } from "./parts";
@@ -20,18 +21,8 @@ import { type PanelKey, useFlowNav } from "./search";
 export const DOCK_AT = 900;
 /** The panel is a document form: 400 px, 440 on a wide page. */
 const panelWidthFor = (page: number) => (page >= 1180 ? 440 : 400);
-/**
- * The room a row of four cards needs (about 130 px a card and 44 px of arrow and "+" between and
- * after them), and what each custom step adds (a 132 px card and its arrow). With less the flow is
- * a list.
- */
-const ROW_AT = 696;
-const CUSTOM_ROOM = 140;
-
-/** Row or list: from the room the flow has and the custom steps in it. */
-export function layoutFor(room: number, flow: ResolvedFlow): "row" | "list" {
-  return room >= ROW_AT + CUSTOM_ROOM * flow.custom.length ? "row" : "list";
-}
+/** Under this the states stack, one under the other (spec 5.2). */
+export const STACK_UNDER = 640;
 
 export function FlowTab({ width }: { width: number }) {
   const nav = useFlowNav();
@@ -43,8 +34,8 @@ export function FlowTab({ width }: { width: number }) {
 
   const docked = width >= DOCK_AT;
   const screen = open !== undefined && !docked && width > 0;
-  const room = (open !== undefined && docked ? width - panelWidthFor(width) : width) - 48;
-  const layout = layoutFor(room, shown);
+  // From the page, not from the room the panel leaves: opening a panel never redraws the flow.
+  const layout = width > 0 && width < STACK_UNDER ? "stack" : "line";
 
   useHotkey("Escape", () => nav.close(), { enabled: open !== undefined });
 
@@ -78,9 +69,11 @@ export function FlowTab({ width }: { width: number }) {
         document.querySelector<HTMLElement>('[data-wf="SettingsView"] [data-panel-back]')?.focus();
       } else if (!open && before.key) {
         const key = before.key === "new" ? `new:${before.after ?? ""}` : before.key;
-        document
-          .querySelector<HTMLElement>(`[data-flow-nav="${CSS.escape(key)}"]`)
-          ?.focus({ preventScroll: true });
+        // A step that is gone (removed) leaves the start of the flow.
+        (
+          document.querySelector<HTMLElement>(`[data-flow-nav="${CSS.escape(key)}"]`) ??
+          document.querySelector<HTMLElement>('[data-wf="FlowLine"] [data-flow-nav="add"]')
+        )?.focus({ preventScroll: true });
       }
     });
     return () => cancelAnimationFrame(frame);
@@ -96,6 +89,8 @@ export function FlowTab({ width }: { width: number }) {
       teamView={!mine}
       onClose={() => nav.close()}
       onAdded={(id) => nav.select(`custom:${id}`)}
+      onOpen={nav.select}
+      onAddStep={nav.openNew}
     />
   );
 
@@ -118,9 +113,10 @@ export function FlowTab({ width }: { width: number }) {
             <h1 className="font-semibold text-fg text-xl leading-snug tracking-tight">
               Skills flow
             </h1>
-            <p className="max-w-[62ch] text-fg-muted text-md">
-              Which skill runs each step of the work, for everyone in {workspace}. Change a step for
-              the whole team or just for you.
+            <p className="min-h-[2lh] max-w-[62ch] text-fg-muted text-md">
+              {mine
+                ? `Which skill runs each step of the work, for everyone in ${workspace}. Change a step for the whole team or just for you.`
+                : "The team default alone, as workflow.toml has it. Your own choices are left out."}
             </p>
           </div>
           <Segmented
@@ -135,8 +131,10 @@ export function FlowTab({ width }: { width: number }) {
         </header>
 
         <div className="flex min-w-0 flex-col gap-4 px-6 pb-8 max-md:px-4">
-          <Notes team={!mine} problems={state.personalProblems} />
-          <FlowMap
+          <Notes problems={state.personalProblems} />
+          {/* A removed step has no panel to say so in: the line is above the flow, where it is seen. */}
+          {open === undefined && <SavedLine step={undefined} />}
+          <FlowLine
             flow={shown}
             catalog={state.catalog}
             mine={mine}
@@ -146,7 +144,6 @@ export function FlowTab({ width }: { width: number }) {
             onSelect={nav.select}
             onAdd={nav.openNew}
           />
-          {open === undefined && <SavedLine step={undefined} />}
         </div>
       </section>
 
@@ -163,22 +160,13 @@ export function FlowTab({ width }: { width: number }) {
   );
 }
 
-/** The lines above the flow: what the view shows, and what is wrong with my own file. */
-function Notes({ team, problems }: { team: boolean; problems: string[] }) {
-  return (
-    <>
-      {team && (
-        <p className="text-fg-muted text-sm">
-          The team default alone, as workflow.toml has it. Your own choices are left out.
-        </p>
-      )}
-      {problems.map((p) => (
-        <Warning key={p} role="status">
-          Your library.toml: {p}
-        </Warning>
-      ))}
-    </>
-  );
+/** What is wrong with my own file, above the flow. */
+function Notes({ problems }: { problems: string[] }) {
+  return problems.map((p) => (
+    <Warning key={p} role="status">
+      Your library.toml: {p}
+    </Warning>
+  ));
 }
 
 function PanelHost({
@@ -188,6 +176,8 @@ function PanelHost({
   teamView,
   onClose,
   onAdded,
+  onOpen,
+  onAddStep,
 }: {
   open: PanelKey;
   teamView: boolean;
@@ -195,12 +185,15 @@ function PanelHost({
   variant: PanelVariant;
   onClose: () => void;
   onAdded: (id: string) => void;
+  onOpen: (key: PanelKey) => void;
+  onAddStep: (after: FlowAfter) => void;
 }) {
   if (open === "new")
     return (
       <NewStepPanel
         after={FLOW_AFTER.find((a) => a === after) ?? "do"}
         variant={variant}
+        teamView={teamView}
         onClose={onClose}
         onAdded={onAdded}
       />
@@ -213,6 +206,8 @@ function PanelHost({
       variant={variant}
       onClose={onClose}
       teamView={teamView}
+      onOpen={onOpen}
+      onAdd={onAddStep}
     />
   );
 }

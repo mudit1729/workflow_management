@@ -4,9 +4,12 @@
 import { ArrowLeft, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { openAddLibrary } from "@/app/shell-store";
 import { CopyButton } from "@/components/common";
 import { Button, IconButton, Segmented } from "@/components/ui";
+import {
+  openAddLibraryFromSettings,
+  useAddedFromSettings,
+} from "@/features/library/team/from-settings";
 import type { FlowScope } from "@/lib/api";
 import {
   type FlowSaved,
@@ -317,16 +320,25 @@ export function MoreSkills({
 }) {
   const library = catalog.shelves.some((s) => s.source === "library");
   const first = copy && groups.length === 1;
-  if (library && !first) return null;
+  const added = useAddedFromSettings();
+  if (library && !first && !added) return null;
   return (
     <div data-wf="MoreSkills" className="flex flex-col items-start gap-1.5">
-      <p className="text-fg-faint text-xs">
-        {first
-          ? "Skills of this workspace, of a team library and of your own library appear here. Edit a copy of a skill to make the first one."
-          : "Skills of a team library appear here once you add it."}
-      </p>
+      {added && (
+        <p role="status" className="text-fg-muted text-sm">
+          Added {added.name}
+          <span className="block text-fg-faint text-xs">{added.description}</span>
+        </p>
+      )}
+      {(first || !library) && (
+        <p className="text-fg-faint text-xs">
+          {first
+            ? "Skills of this workspace, of a team library and of your own library appear here. Edit a copy of a skill to make the first one."
+            : "Skills of a team library appear here once you add it."}
+        </p>
+      )}
       {!library && (
-        <Button size="sm" variant="ghost" onClick={openAddLibrary} className="-ml-2">
+        <Button size="sm" variant="ghost" onClick={openAddLibraryFromSettings} className="-ml-2">
           Add team library
         </Button>
       )}

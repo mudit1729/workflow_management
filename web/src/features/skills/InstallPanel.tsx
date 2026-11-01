@@ -5,8 +5,8 @@
 // stale; the repository is the team's (`SKILLS_REPO`). The skills of this workspace, of a team
 // library and of mine are not in the plugin: each folder has its own command, `install-skills.sh
 // --from <folder>`, which puts them beside the built-in ones.
-import { FileText } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronRight, FileText } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { CopyButton } from "@/components/common";
 import { Skeleton } from "@/components/ui";
 import {
@@ -15,17 +15,22 @@ import {
   type InstallCommand,
   type InstallGroup,
   installFromCommand,
+  installFromNote,
   SKILLS_REPO,
   type SkillsCatalog,
 } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 export interface InstallPanelProps {
   catalog: SkillsCatalog | undefined;
   /** The catalog is still being read: hold the room of the Claude Code commands, so the panel does not jump. */
   loading?: boolean;
+  /** Show the commands. Closed, the panel is one row, so the skills under it start at the top of the page. */
+  defaultOpen?: boolean;
 }
 
-export function InstallPanel({ catalog, loading = false }: InstallPanelProps) {
+export function InstallPanel({ catalog, loading = false, defaultOpen = false }: InstallPanelProps) {
+  const [open, setOpen] = useState(defaultOpen);
   const claude = claudeInstallGroups(catalog);
   const codex = codexInstallCommands();
   // The places that hold skills of their own, and only the ones that do.
@@ -37,65 +42,99 @@ export function InstallPanel({ catalog, loading = false }: InstallPanelProps) {
       aria-labelledby="skills-install"
       className="rounded-lg border border-border bg-bg"
     >
-      <header className="flex flex-col gap-0.5 px-4 pt-3 pb-1">
-        <h2 id="skills-install" className="font-semibold text-base text-fg">
-          Install for your team
+      <header className="flex flex-col px-1 py-1">
+        <h2 id="skills-install" className="m-0 text-base">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls="skills-install-body"
+            onClick={() => setOpen((o) => !o)}
+            className="flex w-full cursor-default items-center gap-2 rounded-md px-3 py-2 text-left font-semibold text-fg hover:bg-subtle"
+          >
+            <ChevronRight
+              aria-hidden
+              size={14}
+              strokeWidth={1.75}
+              className={cn(
+                "shrink-0 text-fg-faint transition-transform duration-100",
+                open && "rotate-90",
+              )}
+            />
+            Install for your team
+            {!open && (
+              <span className="font-normal text-fg-muted text-sm">
+                Claude Code, Codex and your own skills
+              </span>
+            )}
+          </button>
         </h2>
-        <p className="text-fg-muted text-sm">
-          The team&apos;s repository is{" "}
-          <code className="code-inline rounded-sm bg-muted px-1 py-px text-fg">{SKILLS_REPO}</code>.
-          Install for yourself, or once for everyone who opens it.
-        </p>
-      </header>
-      <div className="flex flex-col gap-4 px-4 pt-2 pb-3">
-        {claude.length > 0 ? (
-          <Tool title="Claude Code">
-            {claude.map((group) => (
-              <CommandGroup key={group.title} group={group} />
-            ))}
-          </Tool>
-        ) : (
-          loading && <CommandsSkeleton />
+        {open && (
+          <p className="px-3 pb-1 text-fg-muted text-sm">
+            The team&apos;s repository is{" "}
+            <code className="code-inline rounded-sm bg-muted px-1 py-px text-fg">
+              {SKILLS_REPO}
+            </code>
+            . Install for yourself, or once for everyone who opens it.
+          </p>
         )}
-        <Tool title="Codex">
-          <CommandGroup
-            group={{
-              title: "In a clone of this repository",
-              hint: "Commit .agents/skills and AGENTS.md and everyone has them",
-              commands: codex,
-            }}
-          />
-        </Tool>
-        {own.length > 0 && (
-          <Tool title="Your own skills">
-            {own.map((shelf) => (
+      </header>
+      {open && (
+        <div id="skills-install-body">
+          <div className="flex flex-col gap-4 px-4 pt-2 pb-3">
+            {claude.length > 0 ? (
+              <Tool title="Claude Code">
+                {claude.map((group) => (
+                  <CommandGroup key={group.title} group={group} />
+                ))}
+              </Tool>
+            ) : (
+              loading && <CommandsSkeleton />
+            )}
+            <Tool title="Codex">
               <CommandGroup
-                key={shelf.key}
                 group={{
-                  title: shelf.name,
-                  hint:
-                    shelf.source === "me"
-                      ? "Only for you, beside the built-in skills"
-                      : "Run it where the agent runs, beside the built-in skills",
-                  commands: [
-                    { label: "Install for Codex", command: installFromCommand(shelf, "codex") },
-                    {
-                      label: "Install for Claude Code",
-                      command: installFromCommand(shelf, "claude"),
-                    },
-                  ],
+                  title: "In a clone of this repository",
+                  hint: "Commit .agents/skills and AGENTS.md and everyone has them",
+                  commands: codex,
                 }}
               />
-            ))}
-          </Tool>
-        )}
-      </div>
-      <p className="flex items-center gap-2 border-border border-t px-4 py-2 text-fg-muted text-sm">
-        <FileText aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
-        <span className="min-w-0">
-          The skills and this board read and write the same markdown files.
-        </span>
-      </p>
+            </Tool>
+            {own.length > 0 && (
+              <Tool title="Your own skills">
+                {own.map((shelf) => (
+                  <CommandGroup
+                    key={shelf.key}
+                    group={{
+                      title: shelf.name,
+                      hint: [
+                        shelf.source === "me"
+                          ? "Only for you, beside the built-in skills"
+                          : "Run it where the agent runs, beside the built-in skills",
+                        installFromNote(shelf),
+                      ]
+                        .filter(Boolean)
+                        .join(". "),
+                      commands: [
+                        { label: "Install for Codex", command: installFromCommand(shelf, "codex") },
+                        {
+                          label: "Install for Claude Code",
+                          command: installFromCommand(shelf, "claude"),
+                        },
+                      ],
+                    }}
+                  />
+                ))}
+              </Tool>
+            )}
+          </div>
+          <p className="flex items-center gap-2 border-border border-t px-4 py-2 text-fg-muted text-sm">
+            <FileText aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-fg-faint" />
+            <span className="min-w-0">
+              The skills and this board read and write the same markdown files.
+            </span>
+          </p>
+        </div>
+      )}
     </section>
   );
 }

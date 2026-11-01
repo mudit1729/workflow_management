@@ -4,7 +4,7 @@
 // my `library.toml` for Just me, as a minimal edit that keeps every other line.
 import { useState } from "react";
 import { Button, Skeleton } from "@/components/ui";
-import type { FlowStepId } from "@/gen/types";
+import type { FlowAfter, FlowStepId } from "@/gen/types";
 import {
   BUILTIN_SKILLS,
   type FlowOptionDef,
@@ -21,6 +21,7 @@ import {
   useFlow,
   usePersonalConfig,
 } from "@/lib/api";
+import { Helpers } from "./Helpers";
 import { OptionRows } from "./OptionRows";
 import {
   ApplyTo,
@@ -35,6 +36,7 @@ import {
 import { OverrideMark, Warning } from "./parts";
 import { SkillActions } from "./SkillActions";
 import { groupsFor, SkillChoices } from "./SkillChoices";
+import type { PanelKey } from "./search";
 
 export interface StepPanelProps {
   step: FlowStepId;
@@ -46,6 +48,10 @@ export interface StepPanelProps {
   keys?: boolean;
   /** The page shows the team default alone: the panel writes the team's file and Just me is off. */
   teamView?: boolean;
+  /** Open the panel of a helper or of a custom step. */
+  onOpen?: (key: PanelKey) => void;
+  /** Open the form that adds a custom step after this one. */
+  onAdd?: (after: FlowAfter) => void;
 }
 
 /** Join the undo tokens of several writes into one: Undo takes all of them back. */
@@ -68,14 +74,19 @@ function StepPanelBody({
   initialScope,
   keys = true,
   teamView = false,
+  onOpen,
+  onAdd,
 }: StepPanelProps) {
   const state = useFlow();
   const { flow, team, config, catalog } = state;
   const canBeMine = usePersonalConfig().data !== undefined && !teamView;
   const def = flowStep(id);
   const mineAlready = Object.keys(config.me.steps[id] ?? {}).length > 0;
-  const [chosen, setScope] = useState<FlowScope>(initialScope ?? (mineAlready ? "me" : "team"));
-  const scope: FlowScope = canBeMine ? chosen : "team";
+  // Only the click is kept: the personal file arrives after the page does, and the panel follows it.
+  const [chosen, setScope] = useState<FlowScope>();
+  const scope: FlowScope = canBeMine
+    ? (chosen ?? initialScope ?? (mineAlready ? "me" : "team"))
+    : "team";
   const { busy, problem, run } = useWriter(id);
 
   const mine = scope === "me";
@@ -185,6 +196,8 @@ function StepPanelBody({
           onPick={pickOption}
         />
       </PanelSection>
+
+      <Helpers step={id} flow={shown} onOpen={onOpen} onAdd={onAdd} />
 
       <PanelSection title="Actions">
         <SkillActions skill={skill} catalog={catalog} panel={id} scope={scope}>

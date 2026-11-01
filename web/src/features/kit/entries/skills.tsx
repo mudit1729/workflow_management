@@ -101,18 +101,25 @@ function InstallPanelBody() {
   return (
     <>
       <V
-        label="the repository's plugins"
-        note="The commands come from marketplace.json and plugin.json: add the marketplace, then install the plugin from it. Codex copies the skills into .agents/skills."
+        label="closed · the first screen"
+        note="One row, so the skills under it start at the top of the page."
         width={640}
       >
         <WithSkills>{(catalog) => <InstallPanel catalog={catalog} />}</WithSkills>
+      </V>
+      <V
+        label="open · the repository's plugins"
+        note="The commands come from marketplace.json and plugin.json: add the marketplace, then install the plugin from it. Codex copies the skills into .agents/skills."
+        width={640}
+      >
+        <WithSkills>{(catalog) => <InstallPanel catalog={catalog} defaultOpen />}</WithSkills>
       </V>
       <V
         label="no marketplace.json"
         note="Without a marketplace only the Codex command is left."
         width={640}
       >
-        <InstallPanel catalog={{ plugins: [], shelves: [] }} />
+        <InstallPanel catalog={{ plugins: [], shelves: [] }} defaultOpen />
       </V>
       <V
         label="with the skills of this workspace, a library and mine"
@@ -120,11 +127,13 @@ function InstallPanelBody() {
         width={640}
       >
         <WithSkills>
-          {(catalog) => <InstallPanel catalog={{ ...catalog, shelves: FIXTURE_SHELVES }} />}
+          {(catalog) => (
+            <InstallPanel catalog={{ ...catalog, shelves: FIXTURE_SHELVES }} defaultOpen />
+          )}
         </WithSkills>
       </V>
       <V label="narrow · 340 px" note="Long commands wrap instead of hiding." width={340}>
-        <WithSkills>{(catalog) => <InstallPanel catalog={catalog} />}</WithSkills>
+        <WithSkills>{(catalog) => <InstallPanel catalog={catalog} defaultOpen />}</WithSkills>
       </V>
     </>
   );

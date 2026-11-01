@@ -63,10 +63,15 @@ export function SavedLineView({
     <p
       data-wf="SavedLine"
       role="status"
-      className={cn("flex min-w-0 items-center gap-1.5 text-fg-muted text-sm", className)}
+      className={cn("flex min-w-0 items-start gap-1.5 text-fg-muted text-sm", className)}
     >
-      <Check aria-hidden size={14} strokeWidth={1.75} className="shrink-0 text-success-text" />
-      <span className="min-w-0 truncate">{undone ? "Undone" : text}</span>
+      <Check
+        aria-hidden
+        size={14}
+        strokeWidth={1.75}
+        className="mt-px shrink-0 text-success-text"
+      />
+      <span className="min-w-0 break-words">{undone ? "Undone" : text}</span>
       {onUndo && !undone && (
         <>
           <span aria-hidden className="text-fg-faint">

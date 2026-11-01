@@ -1,29 +1,31 @@
 // Settings · Agent (spec 5.5): the agent that does the work, and whether it has the skills the flow
-// names. The connection itself (agent, host, repo, version, Switch agent, Disconnect) arrives with
-// round 2; until then this page offers the connect button the seam `setConnectAgentHandler`
-// (library/team/connect-hook.ts) gives, says that the connection comes later, and already lists
+// names. The connection is the one the nav's agent row shows (plan D10, D11): this page reads it
+// and opens the connect flow or the Agent panel (Switch agent, Disconnect) for the actions, and lists
 // what the flow needs installed, with the commands.
 
 import { Link } from "@tanstack/react-router";
 import { Plug } from "lucide-react";
-import { useState } from "react";
+import { openAgent, openAgentPanel } from "@/app/shell-store";
 import { CopyButton } from "@/components/common";
 import { Button, Chip } from "@/components/ui";
-import { openConnectAgent } from "@/features/library/team/connect-hook";
 import {
+  agentName,
   flowSkillRefs,
   installFromCommand,
+  installFromNote,
   parseSkillRef,
   type SkillShelf,
   shelfOf,
+  useAgent,
   useFlow,
 } from "@/lib/api";
 import { SourceChip } from "./parts";
 
 export function AgentTab() {
   const { flow, catalog } = useFlow();
-  // After a press with nothing to connect to, the line under the button says so more plainly.
-  const [nothing, setNothing] = useState(false);
+  const connection = useAgent();
+  const known = connection.status === "connected" || connection.status === "lost";
+  const name = connection.agent ? agentName(connection.agent) : undefined;
   const refs = flowSkillRefs(flow, { builtin: false });
   const shelves = [
     ...new Map(
@@ -58,23 +60,45 @@ export function AgentTab() {
             <h2 id="agent-connection" className="font-semibold text-fg text-sm">
               Connection
             </h2>
-            <Chip>Not connected</Chip>
-          </div>
-          <div>
-            <Button
-              onClick={() => {
-                if (!openConnectAgent()) setNothing(true);
-              }}
+            <Chip
+              tone={
+                connection.status === "connected"
+                  ? "success"
+                  : connection.status === "lost"
+                    ? "stale"
+                    : undefined
+              }
             >
-              <Plug aria-hidden size={14} strokeWidth={1.75} />
-              Connect an agent
-            </Button>
+              {connection.status === "connected"
+                ? `${name} · connected`
+                : connection.status === "lost"
+                  ? `${name} · lost`
+                  : connection.status === "pairing"
+                    ? `${name ?? "Agent"} · pairing…`
+                    : "Not connected"}
+            </Chip>
           </div>
-          <p role={nothing ? "status" : undefined} className="text-fg-muted text-sm">
-            {nothing
-              ? "There is nothing to connect yet. The agent connection arrives with round 2."
-              : "The agent connection arrives with round 2. Until then the dashboard writes the files itself, and a person runs the skills in Codex or Claude Code."}
-          </p>
+          {known && (
+            <p className="text-fg-muted text-sm">
+              {[connection.host, connection.repo, connection.version].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          <div>
+            {known ? (
+              <Button onClick={() => openAgentPanel()}>Open the Agent panel</Button>
+            ) : (
+              <Button onClick={() => openAgent()}>
+                <Plug aria-hidden size={14} strokeWidth={1.75} />
+                {connection.status === "pairing" ? "Finish connecting" : "Connect an agent"}
+              </Button>
+            )}
+          </div>
+          {!known && (
+            <p className="text-fg-muted text-sm">
+              Codex or Claude Code on your computer, through a small bridge you start in the repo.
+              Do next step runs it.
+            </p>
+          )}
         </section>
 
         <section aria-labelledby="agent-skills" className="flex flex-col gap-3">
@@ -125,6 +149,7 @@ function InstallCommands({ shelf }: { shelf: SkillShelf }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="font-medium text-fg-muted text-xs">Install {shelf.name}</h3>
+      {installFromNote(shelf) && <p className="text-fg-faint text-xs">{installFromNote(shelf)}</p>}
       {(["codex", "claude"] as const).map((tool) => {
         const command = installFromCommand(shelf, tool);
         return (

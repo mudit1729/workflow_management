@@ -8,7 +8,13 @@ import { useState } from "react";
 import { CopyButton } from "@/components/common";
 import { Button, Chip, IconButton, Segmented } from "@/components/ui";
 import { MarkdownDocument, Properties, Property } from "@/features/library/MarkdownDocument";
-import { installFromCommand, type Skill, type SkillPlugin, type SkillShelf } from "@/lib/api";
+import {
+  installFromCommand,
+  installFromNote,
+  type Skill,
+  type SkillPlugin,
+  type SkillShelf,
+} from "@/lib/api";
 import { SkillSource } from "./SkillSource";
 
 export type SkillMode = "rendered" | "source";
@@ -195,14 +201,19 @@ function SkillHeader({
         </Property>
         {shelf ? (
           <Property label="install" wide>
-            <span className="flex min-w-0 items-start gap-1">
-              <code className="min-w-0 break-words font-mono text-sm">
-                {installFromCommand(shelf, "codex")}
-              </code>
-              <CopyButton
-                text={installFromCommand(shelf, "codex")}
-                label="Copy the install command"
-              />
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="flex min-w-0 items-start gap-1">
+                <code className="min-w-0 break-words font-mono text-sm">
+                  {installFromCommand(shelf, "codex")}
+                </code>
+                <CopyButton
+                  text={installFromCommand(shelf, "codex")}
+                  label="Copy the install command"
+                />
+              </span>
+              {installFromNote(shelf) && (
+                <span className="text-fg-faint text-xs">{installFromNote(shelf)}</span>
+              )}
             </span>
           </Property>
         ) : (

@@ -1,5 +1,6 @@
 // What Settings says about a skill reference, a source and a step: the words shared by the cards,
 // the panel, the editor and the Kit frames.
+import type { FlowStepId } from "@/gen/types";
 import {
   type ResolvedCustom,
   type ResolvedStep,
@@ -45,4 +46,35 @@ export const skillFilePath = (name: string) => `skills/${name}/SKILL.md`;
 /** The first sentence of "Use when …", without the lead that every skill's line repeats. */
 export function afterUseWhen(useWhen: string): string {
   return useWhen.replace(/^Use when\s+/, "");
+}
+
+/** A step that runs inside another one (spec 1.1): not drawn on the line, listed in the panel of the step it serves. */
+export interface Helper {
+  step: FlowStepId;
+  /** What it does there, in a few words. */
+  why: string;
+}
+
+export const HELPERS: Partial<Record<FlowStepId, Helper[]>> = {
+  add: [{ step: "style", why: "titles" }],
+  plan: [
+    { step: "log", why: "the plan's change entry" },
+    { step: "style", why: "titles and entries" },
+  ],
+  do: [
+    { step: "plan", why: "when there is no plan yet" },
+    { step: "log", why: "the task's entry" },
+    { step: "status", why: "finds the ready task" },
+  ],
+  handoff: [
+    { step: "log", why: "the hand-off entry" },
+    { step: "status", why: "the state it reports" },
+  ],
+};
+
+/** The steps whose panel lists `helper` (Log runs in Plan, Do next step and Hand off). */
+export function usedIn(helper: FlowStepId): FlowStepId[] {
+  return (Object.keys(HELPERS) as FlowStepId[]).filter((id) =>
+    HELPERS[id]?.some((h) => h.step === helper),
+  );
 }

@@ -38,24 +38,32 @@ export function OptionRows({ step, values, mine, disabled = false, onPick }: Opt
             className="flex flex-col gap-1.5"
           >
             <div className="flex min-w-0 items-baseline justify-between gap-2">
-              <span className="font-medium text-base text-fg">{option.label}</span>
+              <span className="font-medium text-fg text-sm">{option.label}</span>
               {off ? (
                 <span className="shrink-0 text-fg-faint text-xs">A team setting</span>
               ) : (
                 mine && current?.origin === "me" && <OverrideMark />
               )}
             </div>
-            <Segmented
-              className="self-start"
-              aria-label={option.label}
-              value={String(current?.value ?? option.default)}
-              disabled={disabled || off}
-              options={buttons}
-              onChange={(v) => {
-                const pick = option.values.find((x) => String(x.value) === v);
-                onPick(option, pick ? pick.value : option.numeric ? Number(v) : v);
-              }}
-            />
+            {off ? (
+              // The team's value, read as text: a dimmed button row cannot be read.
+              <p className="text-base text-fg">
+                {buttons.find((b) => b.value === String(current?.value ?? option.default))?.label}{" "}
+                <span className="text-fg-faint text-sm">· set by the team</span>
+              </p>
+            ) : (
+              <Segmented
+                className="self-start"
+                aria-label={option.label}
+                value={String(current?.value ?? option.default)}
+                disabled={disabled}
+                options={buttons}
+                onChange={(v) => {
+                  const pick = option.values.find((x) => String(x.value) === v);
+                  onPick(option, pick ? pick.value : option.numeric ? Number(v) : v);
+                }}
+              />
+            )}
             <p className="text-fg-faint text-xs">{option.hint}</p>
           </div>
         );

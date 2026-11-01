@@ -1,23 +1,25 @@
-// Kit entries of Settings (src/features/settings): the Skills flow page, its cards in every state,
+// Kit entries of Settings (src/features/settings): the Skills flow page, its line in every state,
 // the panel of a step for Everyone and for Just me, the form that adds a custom step, the two
-// screens of Edit a copy and the editor with its checks. The cards and the flow are drawn from a
+// screens of Edit a copy and the editor with its checks. The line and its labels are drawn from a
 // made-up flow (`fixtures.ts`), so each state is there without writing a file; the panels and the
 // editor are the real ones, on the workspace's own files.
 import { useState } from "react";
 import {
   AddStepButton,
   AgentTab,
+  ArrowLabel,
   CopyPanel,
-  CustomCard,
+  CustomChip,
   CustomStepBody,
-  FlowMap,
+  FlowLine,
+  Helpers,
   NewStepPanel,
   OptionRows,
   SavedLineView,
   SettingsView,
   SkillChecks,
   SkillChoices,
-  StepCard,
+  StatePill,
   StepPanel,
   WorkspaceTab,
 } from "@/features/settings";
@@ -45,9 +47,9 @@ const SRC = "src/features/settings";
 
 const noop = () => {};
 
-/** The fixture with one custom step, so it fits in a row on a page of modest width. */
+/** The fixture with one custom step on an arrow, and none of mine. */
 const SECURITY = FIXTURE_TEAM.custom["security-check"];
-const ROW_FLOW = resolveFlow({
+const ONE_STEP = resolveFlow({
   team: { ...FIXTURE_TEAM, custom: SECURITY ? { "security-check": SECURITY } : {} },
   me: { ...FIXTURE_ME, custom: {} },
   exists: skillExists(FIXTURE_CATALOG),
@@ -60,7 +62,7 @@ function SettingsViewBody() {
     <>
       <V
         label="Skills flow · the built-in flow"
-        note="Four steps in a row, Log under Do next step, a + in each gap and after Hand off, Status and Writing style below. The page is as wide as the frame; 1440 px of window gives the cards 230 px each."
+        note="The five states of an issue on one line, the skill that moves it on each arrow. Hand off and the side states are below the line."
         fill
         height={640}
       >
@@ -70,7 +72,7 @@ function SettingsViewBody() {
       </V>
       <V
         label="Skills flow · the Plan panel open"
-        note="The panel keeps the flow in view. With less room than four cards need, the flow becomes a list."
+        note="The panel keeps the flow in view. With less room than the line needs, the line scrolls sideways; it never turns into a list."
         fill
         height={760}
       >
@@ -97,42 +99,42 @@ function SettingsViewBody() {
   );
 }
 
-// ---------------------------------------------------------------- FlowMap
+// ---------------------------------------------------------------- FlowLine
 
-function FlowMapBody() {
+function FlowLineBody() {
   const props = { catalog: FIXTURE_CATALOG, selected: undefined, onSelect: noop, onAdd: noop };
   return (
     <>
-      <V label="the built-in flow" width={1100}>
-        <FlowMap {...props} flow={BUILTIN_FLOW} mine layout="row" />
+      <V label="the built-in flow" width={1180}>
+        <FlowLine {...props} flow={BUILTIN_FLOW} mine layout="line" />
       </V>
       <V
         label="in effect for me"
         note="Plan uses my skill over the team's, Do next step has two overrides, Status names a skill that is not there (the built-in runs), and Security check must pass."
-        width={1100}
+        width={1180}
       >
-        <FlowMap {...props} flow={ROW_FLOW} mine layout="row" selected="plan" />
+        <FlowLine {...props} flow={ONE_STEP} mine layout="line" selected="plan" />
       </V>
       <V
         label="team default"
         note="My choices are left out; so is the step that is mine."
-        width={1100}
+        width={1180}
       >
-        <FlowMap {...props} flow={FIXTURE_TEAM_FLOW} mine={false} layout="list" />
+        <FlowLine {...props} flow={FIXTURE_TEAM_FLOW} mine={false} layout="line" />
       </V>
-      <V label="the form's + is pressed" width={1100}>
-        <FlowMap {...props} flow={BUILTIN_FLOW} mine layout="row" adding="plan" />
+      <V label="the form's + is pressed" width={1180}>
+        <FlowLine {...props} flow={BUILTIN_FLOW} mine layout="line" adding="plan" />
       </V>
       <V
-        label="list · under 640 px"
-        note="Down arrows, the + between items, custom steps indented under the line."
+        label="stacked · under 640 px"
+        note="The states one under the other, the arrow labels between them, the + always there."
         width={390}
       >
-        <FlowMap
+        <FlowLine
           {...props}
           flow={FIXTURE_FLOW}
           mine
-          layout="list"
+          layout="stack"
           selected="custom:security-check"
         />
       </V>
@@ -140,70 +142,87 @@ function FlowMapBody() {
   );
 }
 
-// ---------------------------------------------------------------- StepCard
+// ---------------------------------------------------------------- ArrowLabel
 
-const CARD_W = 220;
+const LABEL_W = 180;
 
-function StepCardBody() {
-  const card = (
+function ArrowLabelBody() {
+  const label = (
     flow: typeof FIXTURE_FLOW,
     id: keyof typeof FIXTURE_FLOW.steps,
-    extra: { selected?: boolean; compact?: boolean; overrides?: boolean } = {},
+    extra: { selected?: boolean; variant?: "arrow" | "inline" | "loop" } = {},
   ) => (
-    <StepCard
-      step={flow.steps[id]}
-      catalog={FIXTURE_CATALOG}
-      onSelect={noop}
-      className="w-full"
-      {...extra}
-    />
+    <div className="flex justify-center">
+      <ArrowLabel step={flow.steps[id]} catalog={FIXTURE_CATALOG} onSelect={noop} {...extra} />
+    </div>
   );
   return (
     <>
       <V
         label="built-in"
-        note="No flow table anywhere: the skill that ships with the plugin."
-        width={CARD_W}
+        note="No flow table anywhere: the skill that ships with the plugin, and no chip."
+        width={LABEL_W}
       >
-        {card(BUILTIN_FLOW, "plan")}
+        {label(BUILTIN_FLOW, "plan")}
       </V>
-      <V label="team skill" note="This workspace's skill, chosen for everyone." width={CARD_W}>
-        {card(FIXTURE_TEAM_FLOW, "plan")}
+      <V label="team skill" note="This workspace's skill, chosen for everyone." width={LABEL_W}>
+        {label(FIXTURE_TEAM_FLOW, "plan")}
       </V>
       <V
         label="yours"
         note="My skill, with the dot that says it is mine over the team's."
-        width={CARD_W}
+        width={LABEL_W}
       >
-        {card(FIXTURE_FLOW, "plan")}
+        {label(FIXTURE_FLOW, "plan")}
       </V>
       <V
         label="override · options only"
         note="The team's skill stays; one option is mine."
-        width={CARD_W}
+        width={LABEL_W}
       >
-        {card(FIXTURE_FLOW, "do")}
+        {label(FIXTURE_FLOW, "do")}
       </V>
       <V
         label="unresolved"
-        note="The reference is gone: the built-in skill runs, and the card says so."
-        width={CARD_W}
+        note="The reference is gone: the built-in skill runs, and a dot says so."
+        width={LABEL_W}
       >
-        {card(FIXTURE_FLOW, "status")}
+        {label(FIXTURE_FLOW, "status")}
       </V>
-      <V label="selected" width={CARD_W}>
-        {card(BUILTIN_FLOW, "do", { selected: true })}
+      <V label="selected" width={LABEL_W}>
+        {label(BUILTIN_FLOW, "do", { selected: true })}
       </V>
-      <V label="Log · smaller, under Do next step" width={CARD_W}>
-        {card(BUILTIN_FLOW, "log", { compact: true })}
+      <V label="the loop · under In progress" width={LABEL_W}>
+        {label(BUILTIN_FLOW, "do", { variant: "loop" })}
+      </V>
+      <V label="Hand off · below the line" width={360}>
+        {label(BUILTIN_FLOW, "handoff", { variant: "inline" })}
       </V>
     </>
   );
 }
 
-// ---------------------------------------------------------------- CustomCard
+// ---------------------------------------------------------------- StatePill
 
-function CustomCardBody() {
+function StatePillBody() {
+  return (
+    <V
+      label="the five states"
+      note="The board's status icon and color. Not buttons: the arrows between them are what a person changes."
+      width={560}
+    >
+      <div className="flex flex-wrap gap-2">
+        {(["backlog", "planned", "in_progress", "review", "done"] as const).map((s) => (
+          <StatePill key={s} status={s} />
+        ))}
+      </div>
+    </V>
+  );
+}
+
+// ---------------------------------------------------------------- CustomChip
+
+function CustomChipBody() {
   const custom = (id: string): ResolvedCustom => {
     const c = FIXTURE_FLOW.custom.find((x) => x.id === id);
     if (!c) throw new Error(`no fixture step ${id}`);
@@ -219,35 +238,29 @@ function CustomCardBody() {
     unresolved: true,
   };
   const show = (c: ResolvedCustom, extra: { selected?: boolean; problem?: string } = {}) => (
-    <CustomCard
-      custom={c}
-      catalog={FIXTURE_CATALOG}
-      onSelect={noop}
-      className="w-full"
-      {...extra}
-    />
+    <CustomChip custom={c} onSelect={noop} {...extra} />
   );
   return (
     <>
-      <V label="optional" note="The run goes on when it fails, and logs it." width={190}>
+      <V label="optional" note="The run goes on when it fails, and logs it." width={220}>
         {show(custom("changelog"))}
       </V>
-      <V label="must pass" note="A failing step stops the run." width={190}>
+      <V label="must pass" note="A failing step stops the run." width={220}>
         {show(custom("security-check"))}
       </V>
       <V
         label="just you"
         note="A step of my own: it runs after the team's at this point."
-        width={190}
+        width={220}
       >
         {show(custom("notify-me"))}
       </V>
-      <V label="unresolved" width={190}>
+      <V label="unresolved" width={220}>
         {show(unresolved, {
           problem: "platform:auditing is not in the team library platform. The step does not run.",
         })}
       </V>
-      <V label="selected" width={190}>
+      <V label="selected" width={220}>
         {show(custom("security-check"), { selected: true })}
       </V>
     </>
@@ -259,15 +272,45 @@ function CustomCardBody() {
 function AddStepButtonBody() {
   return (
     <>
-      <V label="quiet" note="Always there, between two steps and after Hand off." width={120}>
+      <V
+        label="quiet"
+        note="Drawn on hover and focus of the line; always on touch and when stacked."
+        width={120}
+      >
         <div className="flex h-10 items-center justify-center">
-          <AddStepButton after="plan" afterName="Plan" onAdd={noop} />
+          <AddStepButton after="plan" afterName="Plan" shown onAdd={noop} />
         </div>
       </V>
       <V label="its form is open" width={120}>
         <div className="flex h-10 items-center justify-center">
           <AddStepButton after="plan" afterName="Plan" pressed onAdd={noop} />
         </div>
+      </V>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Helpers
+
+function HelpersBody() {
+  return (
+    <>
+      <V
+        label="Do next step · helpers and a custom step"
+        note="Plan, Log and Status run inside it; each opens its own panel. The custom steps on the arrow come next."
+        width={440}
+      >
+        <Helpers step="do" flow={ONE_STEP} />
+      </V>
+      <V label="Plan" width={440}>
+        <Helpers step="plan" flow={BUILTIN_FLOW} />
+      </V>
+      <V
+        label="a helper · Log"
+        note="Not on the line, so its panel says where it runs."
+        width={440}
+      >
+        <Helpers step="log" flow={BUILTIN_FLOW} />
       </V>
     </>
   );
@@ -550,7 +593,7 @@ function AgentTabBody() {
   return (
     <V
       label="before the agent connection exists"
-      note="The connect button, a line that the connection comes with round 2, and what the flow needs installed."
+      note="The connect button, a line that connecting is not available yet, and what the flow needs installed."
       width={720}
       height={560}
     >
@@ -581,31 +624,45 @@ export const settingsEntries: KitEntry[] = [
   ),
   entry(
     "Settings",
-    "FlowMap",
-    `${SRC}/FlowMap.tsx`,
-    "The flow is drawn as it runs, step after step with the custom steps where they run, so a person sees what a swap changes before making it.",
-    FlowMapBody,
+    "FlowLine",
+    `${SRC}/FlowLine.tsx`,
+    "The flow is the life of an issue: five states on one line, and on each arrow the skill that moves it along, so a person sees what a swap changes before making it.",
+    FlowLineBody,
   ),
   entry(
     "Settings",
-    "StepCard",
-    `${SRC}/StepCard.tsx`,
-    "One step, one glance: the skill in mono, where it lives, whose choice it is and what its options say; a warning when the reference no longer resolves.",
-    StepCardBody,
+    "StatePill",
+    `${SRC}/ArrowLabel.tsx`,
+    "The states are the board's own, in the board's colors, so the line reads as the board does.",
+    StatePillBody,
   ),
   entry(
     "Settings",
-    "CustomCard",
-    `${SRC}/StepCard.tsx`,
-    "A step that is added, not built in, is smaller and dashed; it says when it must pass and when it is only yours.",
-    CustomCardBody,
+    "ArrowLabel",
+    `${SRC}/ArrowLabel.tsx`,
+    "One step on its arrow: the skill in mono, a chip only when it is not built in, whose choice it is, and a dot when the reference no longer resolves.",
+    ArrowLabelBody,
+  ),
+  entry(
+    "Settings",
+    "CustomChip",
+    `${SRC}/ArrowLabel.tsx`,
+    "A step that is added, not built in, sits on its arrow as + and its label; it says when it must pass and when it is only yours.",
+    CustomChipBody,
   ),
   entry(
     "Settings",
     "AddStepButton",
-    `${SRC}/StepCard.tsx`,
-    "Inserting a step is one quiet click at the point where it will run.",
+    `${SRC}/ArrowLabel.tsx`,
+    "Inserting a step is one quiet click on the arrow where it will run.",
     AddStepButtonBody,
+  ),
+  entry(
+    "Settings",
+    "Helpers",
+    `${SRC}/Helpers.tsx`,
+    "Log, Writing style and Status are not on the line; the arrow they run in lists them, each opening its own panel.",
+    HelpersBody,
   ),
   entry(
     "Settings",

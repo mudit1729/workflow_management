@@ -4,10 +4,13 @@
 //               the folder, points the step at the copy and goes back to the panel;
 //   a skill     `?skill=ws:<name>` (or `me:<name>`): the file of the workspace or of my library, edited
 //               where it lives, with the same checks.
+
+import { useBlocker } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/common";
 import { Button, Skeleton } from "@/components/ui";
+import { DiscardDialog } from "@/features/files/DiscardDialog";
 import { SourceEditor } from "@/features/files/SourceEditor";
 import {
   allSkills,
@@ -148,8 +151,11 @@ export interface EditorShellProps {
   /** Why the last Save was refused, in a sentence. */
   refusal?: string;
   onBack: () => void;
-  /** The SourceEditor, given what it reports the draft to: `<SourceEditor onDraftChange={onDraft} …/>`. */
-  children: (onDraft: (text: string) => void) => ReactNode;
+  /**
+   * The SourceEditor, given what it reports the draft to: `<SourceEditor onDraftChange={onDraft} …/>`.
+   * `release` is called before the editor itself leaves (saved, cancelled), so the guard stays quiet.
+   */
+  children: (onDraft: (text: string) => void, release: () => void) => ReactNode;
 }
 
 /** The header, the editor and the live checks, which follow the draft as it is typed. */
@@ -165,6 +171,15 @@ export function EditorShell({
   children,
 }: EditorShellProps) {
   const [draft, setDraft] = useState(startText);
+  // A draft is not lost without asking: the back button, mod+, and the nav rail all stop here.
+  const released = useRef(false);
+  const dirty = draft !== startText;
+  const blocker = useBlocker({
+    shouldBlockFn: () => !released.current,
+    disabled: !dirty,
+    enableBeforeUnload: false,
+    withResolver: true,
+  });
   const problems = useMemo(() => validateSkill(draft, name, { exists }), [draft, name, exists]);
   const beside = width >= CHECKS_BESIDE;
 
@@ -198,7 +213,11 @@ export function EditorShell({
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* The editor takes the page; its own toolbar has Save and Cancel. */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children(setDraft)}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {children(setDraft, () => {
+            released.current = true;
+          })}
+        </div>
         {beside && (
           <aside
             aria-label="Checks"
@@ -218,6 +237,12 @@ export function EditorShell({
           {refusal}
         </p>
       )}
+      <DiscardDialog
+        open={blocker.status === "blocked"}
+        name={name}
+        onKeep={() => blocker.reset?.()}
+        onDiscard={() => blocker.proceed?.()}
+      />
     </div>
   );
 }
@@ -263,7 +288,7 @@ function CopyEditor({
       refusal={refusal}
       onBack={() => edit.back()}
     >
-      {(onDraft) => (
+      {(onDraft, release) => (
         <SourceEditor
           onDraftChange={onDraft}
           path={skillFilePath(name)}
@@ -302,10 +327,17 @@ function CopyEditor({
                   ? `Saved the copy and set ${forStep} to it in ${fileWords(saved.current.file)}`
                   : `Saved the copy in ${where}`,
               );
+            release();
             edit.back();
           }}
-          onCancel={() => edit.back()}
-          onReload={() => edit.back()}
+          onCancel={() => {
+            release();
+            edit.back();
+          }}
+          onReload={() => {
+            release();
+            edit.back();
+          }}
         />
       )}
     </EditorShell>
@@ -358,7 +390,7 @@ function InPlaceEditor({
       exists={exists}
       onBack={() => edit.back()}
     >
-      {(onDraft) => (
+      {(onDraft, release) => (
         <SourceEditor
           onDraftChange={onDraft}
           path={path}
@@ -377,10 +409,17 @@ function InPlaceEditor({
               stepOf(edit.for),
               async () => !!(await write({ path, text: before, base_rev: rev })),
             );
+            release();
             edit.back();
           }}
-          onCancel={() => edit.back()}
-          onReload={() => edit.back()}
+          onCancel={() => {
+            release();
+            edit.back();
+          }}
+          onReload={() => {
+            release();
+            edit.back();
+          }}
         />
       )}
     </EditorShell>
