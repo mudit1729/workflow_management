@@ -78,12 +78,13 @@ try {
     await page.waitForTimeout(400);
   };
   const saved = () => page.locator('[data-wf="SavedLine"]');
-  const card = (step) => page.locator(`[data-wf="StepCard"][data-step="${step}"]`);
+  const card = (step) => page.locator(`[data-wf="ArrowLabel"][data-step="${step}"]`).first();
 
   // 0. The sample on the board, then Settings by the gear (no reload).
   await page.goto(`${BASE}/w`, { waitUntil: "networkidle" });
   await page.evaluate(() => window.__wf.loadSample());
   await page.evaluate(() => window.__wf.setCodexPhaseMs(150));
+  await page.evaluate(() => window.__wf.connectAgent());
   await page.getByRole("link", { name: "Settings" }).first().click();
   await page.waitForURL(/\/settings\/flow$/, { timeout: T });
   await page.locator('[data-wf="FlowTab"]').waitFor({ timeout: T });
@@ -92,11 +93,17 @@ try {
     await page.getByRole("heading", { name: "Skills flow" }).isVisible(),
   );
   ok(
-    "four steps, Log under Do next step, and the Anywhere row",
-    (await page.locator('[data-wf="StepCard"]').count()) === 7,
+    "five states, and the skill on each arrow (Do next step three times, Hand off below)",
+    (await page.locator('[data-wf="StatePill"]').count()) === 5 &&
+      (await page.locator('[data-wf="ArrowLabel"]').count()) === 6,
   );
-  for (const step of ["add", "plan", "do", "handoff"])
-    ok(`${step} is built in`, (await card(step).innerText()).includes("Built-in"));
+  for (const [step, skill] of [
+    ["add", "adding-work"],
+    ["plan", "planning-issues"],
+    ["do", "doing-next-step"],
+    ["handoff", "handing-off"],
+  ])
+    ok(`${step} is built in`, (await card(step).innerText()).includes(skill));
   const base = await read("workflow.toml");
   ok("the shipped workflow.toml has no [flow]", !base.includes("[flow"));
   await shot(page, "0-flow");
@@ -167,7 +174,7 @@ try {
       added.every((l) => /^(#.*|\[flow\.plan\]|skill = .*)$/.test(l)),
     JSON.stringify(added),
   );
-  ok("the card says This workspace", (await card("plan").innerText()).includes("This workspace"));
+  ok("the arrow says This workspace", (await card("plan").innerText()).includes("This workspace"));
   await shot(page, "2c-saved");
   // Undo takes the folder and the pointer back, exactly.
   await saved().getByRole("button", { name: "Undo" }).click();
@@ -178,7 +185,10 @@ try {
     await read("workflow.toml"),
   );
   ok("Undo: the copy is gone", (await read("skills/wf-planning-issues/SKILL.md")) === undefined);
-  ok("Undo: the card is built in again", (await card("plan").innerText()).includes("Built-in"));
+  ok(
+    "Undo: the arrow is built in again",
+    (await card("plan").innerText()).includes("planning-issues"),
+  );
   // Again, and the hints, the bundle's flow line and the run's Plan phase name the copy.
   await copyPlan(false);
   ok(
@@ -259,8 +269,8 @@ try {
   await shot(page, "3a-override");
   await page.getByRole("radio", { name: "Team default", exact: true }).click();
   ok(
-    "Team default shows the team's value",
-    (await card("do").innerText()).includes("Tasks finish when verified"),
+    "Team default shows the team's value, without my override",
+    !(await card("do").innerText()).includes("Your override"),
     await card("do").innerText(),
   );
   await page.getByRole("radio", { name: "In effect for me", exact: true }).click();
@@ -335,7 +345,7 @@ try {
     await page.getByRole("radio", { name: "Yes", exact: true }).click();
     if (first) await shot(page, "4a-add");
     await page.getByRole("button", { name: "Add step" }).click();
-    await page.locator('[data-wf="CustomCard"]').first().waitFor({ timeout: T });
+    await page.locator('[data-wf="CustomChip"]').first().waitFor({ timeout: T });
   };
   const beforeAdd = await read("workflow.toml");
   await addStep(true);
@@ -348,9 +358,9 @@ try {
     flowText,
   );
   ok(
-    "its card reads Security check, Must pass",
-    /Security check[\s\S]*Must pass/.test(
-      await page.locator('[data-wf="CustomCard"]').first().innerText(),
+    "its chip reads + Security check, Must pass",
+    /\+ Security check[\s\S]*Must pass/.test(
+      await page.locator('[data-wf="CustomChip"]').first().innerText(),
     ),
   );
   await shot(page, "4b-added");
@@ -361,7 +371,7 @@ try {
     (await read("workflow.toml")) === beforeAdd,
     await read("workflow.toml"),
   );
-  ok("Undo: the card is gone", (await page.locator('[data-wf="CustomCard"]').count()) === 0);
+  ok("Undo: the card is gone", (await page.locator('[data-wf="CustomChip"]').count()) === 0);
   await go("/settings/flow");
   await addStep(false);
   ok(
@@ -414,8 +424,8 @@ try {
   );
   // Undo takes the step out again, exactly.
   await go("/settings/flow");
-  await page.locator('[data-wf="CustomCard"]').first().click();
-  await page.getByRole("button", { name: "Remove step" }).click();
+  await page.locator('[data-wf="CustomChip"]').first().click();
+  await page.getByRole("button", { name: "Remove for everyone" }).click();
   await saved().waitFor({ timeout: T });
   ok(
     "Remove step takes the table out",

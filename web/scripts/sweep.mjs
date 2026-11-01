@@ -55,6 +55,8 @@ export const ROUTES = [
   "/skills?skill=adding-work",
   "/settings/flow",
   "/settings/flow?step=plan",
+  "/settings/flow?step=log",
+  "/settings/flow?view=team",
   "/settings/agent",
   "/settings/workspace",
   "/kit",
