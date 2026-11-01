@@ -13,6 +13,7 @@ import type {
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "./error";
 import { isRealApi, loadMock } from "./mock-bridge";
+import type { SkillsCatalog } from "./skills";
 import type {
   CodexRun,
   CodexRunKind,
@@ -25,8 +26,10 @@ import type {
   LibrarySource,
   LibraryTree,
   PageRef,
+  PersonalConfig,
   ResolvedAddress,
   SearchScope,
+  SkillFile,
   SplitInput,
   SplitResult,
   WfOp,
@@ -97,6 +100,33 @@ export interface Api {
   /** Add a team library. 422 when its alias is taken. */
   addLibrary(source: LibrarySource): Promise<LibraryInfo>;
   removeLibrary(alias: string): Promise<void>;
+  // ---- the skills flow (docs/plan/proposals/skills-flow-spec.md). `wf serve` paths are a guess.
+  /**
+   * The built-in plugins and skills, then the shelves of this workspace's `skills/` folder, the
+   * loaded team libraries and the person's library. A guess for `wf serve`: `GET /api/skills`.
+   */
+  skills(): Promise<SkillsCatalog>;
+  /**
+   * The text files of one skill's folder, `SKILL.md` first, paths relative to the folder
+   * (scripts and references too). 404 when the reference names no skill. A guess for `wf serve`:
+   * `GET /api/skills/files?ref=<ref>`.
+   */
+  skillFiles(ref: string): Promise<SkillFile[]>;
+  /**
+   * The person's `library.toml`: text, revision and the `[flow]` override it holds. The one config
+   * file of the personal library the dashboard reads and writes (alias `me`). A guess for the
+   * bridge: `GET /api/libraries/me/config`.
+   */
+  personalConfig(): Promise<PersonalConfig>;
+  /**
+   * Replace the text of the personal `library.toml`. The bridge commits and pushes it. 409 when
+   * `base_rev` is stale, 422 when the text is not TOML. A guess for the bridge:
+   * `PUT /api/libraries/me/config` with `{ text, base_rev }`.
+   */
+  savePersonalConfig(args: {
+    text: string;
+    base_rev?: string;
+  }): Promise<{ rev: string; commit: string }>;
 }
 
 /** A workspace path in a URL: every segment encoded, the slashes kept. */
@@ -190,6 +220,15 @@ const real: Api = {
   removeLibrary: async (alias) => {
     await request<unknown>(`/libraries/${encodeURIComponent(alias)}`, { method: "DELETE" }, "text");
   },
+  skills: () => request("/skills"),
+  skillFiles: (ref) => request(`/skills/files?${new URLSearchParams({ ref })}`),
+  personalConfig: () => request("/libraries/me/config"),
+  savePersonalConfig: ({ text, base_rev }) =>
+    request("/libraries/me/config", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, base_rev }),
+    }),
 };
 
 const mock: Api = {
@@ -221,6 +260,10 @@ const mock: Api = {
   saveMedia: async (args) => (await loadMock()).saveMedia(args),
   addLibrary: async (source) => (await loadMock()).addLibrary(source),
   removeLibrary: async (alias) => (await loadMock()).removeLibrary(alias),
+  skills: async () => (await loadMock()).skills(),
+  skillFiles: async (ref) => (await loadMock()).skillFiles(ref),
+  personalConfig: async () => (await loadMock()).personalConfig(),
+  savePersonalConfig: async (args) => (await loadMock()).savePersonalConfig(args),
 };
 
 export const api: Api = isRealApi ? real : mock;

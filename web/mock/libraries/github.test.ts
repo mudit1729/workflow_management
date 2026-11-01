@@ -643,7 +643,7 @@ describe("the fixture acme/platform-handbook", () => {
     if (!found.ok) throw new Error(found.failure.message);
     expect(found.value.repo.fixture).toBe(true);
     expect(found.value.choices).toHaveLength(1);
-    expect(found.value.choices[0]).toMatchObject({ root: "docs", pages: 10, media: 2 });
+    expect(found.value.choices[0]).toMatchObject({ root: "docs", pages: 11, media: 2 });
   });
 
   it("names the page of a blob link and the folder of a tree link", async () => {
@@ -706,7 +706,7 @@ describe("the fixture acme/platform-handbook", () => {
     });
     expect(corpus.info("platform-handbook")).toMatchObject({
       name: "Platform handbook",
-      pages: 10,
+      pages: 11,
       media: 2,
       others: 1,
       home: "README.md",
@@ -718,6 +718,8 @@ describe("the fixture acme/platform-handbook", () => {
       "Getting started",
       "Runbooks",
       "Architecture",
+      // The skills folder of the library (skills-flow-spec 8) is a section like the others.
+      "Skills",
     ]);
     expect(tree?.others).toEqual(["runbooks/alerts.yaml"]);
 
@@ -751,7 +753,7 @@ describe("the fixture acme/platform-handbook", () => {
     const after = await remoteHead("https://github.com/acme/platform-handbook", "main", offline);
     expect(after).toMatchObject({ ok: true, value: { commit: expect.stringMatching(/^e4f5a6b/) } });
     const found = await findLibrary("acme/platform-handbook", offline);
-    expect(found).toMatchObject({ ok: true, value: { choices: [{ pages: 11 }] } });
+    expect(found).toMatchObject({ ok: true, value: { choices: [{ pages: 12 }] } });
     expect(found.ok && found.value.repo.commit).toMatch(/^e4f5a6b/);
     const index = found.ok ? await found.value.repo.read("docs/runbooks/index.md") : "";
     expect(index).toContain("[[runbooks/high-latency]]");
@@ -760,7 +762,7 @@ describe("the fixture acme/platform-handbook", () => {
     expect(heard).toHaveBeenCalledTimes(2);
     expect(await findLibrary("acme/platform-handbook", offline)).toMatchObject({
       ok: true,
-      value: { choices: [{ pages: 10 }] },
+      value: { choices: [{ pages: 11 }] },
     });
     off();
   });

@@ -6,7 +6,19 @@
 //
 // In the dev server a saved SKILL.md replaces this module (it accepts its own update) and the new
 // catalog goes into a holder that outlives the module, so the page does not reload.
-import type { Skill, SkillPlugin, SkillsCatalog, SkillsMarketplace } from "@/lib/api/skills";
+import { skillRef } from "@/lib/api/flow";
+import { firstSkillProblem } from "@/lib/api/skill-check";
+import type {
+  Skill,
+  SkillPlugin,
+  SkillShelf,
+  SkillsCatalog,
+  SkillsMarketplace,
+} from "@/lib/api/skills";
+import type { LibraryInfo } from "@/lib/api/types";
+import { BUILTIN_FILES, BUILTIN_PATHS } from "./skill-files";
+
+export { validateSkill } from "@/lib/api/skill-check";
 
 const SKILL_FILES = import.meta.glob("../../plugins/*/skills/*/SKILL.md", {
   query: "?raw",
@@ -66,7 +78,11 @@ export function splitDescription(description: string): { use_when: string; avoid
   return { use_when: end ? head.slice(0, end.index + 1) : head, avoid };
 }
 
-function parseSkill(key: string, text: string): Skill | undefined {
+/** `SKILL.md` first, then the rest of a folder's files in path order. */
+const folderFiles = (files: string[]): string[] =>
+  [...files].sort((a, b) => (a === "SKILL.md" ? -1 : b === "SKILL.md" ? 1 : a < b ? -1 : 1));
+
+function parseSkill(key: string, text: string, paths: readonly string[]): Skill | undefined {
   const path = repoPath(key);
   const parts = path.split("/"); // plugins / <plugin> / skills / <skill> / SKILL.md
   const plugin = parts[1];
@@ -75,8 +91,10 @@ function parseSkill(key: string, text: string): Skill | undefined {
   const front = skillFrontmatter(text);
   const description = front.description ?? "";
   const { use_when, avoid } = splitDescription(description);
+  const own = `plugins/${plugin}/skills/${folder}/`;
+  const name = front.name || folder;
   return {
-    name: front.name || folder,
+    name,
     plugin,
     path,
     description,
@@ -84,6 +102,15 @@ function parseSkill(key: string, text: string): Skill | undefined {
     ...(avoid ? { avoid } : {}),
     text,
     lines: text.replace(/\n$/, "").split("\n").length,
+    source: "built-in",
+    ref: name,
+    files: folderFiles(
+      paths
+        .filter((p) => p.startsWith(own))
+        .map((p) => p.slice(own.length))
+        .concat("SKILL.md")
+        .filter((p, i, all) => all.indexOf(p) === i),
+    ),
   };
 }
 
@@ -107,6 +134,8 @@ export function buildCatalog(files: {
   skills: Record<string, string>;
   plugins: Record<string, string>;
   marketplaces: Record<string, string>;
+  /** Repository-relative paths of every file of the skills (scripts, references). Default: none. */
+  paths?: readonly string[];
 }): SkillsCatalog {
   const marketFile = Object.entries(files.marketplaces)[0];
   const marketJson = marketFile ? parseJson(marketFile[1]) : undefined;
@@ -124,7 +153,7 @@ export function buildCatalog(files: {
     : [];
 
   const skills = Object.entries(files.skills)
-    .map(([key, text]) => parseSkill(key, text))
+    .map(([key, text]) => parseSkill(key, text, files.paths ?? []))
     .filter((s): s is Skill => s !== undefined);
 
   const byFolder = new Map<string, Skill[]>();
@@ -162,7 +191,7 @@ export function buildCatalog(files: {
       skills: [...(byFolder.get(folder) ?? [])].sort(compareSkills),
     };
   });
-  return { marketplace, plugins };
+  return { marketplace, plugins, shelves: [] };
 }
 
 /** "Start here" skills first (the entry point of a plugin), then by name. */
@@ -174,7 +203,12 @@ function compareSkills(a: Skill, b: Skill): number {
 // ---------------------------------------------------------------- the catalog, hot-swappable
 
 const catalog = (): SkillsCatalog =>
-  buildCatalog({ skills: SKILL_FILES, plugins: PLUGIN_FILES, marketplaces: MARKETPLACE_FILES });
+  buildCatalog({
+    skills: SKILL_FILES,
+    plugins: PLUGIN_FILES,
+    marketplaces: MARKETPLACE_FILES,
+    paths: BUILTIN_PATHS,
+  });
 
 // The holder outlives this module: a re-run of it (a SKILL.md saved in dev) writes the new
 // catalog into the same object, and the copy of `skillsCatalog` that importers still hold reads it.
@@ -189,4 +223,104 @@ if (import.meta.hot) {
 /** The plugins and skills as committed. */
 export function skillsCatalog(): SkillsCatalog {
   return holder.current;
+}
+
+// ---------------------------------------------------------------- the other sources
+
+/** A skill folder in the files of a workspace or a library: `skills/<name>/SKILL.md`. */
+const SKILL_MD = /^skills\/([^/]+)\/SKILL\.md$/;
+
+/**
+ * The skills of one source from its text files (paths relative to the root of the workspace or
+ * library): every `skills/<name>/SKILL.md`, with the files beside it. `prefix` is where the root
+ * is in its repository (`docs/` for a library whose root is `docs`), so `path` is repo-relative.
+ */
+export function shelfSkills(args: {
+  source: "workspace" | "library" | "me";
+  alias?: string;
+  /** The key the skills belong to: `ws`, the alias or `me`. */
+  key: string;
+  files: Record<string, string>;
+  prefix?: string;
+}): Skill[] {
+  const { source, alias, key, files } = args;
+  const skills: Skill[] = [];
+  for (const [path, text] of Object.entries(files)) {
+    const folder = SKILL_MD.exec(path)?.[1];
+    if (!folder) continue;
+    const own = `skills/${folder}/`;
+    const mine = Object.keys(files)
+      .filter((p) => p.startsWith(own))
+      .map((p) => p.slice(own.length));
+    const front = skillFrontmatter(text);
+    const description = front.description ?? "";
+    const { use_when, avoid } = splitDescription(description);
+    // Relative paths in a skill: `../other/x.md` is a built-in or a sibling of the same shelf.
+    const exists = (rel: string): boolean => {
+      const sibling = /^\.\.\/([^/]+)\/(.+)$/.exec(rel);
+      if (sibling)
+        return (
+          BUILTIN_FILES.has(`${sibling[1]}/${sibling[2]}`) ||
+          `skills/${sibling[1]}/${sibling[2]}` in files
+        );
+      return `${own}${rel}` in files;
+    };
+    const problem = firstSkillProblem(text, folder, { exists });
+    skills.push({
+      name: front.name || folder,
+      plugin: key,
+      path: `${args.prefix ?? ""}${path}`,
+      description,
+      use_when,
+      ...(avoid ? { avoid } : {}),
+      text,
+      lines: text.replace(/\n$/, "").split("\n").length,
+      source,
+      // The reference is the folder's name: it is what the install puts beside the built-ins.
+      ref: skillRef(source, folder, alias),
+      ...(alias ? { library: alias } : {}),
+      files: folderFiles(mine),
+      ...(problem ? { problem } : {}),
+    });
+  }
+  return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** This workspace's `skills/` folder. `files` are the workspace's text files by path. */
+export function workspaceShelf(files: Record<string, string>): SkillShelf {
+  return {
+    source: "workspace",
+    key: "ws",
+    name: "This workspace",
+    path: "skills",
+    editable: true,
+    skills: shelfSkills({ source: "workspace", key: "ws", files }),
+  };
+}
+
+/** A shelf for a loaded library: `files` are relative to its root, `info` is the library's listing. */
+export function libraryShelf(info: LibraryInfo, files: Record<string, string>): SkillShelf {
+  const personal = info.kind === "personal";
+  const prefix = !personal && info.root ? `${info.root}/` : "";
+  const key = personal ? "me" : info.alias;
+  return {
+    source: personal ? "me" : "library",
+    key,
+    name: personal ? "My library" : info.name,
+    path: `${prefix}skills`,
+    ...(info.url ? { url: info.url } : {}),
+    editable: personal,
+    skills: shelfSkills({
+      source: personal ? "me" : "library",
+      ...(personal ? {} : { alias: info.alias }),
+      key,
+      files,
+      prefix,
+    }),
+  };
+}
+
+/** The built-in catalog with the shelves of the other sources after it. */
+export function composeCatalog(base: SkillsCatalog, shelves: SkillShelf[]): SkillsCatalog {
+  return { ...base, shelves };
 }

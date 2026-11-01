@@ -2,6 +2,7 @@
 import type {
   ContextLink,
   Diagnostic,
+  FlowConfig,
   GroupId,
   Handle,
   IssueId,
@@ -182,13 +183,23 @@ export type CodexRunKind = "next_step";
  */
 export type CodexRunStatus = "running" | "done" | "failed" | "cancelled" | "nothing_ready";
 
-/** The phases of a `next_step` run, in order. */
-export type CodexPhaseId = "claim" | "log" | "verify" | "done";
+/**
+ * The phases of a `next_step` run, in order: `claim` (with the plan first when the issue has
+ * none), `log`, `verify` (CI; absent when the flow commits nothing), one `custom:<id>` for each
+ * custom step after Do next step that runs, and `done`.
+ */
+export type CodexPhaseId = "claim" | "log" | "verify" | "done" | `custom:${string}`;
 
 export interface CodexPhase {
   id: CodexPhaseId;
   /** Imperative, for a step list: "Claim T-2". */
   label: string;
+  /**
+   * The skill that ran the phase, as a reference (`doing-next-step`, `ws:acme-planning`): the Plan
+   * step's skill for a claim that plans first, the Log step's for `log`, a custom step's own, the
+   * Do next step's for the rest. Shown in the tooltip of the run strip and in the run's details.
+   */
+  skill?: string;
   /**
    * `running` only while the run is `running`. A run that stops early (`cancelled`, `failed`)
    * leaves the phase it cut short, and the ones after it, `pending`.
@@ -262,6 +273,27 @@ export interface WorkspaceFile {
   bytes: number;
   /** Findings of this file, with line numbers. */
   diagnostics: Diagnostic[];
+}
+
+/** One text file of a skill folder: `SKILL.md`, `scripts/run.sh`, `references/format.md`. */
+export interface SkillFile {
+  /** Relative to the skill's folder. */
+  path: string;
+  text: string;
+}
+
+/**
+ * The person's `library.toml`: the raw text to edit and the flow override it holds
+ * (skills-flow-spec 3.2). `rev` is the `base_rev` of the next save.
+ */
+export interface PersonalConfig {
+  /** Empty when the library has no `library.toml` yet. */
+  text: string;
+  rev: string;
+  /** The `[flow]` tables, valid values only. */
+  flow: FlowConfig;
+  /** What the server could not use: invalid TOML, a value the flow does not take. */
+  problems: string[];
 }
 
 // ---------------------------------------------------------------- libraries

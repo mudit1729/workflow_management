@@ -47,6 +47,11 @@ export interface PlanArgs {
   by: Handle;
   /** The lane of every task: the area of the work. */
   lane: string;
+  /**
+   * The most tasks a phase may have (the Plan step's `max_tasks`, default 8). More criteria than
+   * that start a second phase, a third, and so on, each with at most this many.
+   */
+  maxTasks?: number;
 }
 
 /** The phase name of a drafted plan. */
@@ -75,6 +80,13 @@ export function draftPlan(src: IssueSrc, args: PlanArgs): PlanSrc {
       ],
     };
   });
+  // A plan holds at most `maxTasks` tasks in one phase; the rest wait in the next one.
+  const per = Math.max(1, args.maxTasks ?? tasks.length);
+  const phases = Array.from({ length: Math.max(1, Math.ceil(tasks.length / per)) }, (_, i) => ({
+    index: i + 1,
+    name: i === 0 ? PHASE_NAME : `${PHASE_NAME}, part ${i + 1}`,
+    tasks: tasks.slice(i * per, (i + 1) * per),
+  }));
   return {
     updated_at: args.at,
     updated_by: args.by,
@@ -83,6 +95,6 @@ export function draftPlan(src: IssueSrc, args: PlanArgs): PlanSrc {
       "Each task satisfies one criterion of goal.md and proves it with the verify command of that criterion. The tasks run in order. Revise the plan when the work shows a better split.",
     assumptions: [],
     prior_art: [],
-    phases: [{ index: 1, name: PHASE_NAME, tasks }],
+    phases,
   };
 }

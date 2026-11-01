@@ -119,6 +119,12 @@ describe("config", () => {
       staleness: { issue_hours: 24, task_hours: 4 },
       author: "shruti",
       archify: "unavailable",
+      // The team-only options the shipped file writes ([context] and [staleness]).
+      flow: {
+        steps: {},
+        custom: {},
+        limits: { budget_tokens: 6000, changes: 5, issue_hours: 24, task_hours: 4 },
+      },
     });
   });
 

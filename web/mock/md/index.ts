@@ -2,6 +2,7 @@
 // daemon does and returns the sources `derive()` needs, plus the texts, the F and S lint
 // findings, the anchors and the diagrams. It never throws: bad input becomes findings.
 import type { Diagnostic, Diagram, IssueId, LibId, Severity } from "@/gen/types";
+import { BUILTIN_FILES } from "../skill-files";
 import type {
   DocSrc,
   GroupSrc,
@@ -15,6 +16,12 @@ import { toDate, toTs } from "../time";
 import { hashId } from "../util";
 import { checkWorkspace } from "./checks";
 import { lintCommon, lintIssueFile, lintLibraryFile } from "./lint";
+import {
+  checkFlowRefs,
+  lintWorkspaceSkill,
+  skillFolderOf,
+  workspaceSkillFiles,
+} from "./parse-flow";
 import { type GoalParse, parseGoal } from "./parse-goal";
 import { parseChanges, parseDecisions, parseLearnings } from "./parse-log";
 import {
@@ -175,12 +182,35 @@ function load(input: Record<string, string>, opts: LoadOptions): LoadedWorkspace
       authors.find((a) => a.kind === "human")?.handle ?? authors[0]?.handle ?? "me";
   }
 
+  // ---- skills: the workspace's own `skills/<name>/SKILL.md` follow the skill rules (F021), and the
+  // flow's references to a built-in or workspace skill must exist (F020). The folder is not an
+  // issue folder: nothing below it is read as goal.md, plan.md or a library item.
+  const skillFiles = workspaceSkillFiles(text);
+  const skillNames = new Set(skillFiles.map(skillFolderOf));
+  if (cfgCtx) checkFlowRefs(cfgCtx, cfg.config.flow, skillNames);
+  for (const path of skillFiles) {
+    recognised.add(path);
+    const name = skillFolderOf(path);
+    // A relative path in a skill: `../other/x.md` is another skill (a built-in or one of the
+    // workspace's); `references/x.md` is its own. Its scripts are not text files this loader is
+    // given, so they are taken as there.
+    lintWorkspaceSkill(ctxOf(path), (rel) => {
+      const sibling = /^\.\.\/([^/]+)\/(.+)$/.exec(rel);
+      if (sibling)
+        return (
+          BUILTIN_FILES.has(`${sibling[1]}/${sibling[2]}`) ||
+          `skills/${sibling[1]}/${sibling[2]}` in text
+        );
+      return rel.startsWith("scripts/") || `skills/${name}/${rel}` in text;
+    });
+  }
+
   // ---- folder structure
   const allPaths = [...Object.keys(text), ...Object.keys(binary)];
   const underIssues = (p: string) => p.startsWith(`${issuesDir}/`);
   const issueDirSet = new Set(
     Object.keys(text)
-      .filter((p) => underIssues(p) && base(p) === "goal.md")
+      .filter((p) => underIssues(p) && !p.startsWith("skills/") && base(p) === "goal.md")
       .map(parentOf)
       .filter((d) => d !== issuesDir),
   );

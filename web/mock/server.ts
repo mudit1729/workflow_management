@@ -3,6 +3,7 @@
 // shared instance for the app and exposes its controls on `window.__wf` for the Prototype
 // panel and the command palette.
 import type {
+  FlowStepId,
   GlossaryTerm,
   Health,
   IssueDetail,
@@ -13,7 +14,8 @@ import type {
   WorkspaceSnapshot,
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "@/lib/api/error";
-import type { SkillsCatalog } from "@/lib/api/skills";
+import { parseSkillRef, type ResolvedFlow, resolveFlow } from "@/lib/api/flow";
+import { type SkillsCatalog, skillExists } from "@/lib/api/skills";
 import type {
   CodexRun,
   CodexRunKind,
@@ -26,8 +28,10 @@ import type {
   LibrarySource,
   LibraryTree,
   PageRef,
+  PersonalConfig,
   ResolvedAddress,
   SearchScope,
+  SkillFile,
   SplitInput,
   SplitResult,
   WfOp,
@@ -39,10 +43,12 @@ import { contextBundle } from "./context";
 import { createEventPlayer } from "./events";
 import { listFiles, readFile } from "./files";
 import { createLibraries, type Libraries } from "./libraries";
+import { removeTomlTable, setTomlKey } from "./md/toml-edit";
 import { applyOp } from "./ops";
 import { PERSONAL, PERSONAL_SAMPLE } from "./personal-files";
 import { search as searchCorpus } from "./search";
-import { skillsCatalog } from "./skills";
+import { builtinSkillFiles } from "./skill-files";
+import { composeCatalog, libraryShelf, skillsCatalog, workspaceShelf } from "./skills";
 import {
   type Connection,
   checkPath,
@@ -86,6 +92,16 @@ export interface MockControls {
   holdSample: () => () => void;
   /** Time between the phases of the Codex runs that start from now on, in ms. Default 2000. */
   setCodexPhaseMs: (ms: number) => void;
+  /**
+   * Point a step of the skills flow at a skill, as a script would: `setFlow("plan", "ws:acme-planning")`
+   * writes `[flow.plan] skill` to `workflow.toml` (the team default); with `"me"` it writes my
+   * `library.toml`. One minimal edit of the file, like the Settings page makes.
+   */
+  setFlow: (step: FlowStepId, ref: string, scope?: "team" | "me") => void;
+  /** Back to the built-in flow: no `[flow]` table in `workflow.toml` or in my `library.toml`, no custom step set to fail. */
+  resetFlow: () => void;
+  /** Make the custom step `id` fail (or pass again) in the Do next step runs that reach it. */
+  failCustomStep: (id: string, fail?: boolean) => void;
 }
 
 export interface MockServerOptions extends StoreOptions {
@@ -123,8 +139,21 @@ export interface MockServer {
   cancelCodexRun(id: string): Promise<CodexRun>;
   /** Hear every move of a Codex run and every change of an issue's git and CI data. */
   subscribeCodex(fn: (e: CodexEvent) => void): () => void;
-  /** The plugins and skills of the repository, read from its files (Workdatabase · Skills). */
+  /**
+   * The plugins and skills of the repository, read from its files (Workdatabase · Skills), then
+   * the shelves of this workspace's `skills/` folder, the loaded team libraries and the personal
+   * library.
+   */
   skills(): Promise<SkillsCatalog>;
+  /** The text files of one skill's folder by reference, `SKILL.md` first. 404 when there is none. */
+  skillFiles(ref: string): Promise<SkillFile[]>;
+  /** The personal `library.toml`: text, revision and its `[flow]` override. */
+  personalConfig(): Promise<PersonalConfig>;
+  /** Replace the personal `library.toml`. 409 on a stale `base_rev`, 422 when it is not TOML. */
+  savePersonalConfig(args: {
+    text: string;
+    base_rev?: string;
+  }): Promise<{ rev: string; commit: string }>;
   /** The workspace library, the personal one and the team libraries, in that order. */
   libraries(): Promise<LibraryInfo[]>;
   libraryTree(alias: string): Promise<LibraryTree>;
@@ -176,11 +205,20 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function createMockServer(options: MockServerOptions = {}): MockServer {
   const store = createStore(options);
   const player = createEventPlayer(store, { autoplay: options.autoplay });
-  const codex = createCodex(store, { phaseMs: options.codexPhaseMs });
   const libs = createLibraries(store, {
     personal: options.personal ?? PERSONAL,
     personalSample: options.personalSample ?? PERSONAL_SAMPLE,
   });
+  // The flow in effect for the person this server acts for: the team's `[flow]`, my override over
+  // it, and the skills that exist (the catalog below). The Do next step run and the context
+  // bundle follow it.
+  const flowNow = (): ResolvedFlow =>
+    resolveFlow({
+      team: store.world.config.flow,
+      me: libs.personalConfig().flow,
+      exists: skillExists(catalog()),
+    });
+  const codex = createCodex(store, { phaseMs: options.codexPhaseMs, flow: flowNow });
   const latency = options.latency ?? [80, 160];
   let conflictNext = false;
   /** Holders of the sample that `controls.holdSample` handed out and that have not released yet. */
@@ -244,6 +282,35 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
       };
     },
     setCodexPhaseMs: (ms) => codex.setPhaseMs(ms),
+    setFlow: (step, ref, scope = "team") => {
+      if (scope === "me") {
+        const mine = libs.personalConfig().text || 'kind = "personal"\n';
+        libs.savePersonalConfig({ text: setTomlKey(mine, `flow.${step}`, "skill", ref) });
+        return;
+      }
+      const text = store.text("workflow.toml") ?? "wf_format = 1\n";
+      commit(() =>
+        store.applyChanges(
+          [{ path: "workflow.toml", text: setTomlKey(text, `flow.${step}`, "skill", ref) }],
+          store.me,
+          "file",
+        ),
+      );
+    },
+    resetFlow: () => {
+      codex.resetFailures();
+      const mine = libs.personalConfig().text;
+      const mineAfter = removeTomlTable(mine, "flow", { deep: true });
+      if (mineAfter !== mine) libs.savePersonalConfig({ text: mineAfter });
+      const text = store.text("workflow.toml");
+      if (text === undefined) return;
+      const after = removeTomlTable(text, "flow", { deep: true });
+      if (after !== text)
+        commit(() =>
+          store.applyChanges([{ path: "workflow.toml", text: after }], store.me, "file"),
+        );
+    },
+    failCustomStep: (id, fail) => codex.failCustomStep(id, fail),
   };
 
   /** What a context id (library item, glossary term, file) is called in a list. */
@@ -253,6 +320,29 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     (store.text(id) !== undefined || store.assets()[id]
       ? id.slice(id.lastIndexOf("/") + 1)
       : undefined);
+
+  /** The workspace's own skills: its text files under `skills/`. */
+  const workspaceSkillFiles = (): Record<string, string> =>
+    Object.fromEntries(
+      store
+        .paths()
+        .filter((p) => p.startsWith("skills/"))
+        .flatMap((p) => {
+          const text = store.text(p);
+          return text === undefined ? [] : [[p, text] as const];
+        }),
+    );
+
+  /** The catalog: the plugins' skills, then each source that is not a plugin. */
+  const catalog = (): SkillsCatalog =>
+    composeCatalog(skillsCatalog(), [
+      workspaceShelf(workspaceSkillFiles()),
+      ...libs
+        .list()
+        .filter((l) => l.loaded && (l.kind === "team" || l.kind === "personal"))
+        .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "team" ? -1 : 1))
+        .map((l) => libraryShelf(l, libs.files(l.alias))),
+    ]);
 
   /** The error of a refused file edit, in the shape of a 422. */
   const invalid = (...gaps: string[]) => new ApiError(422, { diagnostics: [], gaps });
@@ -288,7 +378,15 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     context: async (id, budget) => {
       await delay();
       if (!store.derived.details.has(id)) throw new NotFoundError(`Issue ${id}`);
-      return contextBundle(store.derived, id, budget, store.now(), store.delivery(id), libs);
+      return contextBundle(
+        store.derived,
+        id,
+        budget,
+        store.now(),
+        store.delivery(id),
+        libs,
+        flowNow(),
+      );
     },
     ops: async (op) => {
       await delay();
@@ -327,7 +425,37 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         offDelivery();
       };
     },
-    skills: () => read(skillsCatalog),
+    skills: () => read(catalog),
+    skillFiles: async (ref) => {
+      await delay();
+      const parts = parseSkillRef(ref);
+      if (!parts) throw new NotFoundError(`Skill ${ref}`);
+      const folder = `skills/${parts.name}/`;
+      const own = (files: Record<string, string>): SkillFile[] =>
+        Object.entries(files)
+          .filter(([p]) => p.startsWith(folder))
+          .map(([p, text]) => ({ path: p.slice(folder.length), text }));
+      const found =
+        parts.source === "built-in"
+          ? await builtinSkillFiles(parts.name)
+          : own(
+              parts.source === "workspace"
+                ? workspaceSkillFiles()
+                : libs.files(parts.source === "me" ? "me" : (parts.alias as string)),
+            );
+      if (!found.some((f) => f.path === "SKILL.md")) throw new NotFoundError(`Skill ${ref}`);
+      return clone(
+        found.sort((a, b) =>
+          a.path === "SKILL.md" ? -1 : b.path === "SKILL.md" ? 1 : a.path < b.path ? -1 : 1,
+        ),
+      );
+    },
+    personalConfig: () => read(() => libs.personalConfig()),
+    savePersonalConfig: async (args) => {
+      await delay();
+      assertOnline();
+      return libs.savePersonalConfig(args);
+    },
     libraries: () => read(() => libs.list()),
     libraryTree: (alias) => read(() => libs.tree(alias)),
     libraryPage: (alias, path) => read(() => libs.page(alias, path)),
@@ -488,6 +616,9 @@ export const startCodexRun = server.startCodexRun;
 export const cancelCodexRun = server.cancelCodexRun;
 export const subscribeCodex = server.subscribeCodex;
 export const skills = server.skills;
+export const skillFiles = server.skillFiles;
+export const personalConfig = server.personalConfig;
+export const savePersonalConfig = server.savePersonalConfig;
 export const libraries = server.libraries;
 export const libraryTree = server.libraryTree;
 export const libraryPage = server.libraryPage;

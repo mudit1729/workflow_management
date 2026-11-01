@@ -27,8 +27,12 @@ export function useWorkspaceFile(path?: string) {
   });
 }
 
-/** After a file write the board, the issue views and the file views must read again. */
-function refreshAfterWrite() {
+/**
+ * After a file write the board, the issue views and the file views must read again, and so must
+ * the skills (a file under `skills/` is a skill) and the flow (`workflow.toml` holds it).
+ */
+export function refreshAfterWrite() {
+  void queryClient.invalidateQueries({ queryKey: qk.skills() });
   void queryClient.invalidateQueries({ queryKey: qk.snapshot() });
   void queryClient.invalidateQueries({ queryKey: ["issue"] });
   void queryClient.invalidateQueries({ queryKey: ["library"] });

@@ -15,6 +15,7 @@ import type { GroupSrc, LibrarySrc } from "../source";
 import { hashColor } from "../util";
 import { blockMeta, h2Sections, oneOf } from "./blocks";
 import { anchorKeys, asHandle, asInt, asList, asString, readFrontmatter } from "./frontmatter";
+import { flowReporter, parseFlow } from "./parse-flow";
 import { bare, fenceMask, joinBlock, splitList } from "./text";
 import type { FileCtx } from "./types";
 
@@ -335,7 +336,17 @@ export function parseAuthors(ctx: FileCtx): Author[] {
 
 type Table = Record<string, unknown>;
 const TOML_KEYS: Record<string, readonly string[]> = {
-  "": ["wf_format", "workspace", "leases", "staleness", "context", "archify", "lint", "server"],
+  "": [
+    "wf_format",
+    "workspace",
+    "leases",
+    "staleness",
+    "context",
+    "archify",
+    "lint",
+    "server",
+    "flow",
+  ],
   workspace: ["name", "issues_dir", "library_dir", "id_prefix"],
   leases: ["minutes"],
   staleness: ["issue_hours", "task_hours"],
@@ -386,6 +397,8 @@ export function parseConfig(ctx: FileCtx | undefined, text: string | undefined):
     }
     reportUnknownKeys(ctx, toml);
   }
+  // [flow] has its own rules (F018, F019): the steps and options are not a flat list of keys.
+  const flow = parseFlow(toml.flow, ctx ? flowReporter(ctx) : undefined, toml);
   const ws = asTable(toml.workspace);
   const leases = asTable(toml.leases);
   const stale = asTable(toml.staleness);
@@ -405,6 +418,7 @@ export function parseConfig(ctx: FileCtx | undefined, text: string | undefined):
     staleness: { issue_hours: num(stale.issue_hours, 24), task_hours: num(stale.task_hours, 4) },
     author: str(server.author, ""),
     archify: "unavailable",
+    flow,
   };
   return {
     config,
@@ -433,7 +447,8 @@ function reportUnknownKeys(ctx: FileCtx, toml: Table): void {
       continue;
     }
     const allowed = TOML_KEYS[k];
-    if (!allowed || typeof v !== "object" || v === null || Array.isArray(v)) continue;
+    if (k === "flow" || !allowed || typeof v !== "object" || v === null || Array.isArray(v))
+      continue;
     for (const sub of Object.keys(v as Table))
       if (!allowed.includes(sub))
         ctx.report(

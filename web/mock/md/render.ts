@@ -2,7 +2,8 @@
 // `export.ts` uses these functions to write the workspace files, `edit.ts` to write new
 // entries, and the parser in this folder is their exact inverse. Nothing here reads seed data:
 // archify blocks come from the `lookup` a caller passes, and fences stay as they are without one.
-import type { Author, DiagramType, GlossaryTerm, WorkspaceConfig } from "@/gen/types";
+import type { Author, DiagramType, FlowConfig, GlossaryTerm, WorkspaceConfig } from "@/gen/types";
+import { FLOW_STEP_IDS } from "@/lib/api/flow";
 import type {
   ChangeSrc,
   CriterionSrc,
@@ -392,8 +393,8 @@ export function renderWorkflowToml(c: WorkspaceConfig, opts: TomlOptions = {}): 
     `task_hours = ${c.staleness.task_hours}`,
     "",
     "[context]",
-    "budget_tokens = 6000",
-    "changes = 5",
+    `budget_tokens = ${c.flow.limits?.budget_tokens ?? 6000}`,
+    `changes = ${c.flow.limits?.changes ?? 5}`,
     "library = 3",
     "",
     "[archify]",
@@ -410,5 +411,29 @@ export function renderWorkflowToml(c: WorkspaceConfig, opts: TomlOptions = {}): 
     "[server]",
     "port = 7777",
     `author = ${toml(c.author)}`,
+    ...renderFlowTables(c.flow),
   ].join("\n")}\n`;
+}
+
+/**
+ * The `[flow]` tables of a config as `workflow.toml` lines (skills-flow-spec 3.1), each table
+ * after a blank line; nothing for an empty flow. `renderWorkflowToml` ends with them, so a config
+ * that has a flow keeps it.
+ */
+export function renderFlowTables(flow: FlowConfig | undefined): string[] {
+  const out: string[] = [];
+  for (const id of FLOW_STEP_IDS) {
+    const step = flow?.steps[id];
+    if (!step) continue;
+    out.push("", `[flow.${id}]`);
+    for (const [key, value] of Object.entries(step))
+      out.push(`${key} = ${typeof value === "string" ? toml(value) : value}`);
+  }
+  for (const [id, c] of Object.entries(flow?.custom ?? {})) {
+    out.push("", `[flow.custom.${id}]`, `after = ${toml(c.after)}`, `skill = ${toml(c.skill)}`);
+    if (c.label !== undefined) out.push(`label = ${toml(c.label)}`);
+    if (c.required !== undefined) out.push(`required = ${c.required}`);
+    if (c.order !== undefined) out.push(`order = ${c.order}`);
+  }
+  return out;
 }

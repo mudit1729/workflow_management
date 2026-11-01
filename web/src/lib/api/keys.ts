@@ -24,4 +24,6 @@ export const qk = {
     ["libraries", "search", scope, k, query] as const,
   libraryBacklinks: (address: string) => ["libraries", "backlinks", address] as const,
   libraryResolve: (raw: string, from: string) => ["libraries", "resolve", from, raw] as const,
+  /** The person's `library.toml` and its `[flow]` override (starts with "libraries": library writes refresh it). */
+  personalConfig: () => ["libraries", "config"] as const,
 };

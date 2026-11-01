@@ -64,6 +64,15 @@ describe("codexCommand", () => {
     expect(command).toContain(`Don'\\''t`);
   });
 
+  test("names the Do next step skill in effect when the flow runs another", () => {
+    const { prompt, command } = codexCommand(issue, "ws:acme-doing");
+    expect(prompt).toBe(
+      'Work on wf-3k9x2 "Push board updates over SSE" in issues/wf/web/live-board-updates. Read current_state.md first, then use the wf skills (ws:acme-doing).',
+    );
+    expect(command).toBe(`codex '${prompt}'`);
+    expect(resumePrompt(issue, "doing-next-step")).toBe(codexCommand(issue).prompt);
+  });
+
   test("it is pure: the same issue gives the same command", () => {
     expect(codexCommand(issue)).toEqual(codexCommand({ ...issue }));
   });

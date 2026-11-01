@@ -149,7 +149,13 @@ describe("the repository's own catalog", () => {
 
   test("is what the mock server answers", async () => {
     const server = createMockServer({ latency: 0 });
-    expect(await server.skills()).toEqual(catalog);
+    const served = await server.skills();
+    // The plugins are the repository's; the shelves are this workspace's and the person's, empty here.
+    expect({ ...served, shelves: [] }).toEqual(catalog);
+    expect(served.shelves.map((s) => [s.key, s.skills.length])).toEqual([
+      ["ws", 0],
+      ["me", 0],
+    ]);
     server.dispose();
   });
 });
@@ -173,7 +179,7 @@ describe("install commands", () => {
     const groups = claudeInstallGroups(skillsCatalog());
     expect(groups.map((g) => g.title)).toEqual(["Just me", "Everyone on the repository"]);
     expect(groups[1].hint).toContain(".claude/settings.json");
-    expect(claudeInstallGroups({ plugins: [] })).toEqual([]);
+    expect(claudeInstallGroups({ plugins: [], shelves: [] })).toEqual([]);
     expect(claudeTeamCommands(undefined)).toEqual([]);
   });
 

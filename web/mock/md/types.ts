@@ -103,6 +103,10 @@ export const F_SEVERITY: Record<string, Severity> = {
   F014: "warn",
   F016: "error",
   F017: "warn",
+  F018: "warn",
+  F019: "warn",
+  F020: "warn",
+  F021: "warn",
 };
 
 /** The text of the files of one issue folder, as read. */

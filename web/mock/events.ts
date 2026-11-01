@@ -7,6 +7,7 @@
 // event is skipped without a sound: no edit, no activity, no toast. "Load sample data" brings
 // the issues, and the events, back.
 import type { Handle, IssueId } from "@/gen/types";
+import { resolveFlow } from "@/lib/api/flow";
 import {
   addRequest,
   answerRequest,
@@ -144,7 +145,8 @@ const codexProgress: ScriptedEvent = {
 
 // ---------------------------------------------------------------- 2. claude-opus rewrites current_state
 
-const STATES = [
+/** The rewrites of current_state.md, naming the Do next step skill the flow runs (an agent would). */
+const states = (doSkill: string) => [
   {
     summary: "The delta stream and resync work end to end; leader-tab election is next.",
     in_flight: [
@@ -153,7 +155,7 @@ const STATES = [
     next: [
       "Run `cargo test -p wf-server sse` and move [[#T-3]] to review.",
       "Claim [[#T-4]] once [[#T-3]] lands.",
-      "Verify SC-3 with the `doing-next-step` skill.",
+      `Verify SC-3 with the \`${doSkill}\` skill.`,
     ],
   },
   {
@@ -162,7 +164,7 @@ const STATES = [
     next: [
       "Start [[#T-4]] against the mock server.",
       "Review [[#T-3]] when @codex moves it.",
-      "Verify SC-3 with the `doing-next-step` skill.",
+      `Verify SC-3 with the \`${doSkill}\` skill.`,
     ],
   },
   {
@@ -171,7 +173,7 @@ const STATES = [
     next: [
       "Relay events over `BroadcastChannel` in [[#T-4]].",
       "Start [[#T-5]] when [[#T-4]] lands.",
-      "Verify SC-4 with the `doing-next-step` skill.",
+      `Verify SC-4 with the \`${doSkill}\` skill.`,
     ],
   },
 ];
@@ -182,7 +184,7 @@ const opusState: ScriptedEvent = {
     const issue = EVENT_TARGETS.rewriteState;
     const src = store.issueSrc(issue);
     if (!src?.state) return false;
-    const v = pick(STATES, n);
+    const v = pick(states(resolveFlow({ team: store.world.config.flow }).steps.do.skill), n);
     const author: Handle = "claude-opus";
     const file = store.filePath(issue, "current_state.md");
     store.mutate(author, issue, (w) => {

@@ -10,6 +10,7 @@ import {
 } from "@/features/context/links";
 import { parseAddress } from "@/features/library/address";
 import type { Criterion, IssueDetail, LibraryItemDetail, Task } from "@/gen/types";
+import { flowLine, type ResolvedFlow, resolveFlow } from "@/lib/api/flow";
 import { resumeCommand } from "@/lib/api/resume";
 import type { Delivery } from "@/lib/api/types";
 import type { Derived, IssueFileName } from "./derive";
@@ -21,6 +22,7 @@ import { tsMs } from "./time";
 export const tokens = (text: string) => Math.ceil(text.length / 4);
 
 const LIBRARY_LIMIT = 3;
+/** `[context] changes` when the workspace sets none. */
 const CHANGES_LIMIT = 5;
 const LEARNINGS_LIMIT = 3;
 
@@ -349,9 +351,11 @@ function buildSections(
   now: number,
   delivery: Delivery | undefined,
   pages: BundlePages | undefined,
+  flow: ResolvedFlow,
 ): Section[] {
   const s = detail.summary;
   const out: Section[] = [];
+  const changesLimit = Number(flow.steps.handoff.options.changes?.value ?? CHANGES_LIMIT);
 
   // 1 Goal, 2 Success criteria, 3 Current state: never cut.
   out.push({
@@ -390,7 +394,7 @@ function buildSections(
     out.push({
       title: "Current state",
       priority: 0,
-      body: "No current_state.md yet. The handing-off skill writes one.",
+      body: `No current_state.md yet. The ${flow.steps.handoff.skill} skill writes one.`,
     });
   }
 
@@ -428,7 +432,7 @@ function buildSections(
 
   const changes = [...detail.changes]
     .sort((a, b) => tsMs(b.ts) - tsMs(a.ts))
-    .slice(0, CHANGES_LIMIT);
+    .slice(0, changesLimit);
   out.push({
     title: "Last changes",
     priority: 7,
@@ -493,6 +497,12 @@ export function contextBundle(
   now = Date.now(),
   delivery?: Delivery,
   pages?: BundlePages,
+  /**
+   * The skills flow in effect for the person who asks. The bundle says so in one line when it
+   * differs from the built-in flow, and the resume line names the Do next step skill. Default:
+   * the team's flow from `workflow.toml`.
+   */
+  flow: ResolvedFlow = resolveFlow({ team: d.snapshot.config.flow }),
 ): string {
   const detail = d.details.get(id);
   if (!detail) throw new Error(`Issue ${id} does not exist.`);
@@ -513,12 +523,14 @@ export function contextBundle(
     s.blocked_by.length ? `blocked_by: ${s.blocked_by.join(", ")}` : undefined,
     s.due ? `due: ${s.due}` : undefined,
     `path: ${s.path}`,
+    // Only when something differs from the built-in flow (spec 4.3): a fresh agent learns it here.
+    flowLine(flow) ? `skills flow: ${flowLine(flow)}` : undefined,
   ]
     .filter((l): l is string => l !== undefined)
     .join("\n");
 
-  const resume = `To resume: ${resumeCommand(s)}`;
-  const sections = buildSections(detail, d, now, delivery, pages);
+  const resume = `To resume: ${resumeCommand(s, flow.steps.do.skill)}`;
+  const sections = buildSections(detail, d, now, delivery, pages, flow);
   const keep = new Set<Section>();
   let used = tokens(header) + tokens(resume) + 60; // the footer, the resume line and the note
   const dropped: string[] = [];

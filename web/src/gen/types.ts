@@ -167,6 +167,60 @@ export interface WorkspaceConfig {
   /** The UI acts as this author (`wf serve --author` or `[server] author`). */
   author: Handle;
   archify: "available" | "unavailable";
+  /** The team default of the skills flow: the `[flow]` tables of `workflow.toml`. Empty by default. */
+  flow: FlowConfig;
+}
+
+// ---------------------------------------------------------------- the skills flow (skills-flow-spec 3)
+
+/** The steps of the flow, in the order the spec lists them. */
+export type FlowStepId = "add" | "plan" | "do" | "log" | "handoff" | "status" | "style";
+
+/** The steps a custom step can follow. */
+export type FlowAfter = "add" | "plan" | "do" | "handoff";
+
+/**
+ * One `[flow.<step>]` table: a skill reference and the step's options. Only what the file writes,
+ * and only valid values: `wf:lint` (F018, F019) reports the rest and the resolver ignores it.
+ */
+export interface FlowStepConfig {
+  /** A skill reference: `planning-issues`, `ws:name`, `<alias>:name` or `me:name`. */
+  skill?: string;
+  /** Add work: what happens after the issues are written. */
+  then?: "offer" | "plan" | "stop";
+  /** Plan: the most tasks a plan may have. */
+  max_tasks?: number;
+  /** Do next step: where a task goes when its verify passes. */
+  finish?: "verify" | "review";
+  /** Do next step: commit after each task, or leave the changes. */
+  commit?: "task" | "none";
+}
+
+/** One `[flow.custom.<id>]` table: a skill that runs after a step. */
+export interface FlowCustomConfig {
+  after: FlowAfter;
+  skill: string;
+  /** Shown on the card; default is the skill's name in words. */
+  label?: string;
+  /** A failing required step stops the run. Default false. */
+  required?: boolean;
+  /** Position among the custom steps after the same step. Default 1. */
+  order?: number;
+}
+
+/** The team-only options that live outside `[flow]`: `[context]` and `[staleness]`. */
+export type FlowLimitKey = "budget_tokens" | "changes" | "issue_hours" | "task_hours";
+
+/** The `[flow]` tables of `workflow.toml`, or of the personal `library.toml`. */
+export interface FlowConfig {
+  steps: Partial<Record<FlowStepId, FlowStepConfig>>;
+  /** Custom steps by id (kebab-case). */
+  custom: Record<string, FlowCustomConfig>;
+  /**
+   * `workflow.toml` only: the team-only options the file writes, from `[context]` and
+   * `[staleness]`. An option that is not here has its default.
+   */
+  limits?: Partial<Record<FlowLimitKey, number>>;
 }
 
 export interface LastActivity {

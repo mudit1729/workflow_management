@@ -23,6 +23,7 @@ import type {
   LibraryScope,
   LibrarySource,
   PageRef,
+  PersonalConfig,
   ResolvedAddress,
 } from "./types";
 
@@ -31,9 +32,10 @@ import type {
 let retained = 0;
 let release: (() => void) | undefined;
 
-/** Ask for every library query again. */
-function refreshLibraries() {
+/** Ask for every library query again, and the skills (the libraries hold skills too). */
+export function refreshLibraries() {
   void queryClient.invalidateQueries({ queryKey: qk.libraries() });
+  void queryClient.invalidateQueries({ queryKey: qk.skills() });
 }
 
 /** Subscribe to the mock's library changes. `wf serve` has no stream: writes invalidate instead. */
@@ -80,6 +82,20 @@ export function useLibraries() {
 /** One library of `useLibraries()` by alias. `undefined` while the list loads or when there is none. */
 export function useLibrary(alias?: string): LibraryInfo | undefined {
   return useLibraries().data?.find((l) => l.alias === alias);
+}
+
+/**
+ * The person's `library.toml`: its text and revision (for an edit) and the `[flow]` override it
+ * holds. An error (no bridge, no personal library) leaves `data` undefined: the flow then has no
+ * personal layer.
+ */
+export function usePersonalConfig() {
+  useLibraryLive();
+  return useQuery<PersonalConfig>({
+    queryKey: qk.personalConfig(),
+    queryFn: () => api.personalConfig(),
+    retry: false,
+  });
 }
 
 /** The page tree of a library. */
@@ -170,6 +186,34 @@ export async function savePage(args: {
       toast.error(firstProblem(err).message);
     } else {
       toast.error("Could not save the page", {
+        description: err instanceof Error ? err.message : "Try again in a moment.",
+      });
+    }
+    return undefined;
+  }
+}
+
+/**
+ * Replace the text of the personal `library.toml`. Resolves to the new `rev` and the commit the
+ * bridge made, or `undefined` after a toast when it failed. The flow writes go through
+ * `flow-writes.ts`, which edits the text with `toml-edit.ts`.
+ */
+export async function savePersonalConfig(args: {
+  text: string;
+  base_rev?: string;
+}): Promise<{ rev: string; commit: string } | undefined> {
+  try {
+    const result = await api.savePersonalConfig(args);
+    refreshLibraries();
+    return result;
+  } catch (err) {
+    refreshLibraries();
+    if (isConflictError(err)) {
+      toast.warning(`${err.body.reason}. Your save was refused.`, { duration: 10_000 });
+    } else if (isUnprocessableError(err)) {
+      toast.error(firstProblem(err).message);
+    } else {
+      toast.error("Could not save library.toml", {
         description: err instanceof Error ? err.message : "Try again in a moment.",
       });
     }

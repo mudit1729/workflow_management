@@ -37,6 +37,7 @@ import type {
   TaskStatus,
   WorkspaceSnapshot,
 } from "@/gen/types";
+import { resolveFlow } from "@/lib/api/flow";
 import { classifyEars } from "./ears";
 import { diagramIds, libraryPath, stateBody } from "./md/render";
 import { ISSUE_FILES, type IssueFileName, type LoadedWorkspace } from "./md/types";
@@ -313,6 +314,8 @@ function buildIssue(
   const world = source.world;
   const now = opts.now;
   const cfg = world.config;
+  // The "Fix:" hints name the skills the team's flow runs (a person's own override is not known here).
+  const steps = resolveFlow({ team: cfg.flow }).steps;
   const g = src.goal;
   const id = g.id;
   const dir = ix.dirs.get(id) ?? src.slug;
@@ -727,7 +730,7 @@ function buildIssue(
       "goal.md",
       statusAt,
       "The issue is in progress without plan.md.",
-      "Press Do next step, or run the `planning-issues` skill.",
+      `Press Do next step, or run the \`${steps.plan.skill}\` skill.`,
     );
   if (signals.stale)
     diag(
@@ -736,7 +739,7 @@ function buildIssue(
       "goal.md",
       statusAt,
       `No change entry or state update for ${ago(now - tsMs(freshest))} (limit ${cfg.staleness.issue_hours} h).`,
-      "Append a change with the `logging-work` skill, or run the `handing-off` skill.",
+      `Append a change with the \`${steps.log.skill}\` skill, or run the \`${steps.handoff.skill}\` skill.`,
     );
   if (active && coordState === "expired" && g.lease_until)
     diag(
@@ -745,7 +748,7 @@ function buildIssue(
       "goal.md",
       where("goal.md", "lease_until", "\nlease_until:"),
       `The coordinator lease of @${g.claimed_by} expired ${ago(now - tsMs(g.lease_until))} ago.`,
-      "Renew it with the `doing-next-step` skill, or take it over there and say so in the change entry.",
+      `Renew it with the \`${steps.do.skill}\` skill, or take it over there and say so in the change entry.`,
     );
   for (const t of expiredTasks) {
     // The `lease_until:` line inside the task's block.
@@ -760,7 +763,7 @@ function buildIssue(
       "plan.md",
       posOf(text, "- lease_until:", from),
       `The lease of @${t.claimed_by} on ${t.id} expired ${ago(now - tsMs(t.lease_until ?? ""))} ago.`,
-      `Renew it with the \`doing-next-step\` skill, or take ${t.id} over there and say so in the change entry.`,
+      `Renew it with the \`${steps.do.skill}\` skill, or take ${t.id} over there and say so in the change entry.`,
     );
   }
   if (signals.state_behind_changes && src.state) {
@@ -771,7 +774,7 @@ function buildIssue(
       "current_state.md",
       where("current_state.md", "updated_at", "updated_at:"),
       `current_state.md is older than the latest ${plural(behind, "change")}.`,
-      "Run the `handing-off` skill.",
+      `Run the \`${steps.handoff.skill}\` skill.`,
     );
   }
   if (state) {
@@ -803,7 +806,7 @@ function buildIssue(
         "goal.md",
         at,
         `${c.id} is ticked without evidence.`,
-        `Verify ${c.id} with the \`doing-next-step\` skill, or add \`evidence:\`.`,
+        `Verify ${c.id} with the \`${steps.do.skill}\` skill, or add \`evidence:\`.`,
       );
     if (src.plan && c.satisfied_by.length === 0)
       diag("Q006", "info", "goal.md", at, `${c.id} is not covered by any task's \`satisfies\`.`);

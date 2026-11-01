@@ -2,6 +2,7 @@
 // Absent when the app talks to the real daemon (`VITE_API=real`), so every caller
 // guards on `undefined`.
 import { toast } from "sonner";
+import type { FlowStepId } from "@/gen/types";
 
 export type MockConnection = "live" | "reconnecting" | "offline";
 
@@ -19,6 +20,16 @@ export interface MockControls {
   holdSample: () => () => void;
   /** Time between the phases of the Codex runs that start from now on, in ms. Default 2000. */
   setCodexPhaseMs: (ms: number) => void;
+  /**
+   * Point a step of the skills flow at a skill, for scripts and Kit frames:
+   * `setFlow("plan", "ws:acme-planning")` writes the team default to `workflow.toml`; with
+   * `"me"` as the scope it writes my override to `library.toml`. The skill must exist to resolve.
+   */
+  setFlow: (step: FlowStepId, ref: string, scope?: "team" | "me") => void;
+  /** Back to the built-in flow: no `[flow]` in `workflow.toml` or in my `library.toml`, no failing custom step. */
+  resetFlow: () => void;
+  /** Make the custom step `id` fail (or pass again) in the Do next step runs that reach it. */
+  failCustomStep: (id: string, fail?: boolean) => void;
 }
 
 export function getMockControls(): MockControls | undefined {

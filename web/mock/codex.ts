@@ -15,9 +15,19 @@
 //                         `Issue: <id>` joins the delivery data; one change entry carries the
 //                         task, criteria, result, evidence, commit and files
 //   verify  (CI)          a CI run starts on the commit, then passes
+//   custom  changes.md    one phase for each custom step after Do next step that runs
+//                         (skills-flow-spec 4.2): it passes, unless `failCustomStep(id)` made it
+//                         fail
 //   done    current_state  the state moves on (never under another author's live coordinator
 //           goal.md       lease); goal.md releases the claim and, when every task is done, goes
 //                         to `review` (steps 10 and 11)
+//
+// The run follows the skills flow in effect when it starts (`CodexOptions.flow`). The Plan step's
+// skill is named in the claim phase of a run that plans first; `finish = review` sends the task to
+// `review` for a person; `commit = none` records no commit, so there is no CI phase; each custom
+// step after Do next step is a phase between the last of those and `done`. A required one that
+// fails stops the run: a `kind: failure` change and a request that needs you (using-wf, section 3).
+// `phases[].skill` carries the skill that ran each phase.
 //
 // Git, PR and CI data are not files (plan D2): the commit and the CI run go to `store.delivery`.
 // One run is active per issue. `cancel` stops it and puts the task back in the queue.
@@ -31,6 +41,7 @@ import type {
   Ts,
 } from "@/gen/types";
 import { ApiError, NotFoundError } from "@/lib/api/error";
+import { customAfter, type ResolvedCustom, type ResolvedFlow, resolveFlow } from "@/lib/api/flow";
 import type {
   CodexPhase,
   CodexPhaseId,
@@ -42,6 +53,7 @@ import { draftPlan, taskTitle } from "./codex-plan";
 import { commitSha, toTsSec } from "./delivery";
 import { stripTicks } from "./derive";
 import {
+  addRequest,
   appendChange,
   claimIssue,
   claimTask,
@@ -98,6 +110,11 @@ export type CodexEvent = CodexRunEvent | { event: "delivery"; issue: IssueId };
 export interface CodexOptions {
   /** Time between two phases. Default `PHASE_MS`. */
   phaseMs?: number;
+  /**
+   * The skills flow in effect for the person who starts a run: the team's flow with their
+   * override, and what exists. Default: the team's flow in `workflow.toml`.
+   */
+  flow?: () => ResolvedFlow;
 }
 
 export interface Codex {
@@ -110,6 +127,14 @@ export interface Codex {
   subscribe(fn: (e: CodexRunEvent) => void): () => void;
   /** The time between phases of the runs that start from now on. */
   setPhaseMs(ms: number): void;
+  /**
+   * Make the custom step `id` fail (or pass again) in the runs that reach it. A required step that
+   * fails stops the run; an optional one is logged and the run goes on. For scripts and tests
+   * (`window.__wf.failCustomStep`).
+   */
+  failCustomStep(id: string, fail?: boolean): void;
+  /** Every custom step passes again. */
+  resetFailures(): void;
   /** Stop every run and forget them: the workspace under them was replaced. */
   reset(): void;
   dispose(): void;
@@ -316,6 +341,12 @@ interface Active {
   coordinator: boolean;
   /** The status goal.md had before the claim moved it, so a cancel puts it back. */
   statusBefore?: IssueStatus;
+  /** The flow the run follows: what it was when the run started. */
+  flow: ResolvedFlow;
+  /** The commit option of Do next step is `task`: the work commits and CI runs on the commit. */
+  commits: boolean;
+  /** The finish option of Do next step is `review`: every task waits for a person. */
+  reviews: boolean;
   /** The task status the work phase left: `done`, or `review` when the verify is `manual`. */
   after?: TaskStatus;
   /** The criteria the work phase ticked. */
@@ -329,7 +360,11 @@ interface Active {
   timers: ReturnType<typeof setTimeout>[];
 }
 
-const PHASES: CodexPhaseId[] = ["claim", "log", "verify", "done"];
+/** The phases that run the same in every flow; a custom phase is `custom:<id>`. */
+type FixedPhase = "claim" | "log" | "verify" | "done";
+
+const optionOf = (flow: ResolvedFlow, key: string): string | number | undefined =>
+  flow.steps.do.options[key]?.value;
 
 const copy = (r: CodexRun): CodexRun => ({ ...r, phases: r.phases.map((p) => ({ ...p })) });
 
@@ -342,6 +377,9 @@ const words = (xs: string[]) => xs.join(", ");
 
 export function createCodex(store: Store, options: CodexOptions = {}): Codex {
   let phaseMs = options.phaseMs ?? PHASE_MS;
+  const flowNow = () => options.flow?.() ?? resolveFlow({ team: store.world.config.flow });
+  /** Custom steps that fail when a run reaches them. */
+  const failing = new Set<string>();
   let runs: CodexRun[] = [];
   const active = new Map<string, Active>();
   const listeners = new Set<(e: CodexRunEvent) => void>();
@@ -383,6 +421,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       at: store.stamp(),
       by: CODEX_HANDLE,
       lane: slugify(group) || "main",
+      maxTasks: Number(a.flow.steps.plan.options.max_tasks?.value),
     });
     const tasks = draft.phases.flatMap((p) => p.tasks);
     const lanes = new Set(tasks.map((t) => t.lane));
@@ -565,12 +604,16 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
 
     const command = stripTicks(live.verify)?.trim();
     const byHand = !command || command === "manual";
+    // A task goes to review when only a person can check it, or when the flow sends every task
+    // there (Do next step, finish = review).
+    const toReview = byHand || a.reviews;
     const tasks = tasksOf(src);
     // Step 7: a criterion is ticked when every task that satisfies it is done and its own verify
-    // is a command. A `manual` criterion is never ticked by an agent: a person checks it.
+    // is a command. A `manual` criterion is never ticked by an agent: a person checks it. A task
+    // that waits in review is not done, so nothing it satisfies is ticked yet.
     const ticks: { id: CriterionId; command: string }[] = [];
     const manual: CriterionId[] = [];
-    if (!byHand)
+    if (!toReview)
       for (const id of live.satisfies ?? []) {
         const criterion = src.criteria[Number(/^SC-(\d+)$/.exec(id)?.[1]) - 1];
         if (!criterion || criterion.checked) continue;
@@ -595,6 +638,10 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     if (ticks.length > 0)
       sentences.push(`Ticked ${words(ticks.map((t) => t.id))} with the passing verify command.`);
     if (byHand) sentences.push(`${task} waits for a manual check by @${owner}.`);
+    else if (a.reviews)
+      sentences.push(
+        `The flow sends every task to review, so ${task} waits for a check by @${owner}.`,
+      );
     else if (manual.length > 0)
       sentences.push(`${words(manual)} waits for a manual check by @${owner}.`);
     if (!a.coordinator)
@@ -611,8 +658,12 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       task,
       criteria: ticks.length > 0 ? ticks.map((t) => t.id) : undefined,
       result: byHand ? undefined : "pass",
-      evidence: byHand ? undefined : `\`${command}\` passed at \`${a.sha}\``,
-      commit: a.sha,
+      evidence: byHand
+        ? undefined
+        : a.commits
+          ? `\`${command}\` passed at \`${a.sha}\``
+          : `\`${command}\` passed`,
+      commit: a.commits ? a.sha : undefined,
       files: files.length > 0 ? files : undefined,
       model: authorModel(),
       body: sentences.join(" "),
@@ -626,7 +677,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         plan = toggleStep(plan, task, i + 1, true);
         touched.push(`${task}.${i + 1}`);
       });
-      const after: TaskStatus = byHand ? "review" : "done";
+      const after: TaskStatus = toReview ? "review" : "done";
       w.write(planFile, dropLease(setTaskStatus(plan, task, after), task));
       const touches: Touch[] = [{ file: planFile, anchors: touched }];
 
@@ -634,7 +685,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
         let goal = text(w, goalFile);
         for (const t of ticks)
           goal = verifyCriterion(goal, t.id, {
-            evidence: `\`${t.command}\` passed at \`${a.sha}\`, see [[#${entry.id}]]`,
+            evidence: `\`${t.command}\` passed${a.commits ? ` at \`${a.sha}\`` : ""}, see [[#${entry.id}]]`,
             by: CODEX_HANDLE,
           });
         w.write(goalFile, goal);
@@ -644,7 +695,7 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       w.write(changesFile, appendChange(w.read(changesFile), entry));
       touches.push({ file: changesFile, anchors: [entry.id] });
       a.after = after;
-      a.run.review = byHand || undefined;
+      a.run.review = toReview || undefined;
       return {
         touches,
         activity: [{ issue_id: issue, kind: "change", author: CODEX_HANDLE, title: entry.title }],
@@ -654,7 +705,9 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     a.ticked = ticks.map((t) => t.id);
     a.manual = manual;
 
-    // Step 8: the commit, with the trailer, on the branch of the issue.
+    // Step 8: the commit, with the trailer, on the branch of the issue. With commit = none the
+    // changes are left for a person and nothing is recorded.
+    if (!a.commits) return;
     store.updateDelivery(issue, (d) => ({
       ...d,
       commits: [
@@ -781,7 +834,8 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       : [
           pointer,
           ...a.ticked.map(
-            (id) => `[[#${id}]] has evidence at ${a.sha}.${a.entry ? ` See [[#${a.entry}]].` : ""}`,
+            (id) =>
+              `[[#${id}]] has evidence${a.commits ? ` at ${a.sha}` : ""}.${a.entry ? ` See [[#${a.entry}]].` : ""}`,
           ),
         ];
     const blocked = inReview
@@ -853,12 +907,83 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     });
   }
 
-  const STEPS: Record<CodexPhaseId, (a: Active) => void> = {
+  /**
+   * A custom step after Do next step. It passes, unless a script made it fail
+   * (`failCustomStep`). A failure is a `kind: failure` change (`result: fail`, the reason in
+   * `evidence`); a required step also asks for a person in `Needs you` and stops the run, an
+   * optional one is logged and the run goes on (using-wf, section 3).
+   */
+  function customStep(a: Active, c: ResolvedCustom) {
+    if (!failing.has(c.id)) return;
+    const { issue, task = "" } = a.run;
+    const src = store.issueSrc(issue);
+    if (!src) throw new Error(`${issue} is gone.`);
+    const changesFile = store.filePath(issue, "changes.md");
+    const stateFile = store.filePath(issue, "current_state.md");
+    const owner = src.goal.owner ?? store.me;
+    const entry: ChangeSrc = {
+      id: store.newId("C-"),
+      ts: store.stamp(),
+      author: CODEX_HANDLE,
+      title: `${c.label} failed`,
+      kind: "failure",
+      task,
+      result: "fail",
+      evidence: `${c.skill} reported a failure for ${task}.`,
+      model: authorModel(),
+      body: `The custom step ${c.id} (${c.skill}) failed after ${task}.${
+        c.required ? " It must pass, so the run stopped." : " It is optional, so the run went on."
+      }`,
+    };
+    store.mutate(CODEX_HANDLE, issue, (w) => {
+      w.write(changesFile, appendChange(w.read(changesFile), entry));
+      const touches: Touch[] = [{ file: changesFile, anchors: [entry.id] }];
+      if (c.required) {
+        const request: RequestSrc = {
+          id: store.newId("Q-"),
+          question: `${c.label} failed on ${task}. Fix it, or tell Codex how to go on.`,
+          from: CODEX_HANDLE,
+          to: owner,
+          kind: "input",
+          urgency: "blocking",
+          asked: store.stamp(),
+          ref: `[[#${entry.id}]]`,
+        };
+        w.write(
+          stateFile,
+          addRequest(w.read(stateFile), request, {
+            summary: `${c.label} failed on ${task}.`,
+            updated_at: store.stamp(),
+            updated_by: CODEX_HANDLE,
+            next_steps: [`Fix what ${c.label} found, then press Do next step.`],
+          }),
+        );
+        touches.push({ file: stateFile, anchors: "all" });
+      }
+      return {
+        touches,
+        activity: [{ issue_id: issue, kind: "change", author: CODEX_HANDLE, title: entry.title }],
+      };
+    });
+    if (c.required) throw new Error(`${c.label} failed on ${task}: it must pass.`);
+  }
+
+  const STEPS: Record<FixedPhase, (a: Active) => void> = {
     claim,
     log: work,
     verify,
     done: finish,
   };
+
+  /** The code of one phase: a fixed one, or the custom step the id names. */
+  function execute(a: Active, id: CodexPhaseId): void {
+    if (id.startsWith("custom:")) {
+      const c = customAfter(a.flow, "do").find((x) => `custom:${x.id}` === id);
+      if (c) customStep(a, c);
+      return;
+    }
+    STEPS[id as FixedPhase](a);
+  }
 
   // ---- running
 
@@ -976,14 +1101,14 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       const why = drifted(a);
       if (why) return fail(a, why);
     }
-    const at = PHASES.indexOf(id);
+    const at = a.run.phases.findIndex((p) => p.id === id);
     a.run.phase = id;
     a.run.phases = a.run.phases.map((p, i) => ({
       ...p,
       state: i < at ? "done" : i === at ? "running" : "pending",
     }));
     try {
-      STEPS[id](a);
+      execute(a, id);
     } catch (err) {
       return fail(a, err instanceof Error ? err.message : String(err));
     }
@@ -996,12 +1121,31 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
 
   // ---- the public side
 
-  const labels = (task: TaskId, plans: boolean): Record<CodexPhaseId, string> => ({
-    claim: plans ? `Plan the issue, claim ${task}` : `Claim ${task}`,
-    log: "Log the change",
-    verify: "Run CI",
-    done: `Finish ${task}`,
-  });
+  /**
+   * The phases of a run under a flow, each with the skill that runs it: the claim plans first with
+   * the Plan step's skill (named in the label unless it is the built-in one), the change is
+   * logged with the Log step's, CI runs only when the flow commits, every custom step after Do next
+   * step is a phase of its own, and the rest is the Do next step's.
+   */
+  function phasesOf(flow: ResolvedFlow, task: TaskId, plans: boolean, commits: boolean) {
+    const plan = flow.steps.plan;
+    const planNote = plan.origin === "built-in" ? "" : ` (${plan.skill})`;
+    const doSkill = flow.steps.do.skill;
+    const list: { id: CodexPhaseId; label: string; skill: string }[] = [
+      plans
+        ? { id: "claim", label: `Plan the issue${planNote}, claim ${task}`, skill: plan.skill }
+        : { id: "claim", label: `Claim ${task}`, skill: doSkill },
+      { id: "log", label: "Log the change", skill: flow.steps.log.skill },
+      ...(commits ? [{ id: "verify" as const, label: "Run CI", skill: doSkill }] : []),
+      ...customAfter(flow, "do").map((c) => ({
+        id: `custom:${c.id}` as const,
+        label: c.label,
+        skill: c.skill,
+      })),
+      { id: "done", label: `Finish ${task}`, skill: doSkill },
+    ];
+    return list.map<CodexPhase>((p) => ({ ...p, state: "pending" }));
+  }
 
   function start(issue: IssueId, kind: CodexRunKind): CodexRun {
     if (kind !== "next_step") reject(`Codex does not know the run "${kind}".`);
@@ -1040,13 +1184,14 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       ? taskTitle(src?.criteria[0]?.text ?? "", 1)
       : src && tasksOf(src).find((t) => t.id === picked.task)?.title;
     if (!src || title === undefined) reject(`Task ${picked.task} does not exist.`);
-    const names = labels(picked.task, picked.plan);
+    const flow = flowNow();
+    const commits = optionOf(flow, "commit") !== "none";
     const run: CodexRun = {
       ...base,
       task: picked.task,
       task_title: title,
       phase: "claim",
-      phases: PHASES.map<CodexPhase>((p) => ({ id: p, label: names[p], state: "pending" })),
+      phases: phasesOf(flow, picked.task, picked.plan, commits),
       ...(picked.plan ? { plans: true } : {}),
     };
     const a: Active = {
@@ -1055,6 +1200,9 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
       branch: `${issue}/${slugify(title ?? picked.task)}`,
       plans: picked.plan,
       coordinator: true,
+      flow,
+      commits,
+      reviews: optionOf(flow, "finish") === "review",
       ticked: [],
       manual: [],
       timers: [],
@@ -1062,14 +1210,16 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     runs = [run, ...runs].slice(0, KEEP_RUNS);
     active.set(id, a);
 
-    // The claim lands now, so the click is answered; the other phases follow.
+    // The claim lands now, so the click is answered; the other phases follow, one phase apart.
     step(a, "claim");
     if (a.run.status === "running") {
       const later = (ms: number, fn: () => void) => a.timers.push(setTimeout(fn, ms));
-      later(phaseMs, () => step(a, "log"));
-      later(2 * phaseMs, () => step(a, "verify"));
-      later(2.5 * phaseMs, () => ciPasses(a));
-      later(3 * phaseMs, () => step(a, "done"));
+      a.run.phases.forEach((p, i) => {
+        if (i === 0) return;
+        later(i * phaseMs, () => step(a, p.id));
+        // CI passes half a phase after it starts.
+        if (p.id === "verify") later((i + 0.5) * phaseMs, () => ciPasses(a));
+      });
     }
     return copy(run);
   }
@@ -1111,9 +1261,17 @@ export function createCodex(store: Store, options: CodexOptions = {}): Codex {
     setPhaseMs(ms) {
       phaseMs = Math.max(0, ms);
     },
+    failCustomStep(id, fail = true) {
+      if (fail) failing.add(id);
+      else failing.delete(id);
+    },
+    resetFailures() {
+      failing.clear();
+    },
     reset() {
       for (const a of [...active.values()]) stop(a);
       runs = [];
+      failing.clear();
     },
     dispose() {
       for (const a of [...active.values()]) stop(a);

@@ -19,6 +19,7 @@ import type {
   LibrarySource,
   LibraryTree,
   PageRef,
+  PersonalConfig,
   ResolvedAddress,
 } from "@/lib/api/types";
 import type { Store } from "../store";
@@ -27,14 +28,19 @@ import { byteLength, rev } from "../util";
 import type { WorkspaceDisk } from "../workspace-bus";
 import { buildCorpus, type Corpus } from "./corpus";
 import { parseManifest } from "./manifest";
+import { personalConfigProblem, readPersonalFlow } from "./personal-config";
+import { layoutOf } from "./tree";
 import { workspaceAlias, workspaceFacts, workspaceSignature, workspaceSource } from "./workspace";
 
 /** The largest page the mock accepts, as for workspace files. */
 const MAX_PAGE_BYTES = 1_000_000;
 
-/** An alias as a link can write it. `me` and `t` are taken by the routes. */
+/** An alias as a link can write it. `me` and `t` are taken by the routes, `ws` by skill references. */
 const ALIAS = /^[a-z0-9][a-z0-9_-]*$/;
-const RESERVED = new Set([PERSONAL_ALIAS, "t"]);
+const RESERVED = new Set([PERSONAL_ALIAS, "t", "ws"]);
+
+/** A file of a skill folder that is not a page: the scripts and references a skill copy brings. */
+const SKILL_SUPPORT = /^skills\/[a-z0-9-]+\/(?:scripts|references)\/[^/]+$/;
 
 /** One `[[team]]` block of `libraries.toml`. */
 export interface TeamEntry {
@@ -62,6 +68,21 @@ export interface Libraries {
   search(query: string, scope?: LibraryScope, k?: number): LibraryPassage[];
   backlinks(address: string): PageRef[];
   resolve(raw: string, from?: { alias: string; path: string }): ResolvedAddress;
+  /**
+   * The person's `library.toml`: its text, its revision and the `[flow]` override it holds
+   * (skills-flow-spec 3.2). The one config file of the personal library the dashboard writes.
+   */
+  personalConfig(): PersonalConfig;
+  /**
+   * Replace the text of the personal `library.toml` (the caller edits it with `toml-edit.ts`).
+   * 409 when `base_rev` is not the revision of the text on file; 422 when the text is not TOML.
+   */
+  savePersonalConfig(args: { text: string; base_rev?: string }): { rev: string; commit: string };
+  /**
+   * The text files of a loaded library by path relative to its root, for the Skills catalog
+   * (`skills/<name>/SKILL.md`, `skills/<name>/scripts/…`). Empty for an alias that is not loaded.
+   */
+  files(alias: string): Record<string, string>;
   /** Write a page of the personal library. Creates it when missing. */
   savePage(args: { alias: string; path: string; text: string; base_rev?: string }): {
     rev: string;
@@ -330,9 +351,44 @@ export function createLibraries(store: Store, options: LibrariesOptions = {}): L
     backlinks: (address) => corpus().backlinks(address),
     resolve: (raw, from) => corpus().resolve(raw, from),
 
+    personalConfig: () => {
+      const text = personalFiles()[PERSONAL_FILES.manifest];
+      return { text: text ?? "", rev: rev(text ?? ""), ...readPersonalFlow(text) };
+    },
+    savePersonalConfig: ({ text, base_rev }) => {
+      const problem = personalConfigProblem(text);
+      if (problem) throw invalid(problem);
+      if (byteLength(text) > MAX_PAGE_BYTES) throw invalid("That file is too large to save.");
+      const path = PERSONAL_FILES.manifest;
+      const current = personalFiles()[path] ?? "";
+      if (base_rev !== undefined && rev(current) !== base_rev)
+        throw new ApiError(409, {
+          reason: `${path} changed by @disk`,
+          file: path,
+          by: "disk",
+          current: null,
+        });
+      writeText(path, text);
+      const hash = rev(text);
+      return { rev: hash, commit: hash.slice(0, 7) };
+    },
+    files: (alias) => {
+      if (alias === PERSONAL_ALIAS) return personalFiles();
+      const source = teams.get(alias);
+      if (!source) return {};
+      const root = layoutOf(source).root;
+      if (!root) return { ...source.files };
+      return Object.fromEntries(
+        Object.entries(source.files)
+          .filter(([path]) => path.startsWith(`${root}/`))
+          .map(([path, text]) => [path.slice(root.length + 1), text]),
+      );
+    },
     savePage: ({ alias, path: raw, text, base_rev }) => {
       const path = personalPath(alias, raw);
-      if (!/\.md$/i.test(path)) throw invalid("A page is a markdown file: its name ends in .md.");
+      // A page is markdown; a copied skill also brings its scripts and references.
+      if (!/\.md$/i.test(path) && !SKILL_SUPPORT.test(path))
+        throw invalid("A page is a markdown file: its name ends in .md.");
       if (byteLength(text) > MAX_PAGE_BYTES) throw invalid("That page is too large to save.");
       const current = personalFiles()[path];
       if (base_rev !== undefined && current !== undefined && rev(current) !== base_rev)

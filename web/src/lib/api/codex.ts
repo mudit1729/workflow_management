@@ -23,13 +23,17 @@ import type { CodexRun, CodexRunKind } from "./types";
 /**
  * What "Open in Codex" copies. `prompt` is the resume prompt of `format.md` section 15 (it names the
  * issue and its folder and points at the skill); `command` is `codex` with the prompt as one quoted
- * argument, the interactive form. `codex exec '<prompt>'` is the headless form.
+ * argument, the interactive form. `codex exec '<prompt>'` is the headless form. `skill` is the Do
+ * next step skill in effect (`useFlowSkill("do")`); left out, the built-in one.
  */
-export function codexCommand(issue: ResumeIssue): {
+export function codexCommand(
+  issue: ResumeIssue,
+  skill?: string,
+): {
   prompt: string;
   command: string;
 } {
-  return { prompt: resumePrompt(issue), command: resumeCommand(issue) };
+  return { prompt: resumePrompt(issue, skill), command: resumeCommand(issue, skill) };
 }
 
 // ---------------------------------------------------------------- the live bridge

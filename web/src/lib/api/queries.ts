@@ -61,8 +61,13 @@ export function useSearch(q: string, scope: SearchScope = "all", k = 12) {
   });
 }
 
-/** The `wf context` bundle for an issue, as markdown. */
-export function useContextBundle(id?: string, budget = 6000) {
+/**
+ * The `wf context` bundle for an issue, as markdown. The budget is the team's `[context]
+ * budget_tokens` (Settings · Skills flow · Hand off) unless the caller names one.
+ */
+export function useContextBundle(id?: string, given?: number) {
+  const configured = useSnapshot().data?.config.flow.limits?.budget_tokens;
+  const budget = given ?? configured ?? 6000;
   return useQuery({
     queryKey: qk.context(id ?? "", budget),
     queryFn: () => api.context(id as string, budget),
